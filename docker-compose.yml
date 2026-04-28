@@ -1,0 +1,106 @@
+version: "3.8"
+
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:16-alpine
+    container_name: spiritus-db
+    environment:
+      POSTGRES_USER: spiritus
+      POSTGRES_PASSWORD: spiritus
+      POSTGRES_DB: spiritus
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U spiritus"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - spiritus-net
+
+  # Redis Cache & Session Store
+  redis:
+    image: redis:7-alpine
+    container_name: spiritus-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --requirepass ""
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - spiritus-net
+
+  # FastAPI Application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: spiritus-app
+    environment:
+      DATABASE_URL: postgresql://spiritus:spiritus@db:5432/spiritus
+      REDIS_URL: redis://redis:6379/0
+      LOG_LEVEL: INFO
+    ports:
+      - "38471:38471"
+      - "10085:10085"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./logs:/app/logs
+      - ./config:/app/config
+    networks:
+      - spiritus-net
+    restart: unless-stopped
+
+  # Prometheus for Monitoring
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: spiritus-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+    networks:
+      - spiritus-net
+
+  # Grafana for Dashboards
+  grafana:
+    image: grafana/grafana:latest
+    container_name: spiritus-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_SECURITY_ALLOW_EMBED_INITIATION: "true"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      - spiritus-net
+
+volumes:
+  db_data:
+  redis_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  spiritus-net:
+    driver: bridge

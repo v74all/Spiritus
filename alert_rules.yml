@@ -1,0 +1,95 @@
+groups:
+  - name: spiritus_alerts
+    interval: 30s
+    rules:
+      - alert: HighFailedLoginRate
+        expr: rate(spiritus_failed_logins_total[5m]) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High failed login rate detected"
+          description: "Failed login rate is {{ $value }} per second"
+
+      - alert: HoneyTokenTriggered
+        expr: spiritus_honey_token_triggered > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Honey token triggered - possible intrusion!"
+          description: "Attacker attempted to use honey token"
+
+      - alert: UnauthorizedAccessAttempt
+        expr: increase(spiritus_unauthorized_access_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Multiple unauthorized access attempts"
+          description: "{{ $value }} unauthorized attempts in last 5 minutes"
+
+      - alert: DatabaseConnectionPoolExhausted
+        expr: spiritus_db_pool_exhausted > 0.8
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Database connection pool nearly exhausted"
+          description: "Pool usage at {{ $value | humanizePercentage }}"
+
+      - alert: RedisConnectionLost
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis connection lost"
+          description: "Cannot reach Redis instance"
+
+      - alert: HighErrorRate
+        expr: |
+          rate(spiritus_requests_total{status=~"5.."}[5m]) /
+          rate(spiritus_requests_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is {{ $value | humanizePercentage }}"
+
+      - alert: SlowAPIResponse
+        expr: spiritus_request_duration_seconds{quantile="0.99"} > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Slow API response times"
+          description: "P99 response time is {{ $value }}s"
+
+      - alert: AnomalousUserBehavior
+        expr: spiritus_anomalous_users > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Anomalous user behavior detected"
+          description: "{{ $value }} users showing suspicious activity"
+
+      - alert: DiskSpaceRunningLow
+        expr: node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"} < 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low disk space warning"
+          description: "{{ (100 * $value) | humanize }}% free space remaining"
+
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) > 0.9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is {{ (100 * (1 - $value)) | humanize }}%"
