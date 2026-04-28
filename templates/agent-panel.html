@@ -1,0 +1,1565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VIP Agent Panel</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg0:#06080f;--bg1:#0d1117;--bg2:#161b22;--bg3:#1c2333;--bg4:#252d3a;
+  --border:#2d333b;--border2:#3d444d;
+  --t0:#f0f6fc;--t1:#c9d1d9;--t2:#8b949e;--t3:#636c76;
+  --accent:#58a6ff;--accent2:#388bfd;
+  --green:#3fb950;--green-bg:rgba(63,185,80,.12);
+  --yellow:#d29922;--yellow-bg:rgba(210,153,34,.12);
+  --red:#f85149;--red-bg:rgba(248,81,73,.12);
+  --purple:#bc8cff;--orange:#f0883e;
+  --radius:14px;--radius-sm:10px;
+  --shadow:0 8px 32px rgba(0,0,0,.4);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',system-ui,sans-serif;background:var(--bg0);color:var(--t1);min-height:100vh;overflow-x:hidden}
+::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:var(--bg1)}::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:3px}
+input,button,textarea,select{font-family:inherit;font-size:inherit}
+
+#login-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;
+  background:radial-gradient(ellipse at 50% 0%,#0d1a2e 0%,var(--bg0) 70%)}
+.login-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);
+  padding:48px 40px;width:380px;text-align:center;box-shadow:var(--shadow)}
+.login-logo{font-size:42px;font-weight:800;letter-spacing:4px;
+  background:linear-gradient(135deg,var(--accent),var(--purple));-webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  margin-bottom:8px}
+.login-sub{color:var(--t2);margin-bottom:32px;font-size:14px}
+.login-input{width:100%;padding:14px 18px;background:var(--bg1);border:1px solid var(--border);
+  border-radius:var(--radius-sm);color:var(--t0);font-size:15px;margin-bottom:16px;
+  text-align:center;letter-spacing:2px;transition:border .2s}
+.login-input:focus{outline:none;border-color:var(--accent)}
+.login-btn{width:100%;padding:14px;background:var(--accent2);color:#fff;border:none;
+  border-radius:var(--radius-sm);font-size:15px;font-weight:600;cursor:pointer;transition:all .2s}
+.login-btn:hover{background:var(--accent);transform:translateY(-1px)}
+.login-error{color:var(--red);margin-top:12px;font-size:13px;min-height:20px}
+
+#panel{display:none}
+.top-bar{display:flex;align-items:center;justify-content:space-between;padding:16px 28px;
+  background:var(--bg1);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100;
+  backdrop-filter:blur(12px)}
+.brand{display:flex;align-items:center;gap:12px}
+.brand-logo{font-size:22px;font-weight:800;letter-spacing:3px;
+  background:linear-gradient(135deg,var(--accent),var(--purple));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.brand-text{color:var(--t2);font-size:13px;font-weight:400}
+.header-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+
+.btn{padding:10px 20px;border:none;border-radius:var(--radius-sm);font-size:13px;font-weight:500;
+  cursor:pointer;transition:all .2s;display:inline-flex;align-items:center;gap:6px}
+.btn-primary{background:var(--accent2);color:#fff}.btn-primary:hover{background:var(--accent);transform:translateY(-1px)}
+.btn-outline{background:transparent;border:1px solid var(--border2);color:var(--t1)}
+.btn-outline:hover{border-color:var(--accent);color:var(--accent)}
+.btn-ghost{background:transparent;border:none;color:var(--t2);padding:10px 14px}.btn-ghost:hover{color:var(--t0)}
+.btn-danger{background:var(--red-bg);color:var(--red);border:1px solid transparent}
+.btn-danger:hover{border-color:var(--red);background:rgba(248,81,73,.2)}
+.btn-sm{padding:7px 14px;font-size:12px}
+.btn-green{background:var(--green-bg);color:var(--green);border:1px solid transparent}
+.btn-green:hover{border-color:var(--green)}
+.btn-orange{background:rgba(240,136,62,.12);color:var(--orange);border:1px solid transparent}
+.btn-orange:hover{border-color:var(--orange)}
+
+.stats-bar{display:flex;gap:0;padding:0 28px;background:var(--bg1);border-bottom:1px solid var(--border)}
+.stat-item{flex:1;padding:18px 20px;text-align:center;border-right:1px solid var(--border)}
+.stat-item:last-child{border-right:none}
+.stat-value{display:block;font-size:26px;font-weight:700;color:var(--t0)}
+.stat-label{font-size:12px;color:var(--t3);margin-top:2px}
+
+.proto-bar{display:flex;gap:6px;padding:10px 28px;background:var(--bg1);border-bottom:1px solid var(--border);flex-wrap:wrap;align-items:center}
+.proto-badge{padding:4px 12px;border-radius:16px;font-size:11px;font-weight:600;display:inline-flex;align-items:center;gap:4px}
+.proto-vmess{background:rgba(88,166,255,.12);color:var(--accent)}
+.proto-vless{background:rgba(188,140,255,.12);color:var(--purple)}
+.proto-cdn{background:rgba(240,136,62,.12);color:var(--orange)}
+
+/* Quota bar */
+.quota-bar{display:flex;align-items:center;gap:14px;padding:10px 28px;background:var(--bg1);border-bottom:1px solid var(--border)}
+.quota-label{font-size:13px;color:var(--t2);font-weight:500;white-space:nowrap}
+.quota-track{flex:1;height:10px;background:var(--bg4);border-radius:5px;overflow:hidden}
+.quota-fill{height:100%;border-radius:5px;transition:width .8s ease,background .5s}
+.quota-text{font-size:13px;color:var(--t1);font-weight:600;white-space:nowrap}
+
+.container{padding:24px 28px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
+
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);
+  padding:20px;transition:all .25s;position:relative;overflow:hidden}
+.card:hover{border-color:var(--border2);transform:translateY(-2px);box-shadow:0 12px 40px rgba(0,0,0,.3)}
+.card.inactive{opacity:.55}
+.card-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.card-name{display:flex;align-items:center;gap:10px}
+.online-dot{width:10px;height:10px;border-radius:50%;background:var(--t3);transition:background .3s}
+.online-dot.on{background:var(--green);box-shadow:0 0 8px var(--green);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+.user-name{font-size:17px;font-weight:700;color:var(--t0)}
+.badge{padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600}
+.badge-active{background:var(--green-bg);color:var(--green)}
+.badge-inactive{background:var(--red-bg);color:var(--red)}
+
+.traffic-section{margin-bottom:14px}
+.progress-track{height:8px;background:var(--bg4);border-radius:4px;overflow:hidden;margin-bottom:8px}
+.progress-fill{height:100%;border-radius:4px;transition:width .8s ease,background .5s}
+.traffic-text{display:flex;justify-content:space-between;font-size:13px;color:var(--t2)}
+.traffic-text b{color:var(--t0)}
+
+.info-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;font-size:13px;color:var(--t2)}
+.info-row .val{color:var(--t1);font-weight:500}
+.info-row .warn{color:var(--yellow)}
+.info-row .crit{color:var(--red)}
+
+.speed-row{display:flex;gap:16px;margin:12px 0;padding:10px 14px;background:var(--bg3);border-radius:var(--radius-sm)}
+.speed-item{flex:1;text-align:center;font-size:12px;color:var(--t2)}
+.speed-val{display:block;font-size:15px;font-weight:600;color:var(--t0);margin-top:2px}
+.speed-item.up .speed-val{color:var(--green)}
+.speed-item.down .speed-val{color:var(--accent)}
+
+.card-actions{display:flex;gap:8px;margin-top:14px;padding-top:14px;border-top:1px solid var(--border)}
+.card-actions .btn{flex:1;justify-content:center}
+
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);
+  backdrop-filter:blur(4px);z-index:200;align-items:center;justify-content:center;padding:20px}
+.modal-overlay.show{display:flex}
+.modal{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);
+  padding:32px;width:100%;max-width:440px;box-shadow:var(--shadow);animation:modalIn .2s ease}
+.modal-lg{max-width:560px}
+.modal-xl{max-width:700px}
+@keyframes modalIn{from{opacity:0;transform:scale(.95) translateY(10px)}to{opacity:1;transform:scale(1) translateY(0)}}
+.modal h3{font-size:18px;color:var(--t0);margin-bottom:24px;font-weight:700}
+.form-group{margin-bottom:18px}
+.form-group label{display:block;font-size:13px;color:var(--t2);margin-bottom:6px;font-weight:500}
+.form-group input,.form-group select{width:100%;padding:12px 16px;background:var(--bg1);border:1px solid var(--border);
+  border-radius:var(--radius-sm);color:var(--t0);font-size:14px;transition:border .2s}
+.form-group input:focus,.form-group select:focus{outline:none;border-color:var(--accent)}
+.modal-actions{display:flex;gap:10px;margin-top:24px}
+.modal-actions .btn{flex:1;justify-content:center;padding:12px}
+
+.config-tabs{display:flex;gap:0;border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;margin-bottom:20px}
+.config-tab{flex:1;padding:10px;text-align:center;font-size:12px;font-weight:600;cursor:pointer;
+  background:transparent;border:none;color:var(--t2);transition:all .2s}
+.config-tab.active{color:#fff}
+.config-tab.tab-vmess.active{background:var(--accent2)}
+.config-tab.tab-vless.active{background:#7c3aed}
+.config-tab.tab-cdn.active{background:var(--orange)}
+.qr-box{background:#fff;border-radius:12px;padding:16px;display:inline-block;margin:0 auto 20px}
+.qr-box svg{display:block}
+.config-center{text-align:center}
+.vmess-box{margin-top:16px}
+.vmess-box textarea{width:100%;padding:12px;background:var(--bg1);border:1px solid var(--border);
+  border-radius:var(--radius-sm);color:var(--accent);font-size:11px;font-family:monospace;
+  resize:none;direction:ltr;text-align:left;word-break:break-all}
+.config-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:16px;
+  padding:14px;background:var(--bg3);border-radius:var(--radius-sm);font-size:12px}
+.config-grid .ck{color:var(--t3)}.config-grid .cv{color:var(--t1);direction:ltr;text-align:left}
+
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);
+  padding:14px 28px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius-sm);
+  color:var(--t0);font-size:14px;font-weight:500;z-index:999;transition:transform .3s ease;
+  box-shadow:0 8px 24px rgba(0,0,0,.4)}
+.toast.show{transform:translateX(-50%) translateY(0)}
+.toast.error{border-color:var(--red);color:var(--red)}
+
+.filter-bar{display:flex;align-items:center;gap:10px;padding:14px 28px;background:var(--bg1);
+  border-bottom:1px solid var(--border);overflow-x:auto;-webkit-overflow-scrolling:touch}
+.filter-bar::-webkit-scrollbar{display:none}
+.filter-pills{display:flex;gap:6px;flex-shrink:0}
+.filter-pill{padding:7px 16px;border-radius:20px;font-size:12px;font-weight:500;cursor:pointer;
+  border:1px solid var(--border);background:transparent;color:var(--t2);transition:all .2s;
+  white-space:nowrap;user-select:none}
+.filter-pill:hover{border-color:var(--border2);color:var(--t1)}
+.filter-pill.active{background:var(--accent2);border-color:var(--accent2);color:#fff}
+.filter-pill .pill-count{display:inline-block;min-width:18px;height:18px;line-height:18px;
+  text-align:center;border-radius:9px;font-size:10px;font-weight:700;margin-left:6px;
+  background:rgba(255,255,255,.15)}
+.filter-pill.active .pill-count{background:rgba(255,255,255,.25)}
+.filter-search{flex:1;min-width:140px;max-width:260px;margin-left:auto;padding:8px 14px;
+  background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-sm);
+  color:var(--t0);font-size:13px;transition:border .2s}
+.filter-search:focus{outline:none;border-color:var(--accent)}
+.filter-search::placeholder{color:var(--t3)}
+
+.bulk-modal-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.bulk-zip-top{flex-shrink:0;white-space:nowrap}
+.bulk-qr-section{margin-top:16px;padding-top:16px;border-top:1px solid var(--border)}
+.bulk-qr-wrap{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;max-height:420px;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:4px 0}
+.bulk-qr-card{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px}
+.bulk-qr-title{font-size:13px;font-weight:700;color:var(--t0);margin-bottom:10px}
+.bulk-qr-title small{font-weight:600;color:var(--t3);margin-left:6px}
+.bulk-qr-row{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;justify-content:flex-start}
+.bulk-qr-item{text-align:center}
+.bulk-qr-lbl{display:block;font-size:10px;color:var(--t3);margin-bottom:6px;font-weight:600}
+.bulk-qr-item svg{display:block;margin:0 auto;border-radius:8px;background:#fff;padding:6px}
+.bulk-tabs{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0 12px}
+.bulk-tab{padding:6px 10px;border-radius:12px;font-size:11px;font-weight:700;cursor:pointer;
+  border:1px solid var(--border);background:transparent;color:var(--t2);transition:all .2s;user-select:none}
+.bulk-tab:hover{border-color:var(--border2);color:var(--t1)}
+.bulk-tab.active{background:var(--accent2);border-color:var(--accent2);color:#fff}
+.bulk-tab small{opacity:.8;font-weight:600}
+
+.settings-section{margin-bottom:24px}
+.settings-title{font-size:13px;font-weight:600;color:var(--t2);margin-bottom:12px;text-transform:uppercase;letter-spacing:1px}
+.settings-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border)}
+.settings-row:last-child{border-bottom:none}
+.settings-label{font-size:14px;color:var(--t1)}
+.settings-desc{font-size:11px;color:var(--t3);margin-top:2px}
+.toggle{position:relative;width:44px;height:24px;cursor:pointer}
+.toggle input{opacity:0;width:0;height:0}
+.toggle-slider{position:absolute;inset:0;background:var(--bg4);border-radius:12px;transition:.3s}
+.toggle-slider::before{content:'';position:absolute;height:18px;width:18px;left:3px;bottom:3px;
+  background:var(--t2);border-radius:50%;transition:.3s}
+.toggle input:checked+.toggle-slider{background:var(--green)}
+.toggle input:checked+.toggle-slider::before{transform:translateX(20px);background:#fff}
+
+.empty{text-align:center;padding:80px 20px;color:var(--t3)}
+.empty-icon{font-size:48px;margin-bottom:12px}
+.empty-text{font-size:15px}
+
+@media(max-width:768px){
+  .top-bar{flex-direction:column;gap:12px;padding:14px 16px}
+  .header-actions{width:100%;justify-content:center}
+  .stats-bar{flex-wrap:wrap}.stat-item{min-width:50%;border-bottom:1px solid var(--border)}
+  .proto-bar{padding:8px 16px}
+  .quota-bar{flex-wrap:wrap;padding:8px 16px}
+  .filter-bar{padding:10px 16px;gap:8px}
+  .filter-search{min-width:100px;max-width:180px}
+  .container{padding:16px}
+  .grid{grid-template-columns:1fr}
+  .modal-overlay{padding:10px;align-items:flex-start;padding-top:20px}
+  .modal{padding:20px 16px;margin:0;max-height:calc(100vh - 40px);overflow-y:auto;-webkit-overflow-scrolling:touch}
+  .modal-lg,.modal-xl{max-width:100%}
+  .modal h3{font-size:16px;margin-bottom:16px}
+  .qr-box{padding:10px;margin-bottom:14px}
+  .qr-box svg{max-width:180px;max-height:180px;width:100%;height:auto}
+  .vmess-box textarea{font-size:10px;padding:10px}
+  .config-grid{grid-template-columns:auto 1fr;gap:6px 10px;padding:10px;font-size:11px}
+  .config-grid .cv{word-break:break-all;overflow-wrap:break-word}
+  .modal-actions{flex-direction:column;gap:8px}
+  .modal-actions .btn{width:100%}
+  .card-actions{flex-wrap:wrap}
+  .card-actions .btn{min-width:calc(50% - 4px)}
+}
+.brand-logo{cursor:pointer;transition:opacity .2s}.brand-logo:hover{opacity:.8}
+.brand-edit-input{width:100%;padding:14px 18px;background:var(--bg1);border:1px solid var(--border);
+  border-radius:var(--radius-sm);color:var(--t0);font-size:22px;font-weight:800;text-align:center;
+  letter-spacing:3px;transition:border .2s}
+.brand-edit-input:focus{outline:none;border-color:var(--accent)}
+.brand-preview{text-align:center;margin:16px 0;font-size:36px;font-weight:800;letter-spacing:4px;
+  background:linear-gradient(135deg,var(--accent),var(--purple));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+</style>
+</head>
+<body>
+
+<!-- ── Login ── -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-logo" id="login-logo">👑 VIP</div>
+    <div class="login-sub">Agent Panel</div>
+    <input type="text" id="login-user" class="login-input" placeholder="Username" autocomplete="username"
+           style="letter-spacing:normal">
+    <input type="password" id="login-pass" class="login-input" placeholder="Password"
+           onkeydown="if(event.key==='Enter')doLogin()">
+    <button type="button" class="login-btn" id="login-submit" onclick="doLogin()">Sign In</button>
+    <div class="login-error" id="login-error"></div>
+  </div>
+</div>
+
+<!-- ── Panel ── -->
+<div id="panel">
+  <header class="top-bar">
+    <div class="brand">
+      <span class="brand-logo" id="panel-logo" onclick="showModal('brand-modal')" title="Click to customize brand">👑 VIP</span>
+      <span class="brand-text">Agent Panel — <span id="agent-name-top" style="color:var(--accent)"></span></span>
+    </div>
+    <div class="header-actions">
+      <button class="btn btn-outline btn-sm" onclick="forceSync()">Sync</button>
+      <button class="btn btn-primary btn-sm" onclick="showModal('add-modal')">+ Add User</button>
+      <button class="btn btn-outline btn-sm" onclick="showModal('bulk-modal')">Bulk Configs</button>
+      <button class="btn btn-outline btn-sm" id="btn-groups" onclick="switchMainView('groups')">Groups</button>
+      <button class="btn btn-outline btn-sm" id="btn-users" onclick="switchMainView('users')" style="display:none">Users</button>
+      <button class="btn btn-ghost btn-sm" onclick="doLogout()">Logout</button>
+    </div>
+  </header>
+
+  <!-- SERVER MIGRATION NOTICE -->
+  <div id="migration-banner" style="
+    background: linear-gradient(135deg, #1a0a00 0%, #2d1600 50%, #1a0a00 100%);
+    border: 1px solid #f59e0b;
+    border-left: 4px solid #f59e0b;
+    margin: 0;
+    padding: 16px 28px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    animation: bannerPulse 2s ease-in-out infinite;
+  ">
+    <div style="display:flex;align-items:center;gap:12px;flex:1">
+      <span style="font-size:28px">&#9888;&#65039;</span>
+      <div>
+        <div style="color:#fbbf24;font-weight:700;font-size:15px;margin-bottom:4px;direction:rtl;text-align:right">
+          &#8252;&#65039; &#1575;&#1591;&#1604;&#1575;&#1593;&#1740;&#1607; &#1605;&#1607;&#1605; &mdash; &#1587;&#1585;&#1608;&#1585; &#1578;&#1594;&#1740;&#1740;&#1585; &#1705;&#1585;&#1583;&#1607; &#1575;&#1587;&#1578;
+        </div>
+        <div style="color:#fcd34d;font-size:13px;direction:rtl;text-align:right;line-height:1.7">
+          &#1604;&#1591;&#1601;&#1575;&#1611; &#1576;&#1607; &#1578;&#1605;&#1575;&#1605; &#1705;&#1575;&#1585;&#1576;&#1585;&#1575;&#1606; &#1582;&#1608;&#1583; &#1575;&#1591;&#1604;&#1575;&#1593; &#1583;&#1607;&#1740;&#1583; &#1705;&#1607; &#1581;&#1578;&#1605;&#1575;&#1611; <b style="color:#fff">Subscription Update</b> &#1585;&#1575; &#1575;&#1606;&#1580;&#1575;&#1605; &#1583;&#1607;&#1606;&#1583;.<br>
+          &#1587;&#1585;&#1608;&#1585; &#1605;&#1575; &#1578;&#1594;&#1740;&#1740;&#1585; &#1705;&#1585;&#1583;&#1607; &#1608; &#1576;&#1583;&#1608;&#1606; &#1570;&#1662;&#1583;&#1740;&#1578; &#1587;&#1575;&#1576;&#8204;&#1575;&#1587;&#1705;&#1585;&#1740;&#1662;&#1588;&#1606;&#1548; &#1575;&#1578;&#1589;&#1575;&#1604; &#1705;&#1575;&#1585;&#1576;&#1585;&#1575;&#1606; &#1602;&#1591;&#1593; &#1582;&#1608;&#1575;&#1607;&#1583; &#1588;&#1583;.
+        </div>
+      </div>
+    </div>
+    <button onclick="this.parentElement.style.display='none'" style="
+      background:none;border:1px solid #92400e;color:#fbbf24;border-radius:8px;
+      padding:6px 14px;cursor:pointer;font-size:12px;white-space:nowrap;
+    ">&#1576;&#1587;&#1578;&#1606; &#10005;</button>
+  </div>
+  <style>
+    @keyframes bannerPulse {
+      0%,100%{border-color:#f59e0b}
+      50%{border-color:#fbbf24;box-shadow:0 0 20px rgba(245,158,11,0.15)}
+    }
+  </style>
+  <!-- /SERVER MIGRATION NOTICE -->
+
+  <!-- Quota Bar -->
+  <div class="quota-bar">
+    <span class="quota-label">Quota:</span>
+    <div class="quota-track"><div class="quota-fill" id="quota-fill" style="width:0%;background:var(--green)"></div></div>
+    <span class="quota-text" id="quota-text">— / — GB</span>
+  </div>
+
+  <div class="stats-bar">
+    <div class="stat-item"><span class="stat-value" id="s-total">—</span><span class="stat-label">Total Users</span></div>
+    <div class="stat-item"><span class="stat-value" id="s-active">—</span><span class="stat-label">Active</span></div>
+    <div class="stat-item"><span class="stat-value" id="s-online">—</span><span class="stat-label">Online</span></div>
+    <div class="stat-item"><span class="stat-value" id="s-traffic">—</span><span class="stat-label">Total Traffic</span></div>
+  </div>
+
+  <div class="proto-bar" id="proto-bar">
+    <span class="proto-badge proto-vmess">VMess:443</span>
+    <span class="proto-badge proto-vless" id="pb-vless" style="display:none">VLESS/Reality</span>
+    <span class="proto-badge proto-cdn" id="pb-cdn" style="display:none">CDN</span>
+  </div>
+
+  <div class="filter-bar">
+    <div class="filter-pills" id="filter-pills">
+      <button class="filter-pill active" data-filter="all">All<span class="pill-count" id="fc-all">0</span></button>
+      <button class="filter-pill" data-filter="online">Online<span class="pill-count" id="fc-online">0</span></button>
+      <button class="filter-pill" data-filter="offline">Offline<span class="pill-count" id="fc-offline">0</span></button>
+      <button class="filter-pill" data-filter="active">Active<span class="pill-count" id="fc-active">0</span></button>
+      <button class="filter-pill" data-filter="disabled">Disabled<span class="pill-count" id="fc-disabled">0</span></button>
+      <button class="filter-pill" data-filter="expiring">Expiring<span class="pill-count" id="fc-expiring">0</span></button>
+    </div>
+    <input type="text" class="filter-search" id="filter-search" placeholder="Search user..." oninput="applyFilter()">
+  </div>
+
+  <div class="container">
+    <div id="users-grid" class="grid"></div>
+    <div id="groups-grid" class="grid" style="display:none"></div>
+  </div>
+</div>
+
+<!-- ── Add Modal ── -->
+<div id="add-modal" class="modal-overlay" onclick="if(event.target===this)closeModal(this.id)">
+  <div class="modal">
+    <h3>New User</h3>
+    <div class="form-group"><label>Username</label>
+      <input type="text" id="add-name" placeholder="e.g. ali"></div>
+    <div class="form-group"><label>Traffic (GB)</label>
+      <input type="number" id="add-traffic" value="10" min="0.1" step="0.1"></div>
+    <div class="form-group"><label>Duration (days)</label>
+      <input type="number" id="add-days" value="30" min="1"></div>
+    <div class="form-group" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div><label>Speed Down (KB/s)</label>
+        <input type="number" id="add-speed-down" value="200" min="0"></div>
+      <div><label>Speed Up (KB/s)</label>
+        <input type="number" id="add-speed-up" value="200" min="0"></div>
+    </div>
+    <div id="add-quota-hint" style="font-size:12px;color:var(--t2);margin-bottom:10px"></div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="doAddUser()">Create User</button>
+      <button class="btn btn-outline" onclick="closeModal('add-modal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Bulk Modal ── -->
+<div id="bulk-modal" class="modal-overlay" onclick="if(event.target===this)closeModal(this.id)">
+  <div class="modal modal-xl" style="max-height:calc(100vh - 40px);overflow-y:auto;-webkit-overflow-scrolling:touch">
+    <div class="bulk-modal-head">
+      <h3 style="margin:0">Bulk Configs (Group)</h3>
+      <button type="button" class="btn btn-green btn-sm bulk-zip-top" onclick="downloadBulkZip()" title="One .txt per user + ALL-CONFIGS.txt">Download ZIP</button>
+    </div>
+    <div style="padding:12px;background:var(--bg3);border-radius:var(--radius-sm);font-size:12px;color:var(--t2);line-height:1.6;margin-bottom:14px">
+      Default mode creates users <b style="color:var(--t1)">without applying to server</b>, so existing connected configs won't drop.
+      You can apply later via <b style="color:var(--t1)">Sync</b>.
+    </div>
+    <div id="bulk-quota-hint" style="font-size:12px;color:var(--t2);margin-bottom:10px"></div>
+    <div class="form-group"><label>Prefix (group name)</label>
+      <input type="text" id="bulk-prefix" value="group" placeholder="e.g. 1gig"></div>
+    <div class="form-group"><label>Count</label>
+      <input type="number" id="bulk-count" value="10" min="1" max="500"></div>
+    <div class="form-group"><label>Traffic per user (GB)</label>
+      <input type="number" id="bulk-traffic" value="1" min="0.1" step="0.1"></div>
+    <div class="form-group"><label>Duration (days)</label>
+      <input type="number" id="bulk-days" value="30" min="1"></div>
+    <div class="form-group" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div>
+        <label>Numbering</label>
+        <select id="bulk-numbered">
+          <option value="1" selected>Numbered (001, 002, 003...)</option>
+          <option value="0">Random suffix</option>
+        </select>
+      </div>
+      <div>
+        <label>Start number</label>
+        <input type="number" id="bulk-start" value="1" min="1">
+      </div>
+    </div>
+    <div class="form-group" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div>
+        <label>Pad digits</label>
+        <input type="number" id="bulk-pad" value="3" min="2" max="6">
+      </div>
+      <div style="padding-top:22px;color:var(--t3);font-size:11px;line-height:1.4">
+        Example: <b style="color:var(--t1)">prefix-1g-001</b>
+      </div>
+    </div>
+    <div class="form-group" style="display:flex;gap:10px;align-items:center">
+      <label class="toggle" style="margin:0"><input type="checkbox" id="bulk-apply"><span class="toggle-slider"></span></label>
+      <div>
+        <div class="settings-label" style="font-size:13px">Apply to server now</div>
+        <div class="settings-desc">May reload server config. Leave OFF to avoid any disruption.</div>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="doBulkCreate()">Create Bulk</button>
+      <button class="btn btn-danger" onclick="deleteBulkGroup()">Delete This Group</button>
+      <button class="btn btn-outline" onclick="closeModal('bulk-modal')">Close</button>
+    </div>
+
+    <div style="margin-top:14px;border-top:1px solid var(--border);padding-top:14px">
+      <div class="settings-title">Results</div>
+      <div id="bulk-tabs" class="bulk-tabs" style="display:none"></div>
+      <textarea id="bulk-output" rows="10" readonly style="width:100%;padding:12px;background:var(--bg1);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--t1);font-size:11px;font-family:monospace;resize:vertical;direction:ltr;text-align:left;word-break:break-all"></textarea>
+      <div class="bulk-qr-section">
+        <div class="settings-title">QR codes (all in this group)</div>
+        <div id="bulk-qr-wrap" class="bulk-qr-wrap" style="display:none"></div>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap">
+        <button class="btn btn-primary btn-sm" onclick="downloadBulkZip()">Download ZIP</button>
+        <button class="btn btn-outline btn-sm" onclick="copyBulkOutput()">Copy</button>
+        <button class="btn btn-outline btn-sm" onclick="downloadBulkCSV()">Download CSV</button>
+        <button class="btn btn-outline btn-sm" onclick="openBulkInNewTab()">Open Tab</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Renew Modal ── -->
+<div id="renew-modal" class="modal-overlay" onclick="if(event.target===this)closeModal(this.id)">
+  <div class="modal">
+    <h3>Renew: <span id="renew-name" style="color:var(--accent)"></span></h3>
+    <div class="form-group"><label>New Traffic (GB)</label>
+      <input type="number" id="renew-traffic" value="10" min="0.1" step="0.1"></div>
+    <div class="form-group"><label>Duration (days)</label>
+      <input type="number" id="renew-days" value="30" min="1"></div>
+    <div id="renew-quota-hint" style="font-size:12px;color:var(--t2);margin-bottom:10px"></div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="doRenewUser()">Renew</button>
+      <button class="btn btn-outline" onclick="closeModal('renew-modal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Config Modal ── -->
+<div id="config-modal" class="modal-overlay" onclick="if(event.target===this)closeModal(this.id)">
+  <div class="modal modal-lg" style="max-height:calc(100vh - 40px);overflow-y:auto;-webkit-overflow-scrolling:touch">
+    <h3>Config: <span id="config-name" style="color:var(--accent)"></span></h3>
+    <div class="config-tabs" id="config-tabs" style="flex-wrap:wrap;gap:4px">
+      <button class="config-tab tab-vmess active" onclick="switchConfigTab('vmess')">VMess</button>
+      <button class="config-tab tab-vless" onclick="switchConfigTab('vless')" id="ct-vless" style="display:none">VLESS</button>
+      <button class="config-tab tab-cdn" onclick="switchConfigTab('cdn')" id="ct-cdn" style="display:none">CDN</button>
+      <button class="config-tab tab-trojan" onclick="switchConfigTab('trojan')" id="ct-trojan" style="display:none">Trojan</button>
+      <button class="config-tab tab-grpc" onclick="switchConfigTab('grpc')" id="ct-grpc" style="display:none">gRPC</button>
+      <button class="config-tab tab-httpupgrade" onclick="switchConfigTab('httpupgrade')" id="ct-httpupgrade" style="display:none">HU</button>
+      <button class="config-tab tab-ss2022" onclick="switchConfigTab('ss2022')" id="ct-ss2022" style="display:none">SS2022</button>
+      <button class="config-tab tab-vless_ws" onclick="switchConfigTab('vless_ws')" id="ct-vless_ws" style="display:none">VLESS-WS</button>
+    </div>
+    <div class="config-center">
+      <div class="qr-box" id="config-qr"></div>
+    </div>
+    <div class="vmess-box">
+      <label style="font-size:12px;color:var(--t3)" id="config-link-label">VMess Link</label>
+      <textarea id="config-vmess" rows="3" readonly style="word-break:break-all;overflow-wrap:break-word"></textarea>
+      <button class="btn btn-primary btn-sm" onclick="copyConfigLink()" style="width:100%;margin-top:8px">Copy Link</button>
+    </div>
+    <div class="config-grid" id="config-info"></div>
+    <div style="margin-top:14px;padding:12px;background:var(--bg3);border-radius:var(--radius-sm);display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span style="font-size:12px;color:var(--t3);flex-shrink:0">📄 Sub Page:</span>
+      <input type="text" id="config-sub-url" readonly style="flex:1;min-width:120px;padding:8px 10px;background:var(--bg1);border:1px solid var(--border);border-radius:8px;color:var(--green);font-size:11px;font-family:monospace">
+      <button class="btn btn-primary btn-sm" onclick="copySubUrl()" style="flex-shrink:0">Copy</button>
+      <a id="config-sub-open" href="#" target="_blank" class="btn btn-outline btn-sm" style="flex-shrink:0;text-decoration:none">Open</a>
+    </div>
+    <!-- Dedicated App Download — Android -->
+    <a href="/download/app" style="display:flex;align-items:center;gap:14px;margin-top:14px;padding:14px 16px;background:linear-gradient(135deg,rgba(88,166,255,.08),rgba(188,140,255,.08));border:1px solid var(--accent);border-radius:var(--radius-sm);text-decoration:none;color:var(--t1);transition:all .2s" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 20px rgba(0,0,0,.3)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
+      <span style="font-size:30px">🚀</span>
+      <div style="flex:1">
+        <div style="font-size:14px;font-weight:700;color:var(--t0);display:flex;align-items:center;gap:8px">
+          اپلیکیشن اختصاصی
+          <span style="padding:2px 8px;border-radius:10px;font-size:9px;font-weight:700;background:var(--green-bg);color:var(--green)">پیشنهادی</span>
+        </div>
+        <div style="font-size:11px;color:var(--t2);margin-top:3px;direction:rtl">سرعت بالاتر • کیفیت بهتر • اتصال پایدار</div>
+        <div style="margin-top:5px;display:flex;gap:6px;flex-wrap:wrap">
+          <span style="padding:2px 8px;border-radius:8px;font-size:9px;font-weight:600;background:rgba(88,166,255,.12);color:var(--accent)">Android</span>
+          <span style="padding:2px 8px;border-radius:8px;font-size:9px;font-weight:600;background:rgba(63,185,80,.12);color:var(--green)">Fragment + MUX</span>
+        </div>
+      </div>
+      <span style="color:var(--accent);font-size:20px;flex-shrink:0">⬇</span>
+    </a>
+    <!-- Dedicated App Download — Windows -->
+    <a href="/download/app-windows" style="display:flex;align-items:center;gap:14px;margin-top:8px;padding:14px 16px;background:linear-gradient(135deg,rgba(188,140,255,.08),rgba(88,166,255,.08));border:1px solid var(--purple);border-radius:var(--radius-sm);text-decoration:none;color:var(--t1);transition:all .2s" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 20px rgba(0,0,0,.3)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
+      <span style="font-size:30px">💻</span>
+      <div style="flex:1">
+        <div style="font-size:14px;font-weight:700;color:var(--t0);display:flex;align-items:center;gap:8px">
+          نسخه ویندوز
+          <span style="padding:2px 8px;border-radius:10px;font-size:9px;font-weight:700;background:rgba(188,140,255,.12);color:var(--purple)">جدید</span>
+        </div>
+        <div style="font-size:11px;color:var(--t2);margin-top:3px;direction:rtl">سرعت بالاتر • MUX • پروکسی سیستم خودکار</div>
+        <div style="margin-top:5px;display:flex;gap:6px;flex-wrap:wrap">
+          <span style="padding:2px 8px;border-radius:8px;font-size:9px;font-weight:600;background:rgba(188,140,255,.12);color:var(--purple)">Windows</span>
+          <span style="padding:2px 8px;border-radius:8px;font-size:9px;font-weight:600;background:rgba(63,185,80,.12);color:var(--green)">Fragment + MUX</span>
+        </div>
+      </div>
+      <span style="color:var(--purple);font-size:20px;flex-shrink:0">⬇</span>
+    </a>
+    <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
+      <button class="btn btn-outline" onclick="closeModal('config-modal')" style="width:100%;justify-content:center;padding:12px">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Toast ── -->
+<div id="toast" class="toast"></div>
+
+<!-- ── Brand Edit Modal ── -->
+<div id="brand-modal" class="modal-overlay" onclick="if(event.target===this)closeModal(this.id)">
+  <div class="modal" style="text-align:center">
+    <h3>Customize Brand Name</h3>
+    <p style="font-size:13px;color:var(--t2);margin-bottom:20px">This name appears on your panel header and login page.</p>
+    <div class="brand-preview" id="brand-preview">VPN</div>
+    <div class="form-group">
+      <input type="text" id="brand-input" class="brand-edit-input" placeholder="Your brand name" maxlength="40"
+             oninput="document.getElementById('brand-preview').textContent=this.value||'VPN'">
+    </div>
+    <p style="font-size:11px;color:var(--t3);margin-bottom:16px">Leave empty to use default (VPN). Max 40 characters.</p>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="saveBrand()">Save</button>
+      <button class="btn btn-outline" onclick="closeModal('brand-modal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/qrcode.js') }}"></script>
+<script>
+const API = '/api/agent';
+const QR_LIB_URL = {{ url_for('static', filename='js/qrcode.js') | tojson }};
+let users = [];
+let prevLive = {}, prevTime = 0, speeds = {};
+let renewTarget = '';
+let polling = false;
+let currentFilter = 'all';
+let serverInfo = {};
+let configTab = 'vmess';
+let configTarget = null;
+let mainView = 'users';
+let groups = [];
+let agentInfo = { name: '', quota_gb: 0, used_gb: 0, remaining_gb: 0, brand_name: '' };
+const SERVER_INFO = {{ {'ip': server_ip, 'port': server_port, 'sni': sni_host, 'path': ws_path} | tojson }};
+
+/* ── Auth ── */
+async function doLogin() {
+  const user = document.getElementById('login-user').value.trim();
+  const pw = document.getElementById('login-pass').value;
+  const errEl = document.getElementById('login-error');
+  const btn = document.getElementById('login-submit');
+  if (!btn) return;
+  if (!user) { errEl.textContent = 'Enter username'; return; }
+  errEl.textContent = '';
+  btn.disabled = true;
+  btn.textContent = 'Signing in...';
+  try {
+    const r = await fetch(API + '/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: user, password: pw }),
+      credentials: 'same-origin'
+    });
+    let d = {};
+    try { d = await r.json(); } catch(e) {
+      errEl.textContent = 'Invalid server response';
+      btn.disabled = false; btn.textContent = 'Sign In'; return;
+    }
+    if (r.ok && d.ok) {
+      document.getElementById('login-screen').style.display = 'none';
+      document.getElementById('panel').style.display = 'block';
+      startPolling();
+      btn.disabled = false; btn.textContent = 'Sign In';
+      return;
+    }
+    errEl.textContent = d.error || 'Error';
+    if (d.locked) {
+      btn.disabled = true; btn.textContent = 'Locked';
+      setTimeout(() => { btn.disabled = false; btn.textContent = 'Sign In'; errEl.textContent = ''; }, 60000);
+      return;
+    }
+    btn.disabled = false; btn.textContent = 'Sign In';
+    document.getElementById('login-pass').value = '';
+    document.getElementById('login-pass').focus();
+  } catch(e) {
+    errEl.textContent = 'Connection error';
+    btn.disabled = false; btn.textContent = 'Sign In';
+  }
+}
+
+async function doLogout() {
+  await fetch(API+'/logout', {method:'POST'});
+  location.reload();
+}
+
+/* ── Data ── */
+async function fetchMe() {
+  try {
+    const r = await fetch(API+'/me');
+    if (r.status === 401) { location.reload(); return; }
+    agentInfo = await r.json();
+    document.getElementById('agent-name-top').textContent = agentInfo.name || '';
+    applyBrand(agentInfo.brand_name || '');
+    updateQuotaBar();
+  } catch(e) {}
+}
+
+function applyBrand(name) {
+  const display = name || 'VPN';
+  const el1 = document.getElementById('panel-logo');
+  const el2 = document.getElementById('login-logo');
+  if (el1) el1.textContent = display;
+  if (el2) el2.textContent = display;
+  document.title = display + ' Agent Panel';
+}
+
+async function saveBrand() {
+  const val = (document.getElementById('brand-input').value || '').trim().slice(0, 40);
+  try {
+    const r = await fetch(API+'/brand', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ brand_name: val })
+    });
+    const d = await r.json();
+    if (d.ok) {
+      agentInfo.brand_name = d.brand_name;
+      applyBrand(d.brand_name);
+      closeModal('brand-modal');
+      toast('Brand updated');
+    } else { toast(d.error||'Error','error'); }
+  } catch(e) { toast('Connection error','error'); }
+}
+
+function updateQuotaBar() {
+  const used = agentInfo.traffic_used_gb || 0;
+  const total = agentInfo.traffic_quota_gb || 0;
+  const remaining = agentInfo.traffic_remaining_gb || 0;
+  const pct = total > 0 ? Math.min(Math.round(used / total * 100), 100) : 0;
+  const color = pct < 60 ? 'var(--green)' : pct < 85 ? 'var(--yellow)' : 'var(--red)';
+  document.getElementById('quota-fill').style.width = pct + '%';
+  document.getElementById('quota-fill').style.background = color;
+  document.getElementById('quota-text').textContent = used.toFixed(1) + ' / ' + total.toFixed(1) + ' GB  (' + remaining.toFixed(1) + ' GB remaining)';
+
+  // Update hints
+  const addHint = document.getElementById('add-quota-hint');
+  if (addHint) addHint.textContent = 'Remaining quota: ' + (agentInfo.traffic_remaining_gb||0).toFixed(1) + ' GB';
+  const bulkHint = document.getElementById('bulk-quota-hint');
+  if (bulkHint) bulkHint.textContent = 'Remaining quota: ' + (agentInfo.traffic_remaining_gb||0).toFixed(1) + ' GB';
+}
+
+async function fetchUsers() {
+  try {
+    const r = await fetch(API+'/users');
+    if (r.status === 401) { location.reload(); return; }
+    users = await r.json();
+    if (mainView === 'users') renderUsers();
+    updateStats();
+  } catch(e) {}
+}
+
+async function fetchGroups() {
+  try {
+    const r = await fetch(API+'/groups');
+    if (r.status === 401) { location.reload(); return; }
+    groups = await r.json();
+    if (mainView === 'groups') renderGroups();
+  } catch(e) {}
+}
+
+async function fetchLive() {
+  try {
+    const r = await fetch(API+'/live');
+    if (r.status === 401) return;
+    const data = await r.json();
+    const now = Date.now();
+    if (prevTime > 0) {
+      const dt = (now - prevTime) / 1000;
+      for (const [name, s] of Object.entries(data)) {
+        const p = prevLive[name];
+        if (p) {
+          if (s.up < p.up || s.down < p.down) {
+            // Counter reset — keep last known speed
+          } else {
+            speeds[name] = {up: Math.max(0,(s.up-p.up)/dt), down: Math.max(0,(s.down-p.down)/dt)};
+          }
+        } else if (s.up + s.down > 0) {
+          speeds[name] = {up: s.up > 0 ? 100 : 0, down: s.down > 0 ? 100 : 0};
+        }
+      }
+      for (const name of Object.keys(speeds)) {
+        if (!(name in data)) speeds[name] = {up:0, down:0};
+      }
+    }
+    prevLive = data; prevTime = now;
+    renderSpeeds();
+  } catch(e) {}
+}
+
+async function fetchServerInfo() {
+  try {
+    const r = await fetch(API+'/server-info');
+    if (r.ok) {
+      serverInfo = await r.json();
+      updateProtoBar();
+    }
+  } catch(e) {}
+}
+
+function startPolling() {
+  if (polling) return;
+  polling = true;
+  fetchMe(); fetchUsers(); fetchGroups(); fetchLive(); fetchServerInfo();
+  setInterval(fetchMe, 15000);
+  setInterval(fetchUsers, 8000);
+  setInterval(fetchGroups, 12000);
+  setInterval(fetchLive, 3000);
+  setInterval(fetchServerInfo, 30000);
+}
+
+function switchMainView(view) {
+  mainView = view;
+  const ug = document.getElementById('users-grid');
+  const gg = document.getElementById('groups-grid');
+  const btnG = document.getElementById('btn-groups');
+  const btnU = document.getElementById('btn-users');
+  if (view === 'groups') {
+    ug.style.display = 'none'; gg.style.display = '';
+    btnG.style.display = 'none'; btnU.style.display = '';
+    document.querySelector('.filter-bar').style.display = 'none';
+    renderGroups(); fetchGroups();
+  } else {
+    ug.style.display = ''; gg.style.display = 'none';
+    btnG.style.display = ''; btnU.style.display = 'none';
+    document.querySelector('.filter-bar').style.display = '';
+    renderUsers();
+  }
+}
+
+function updateProtoBar() {
+  const vl = document.getElementById('pb-vless');
+  const cd = document.getElementById('pb-cdn');
+  if (serverInfo.vless) {
+    vl.style.display = '';
+    vl.textContent = 'VLESS/Reality:' + (serverInfo.vless_port || 2053);
+  } else { vl.style.display = 'none'; }
+  if (serverInfo.cdn) {
+    cd.style.display = '';
+    cd.textContent = 'CDN:' + (serverInfo.cdn_domain || '');
+  } else { cd.style.display = 'none'; }
+}
+
+/* ── Filtering ── */
+function isOnline(name) {
+  const spd = speeds[name] || {up:0, down:0};
+  if ((spd.up + spd.down) > 50) return true;
+  const u = users.find(u => u.name === name);
+  if (u && u.online_ip_count > 0) return true;
+  return false;
+}
+
+function getFilterCounts() {
+  const q = (document.getElementById('filter-search')?.value || '').toLowerCase();
+  const base = q ? users.filter(u => u.name.toLowerCase().includes(q)) : users;
+  return {
+    all: base.length,
+    online: base.filter(u => isOnline(u.name)).length,
+    offline: base.filter(u => u.active && !isOnline(u.name)).length,
+    active: base.filter(u => u.active).length,
+    disabled: base.filter(u => !u.active).length,
+    expiring: base.filter(u => u.active && u.days_left <= 7).length
+  };
+}
+
+function getFilteredUsers() {
+  const q = (document.getElementById('filter-search')?.value || '').toLowerCase();
+  let list = users;
+  if (q) list = list.filter(u => u.name.toLowerCase().includes(q));
+  switch (currentFilter) {
+    case 'online':   return list.filter(u => isOnline(u.name));
+    case 'offline':  return list.filter(u => u.active && !isOnline(u.name));
+    case 'active':   return list.filter(u => u.active);
+    case 'disabled': return list.filter(u => !u.active);
+    case 'expiring': return list.filter(u => u.active && u.days_left <= 7);
+    default:         return list;
+  }
+}
+
+function updateFilterCounts() {
+  const c = getFilterCounts();
+  for (const [k, v] of Object.entries(c)) {
+    const el = document.getElementById('fc-'+k);
+    if (el) el.textContent = v;
+  }
+}
+
+function applyFilter() { updateFilterCounts(); renderUsers(); }
+
+document.addEventListener('click', e => {
+  const pill = e.target.closest('.filter-pill');
+  if (!pill) return;
+  document.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
+  pill.classList.add('active');
+  currentFilter = pill.dataset.filter;
+  applyFilter();
+});
+
+/* ── Rendering ── */
+function renderUsers() {
+  const grid = document.getElementById('users-grid');
+  const filtered = getFilteredUsers();
+  updateFilterCounts();
+  if (!users.length) {
+    grid.innerHTML = '<div class="empty"><div class="empty-icon">📡</div><div class="empty-text">No users created yet</div></div>';
+    return;
+  }
+  if (!filtered.length) {
+    grid.innerHTML = '<div class="empty"><div class="empty-icon">🔍</div><div class="empty-text">No users match this filter</div></div>';
+    return;
+  }
+  grid.innerHTML = filtered.map(u => {
+    const spd = speeds[u.name] || {up:0, down:0};
+    const online = isOnline(u.name);
+    const barColor = u.traffic_percent < 60 ? 'var(--green)' : u.traffic_percent < 85 ? 'var(--yellow)' : 'var(--red)';
+    const daysClass = u.days_left <= 3 ? 'crit' : u.days_left <= 7 ? 'warn' : 'val';
+    return `
+    <div class="card ${u.active?'':'inactive'}" id="card-${u.name}">
+      <div class="card-head">
+        <div class="card-name">
+          <span class="online-dot ${online?'on':''}" id="dot-${u.name}"></span>
+          <span class="user-name">${esc(u.name)}</span>
+        </div>
+        <span class="badge ${u.active?'badge-active':'badge-inactive'}">${u.active?'Active':'Disabled'}</span>
+      </div>
+      <div class="traffic-section">
+        <div class="progress-track"><div class="progress-fill" style="width:${u.traffic_percent}%;background:${barColor}"></div></div>
+        <div class="traffic-text"><span><b>${fmtTraffic(u.traffic_used_bytes)}</b> / ${fmtTraffic(u.traffic_limit_bytes)}</span><span>${u.traffic_percent}%</span></div>
+      </div>
+      <div class="info-row"><span>Expires</span><span class="val">${u.expire_at}</span></div>
+      <div class="info-row"><span>Remaining</span><span class="${daysClass}">${u.days_left} days</span></div>
+      <div class="speed-row" id="speed-${u.name}">
+        <div class="speed-item up"><span>Upload</span><span class="speed-val">${fmtSpeed(spd.up)}</span></div>
+        <div class="speed-item down"><span>Download</span><span class="speed-val">${fmtSpeed(spd.down)}</span></div>
+      </div>
+      <div class="card-actions">
+        <button class="btn btn-outline btn-sm" onclick="showConfig('${esc(u.name)}')">Config</button>
+        <button class="btn ${u.active?'btn-orange':'btn-green'} btn-sm" onclick="toggleUser('${esc(u.name)}')">${u.active?'Disconnect':'Connect'}</button>
+        <button class="btn btn-outline btn-sm" onclick="showRenew('${esc(u.name)}')">Renew</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteUser('${esc(u.name)}')">Delete</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderGroups() {
+  const grid = document.getElementById('groups-grid');
+  if (!groups || !groups.length) {
+    grid.innerHTML = '<div class="empty"><div class="empty-icon">🧩</div><div class="empty-text">No groups yet</div></div>';
+    return;
+  }
+  grid.innerHTML = groups.map(g => {
+    const pctActive = g.count ? Math.round((g.active / g.count) * 100) : 0;
+    return `
+    <div class="card">
+      <div class="card-head">
+        <div class="card-name">
+          <span class="online-dot ${g.active>0?'on':''}"></span>
+          <span class="user-name">${esc(g.id)}</span>
+        </div>
+        <span class="badge ${g.active>0?'badge-active':'badge-inactive'}">${g.active>0?'Active':'Disabled'}</span>
+      </div>
+      <div class="info-row"><span>Total</span><span class="val">${g.count}</span></div>
+      <div class="info-row"><span>Active</span><span class="val">${g.active} (${pctActive}%)</span></div>
+      <div class="info-row"><span>Disabled</span><span class="val">${g.disabled}</span></div>
+      <div class="info-row"><span>Traffic</span><span class="val">${(g.traffic_gb||0)} GB each</span></div>
+      <div class="info-row"><span>Latest expiry</span><span class="val">${(g.latest_expire||'').slice(0,10)}</span></div>
+      <div class="card-actions">
+        <button class="btn btn-outline btn-sm" onclick="openGroupExport('${esc(g.id)}')">Export</button>
+        <button class="btn btn-outline btn-sm" onclick="openGroupUsers('${esc(g.id)}')">Open</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteGroup('${esc(g.id)}')">Delete</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function openGroupUsers(groupId) {
+  const outEl = document.getElementById('bulk-output');
+  outEl.value = 'Loading group...';
+  showModal('bulk-modal');
+  try {
+    const r = await fetch(API+'/groups/'+encodeURIComponent(groupId)+'/users');
+    const d = await r.json();
+    if (!d.ok) { toast(d.error||'Error','error'); return; }
+    const users = d.users || [];
+    const stamp = new Date();
+    const hh = String(stamp.getHours()).padStart(2,'0');
+    const mm = String(stamp.getMinutes()).padStart(2,'0');
+    const label = `${groupId} · open · ${users.length} · ${hh}:${mm}`;
+    const text = formatBulkText({
+      prefix: groupId, created: users.length, traffic: '', days: '',
+      numbered: true, start: '', pad: '', note: 'Exported from Groups section', users
+    });
+    const runId = 'grp_' + Date.now() + '_' + Math.random().toString(16).slice(2);
+    _bulkRuns.unshift({ id: runId, label, meta: {prefix: groupId, created: users.length}, users, text });
+    _bulkActiveRunId = runId;
+    renderBulkTabs(); setBulkOutputForActive();
+  } catch(e) { toast('Connection error','error'); }
+}
+
+function openGroupExport(groupId) {
+  openGroupUsers(groupId);
+  setTimeout(()=>{ try { openBulkInNewTab(); } catch(e) {} }, 300);
+}
+
+async function deleteGroup(groupId) {
+  if (!confirm(`Delete group "${groupId}" from database?`)) return;
+  try {
+    const r = await fetch(API+'/bulk-delete', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ prefix: groupId, apply: false })
+    });
+    const d = await r.json();
+    if (!d.ok) { toast(d.error||'Error','error'); return; }
+    toast(`Deleted ${d.deleted} users`);
+    fetchGroups(); fetchUsers(); fetchMe();
+  } catch(e) { toast('Connection error','error'); }
+}
+
+function renderSpeeds() {
+  let onlineCount = 0;
+  for (const u of users) {
+    const spd = speeds[u.name] || {up:0, down:0};
+    const online = isOnline(u.name);
+    if (online) onlineCount++;
+    const el = document.getElementById('speed-'+u.name);
+    if (el) el.innerHTML = `
+      <div class="speed-item up"><span>Upload</span><span class="speed-val">${fmtSpeed(spd.up)}</span></div>
+      <div class="speed-item down"><span>Download</span><span class="speed-val">${fmtSpeed(spd.down)}</span></div>`;
+    const dot = document.getElementById('dot-'+u.name);
+    if (dot) dot.className = 'online-dot'+(online?' on':'');
+  }
+  document.getElementById('s-online').textContent = onlineCount;
+  updateFilterCounts();
+}
+
+function updateStats() {
+  const total = users.length;
+  const active = users.filter(u=>u.active).length;
+  const totalBytes = users.reduce((s,u)=>s+(u.traffic_used_bytes||0), 0);
+  document.getElementById('s-total').textContent = total;
+  document.getElementById('s-active').textContent = active;
+  document.getElementById('s-traffic').textContent = fmtTraffic(totalBytes);
+  updateFilterCounts();
+}
+
+/* ── Actions ── */
+async function doAddUser() {
+  const name = document.getElementById('add-name').value.trim();
+  const traffic = parseFloat(document.getElementById('add-traffic').value);
+  const days = parseInt(document.getElementById('add-days').value);
+  const speed_limit_down = parseInt(document.getElementById('add-speed-down').value) || 200;
+  const speed_limit_up = parseInt(document.getElementById('add-speed-up').value) || 200;
+  if (!name) {toast('Please enter a username','error'); return;}
+  if (traffic > (agentInfo.traffic_remaining_gb || 0)) {
+    toast('Exceeds remaining quota (' + (agentInfo.traffic_remaining_gb||0).toFixed(1) + ' GB)','error'); return;
+  }
+  const r = await fetch(API+'/users', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({name, traffic, days, speed_limit_up, speed_limit_down})});
+  const d = await r.json();
+  if (d.ok) {
+    closeModal('add-modal');
+    document.getElementById('add-name').value = '';
+    toast('User '+name+' created');
+    fetchUsers(); fetchMe();
+    setTimeout(()=>showConfig(name), 1500);
+  } else { toast(d.error||'Error','error'); }
+}
+
+let _bulkLastUsers = [];
+let _bulkRuns = [];
+let _bulkActiveRunId = '';
+
+async function doBulkCreate() {
+  const prefix = document.getElementById('bulk-prefix').value.trim() || 'group';
+  const count = parseInt(document.getElementById('bulk-count').value) || 1;
+  const traffic = parseFloat(document.getElementById('bulk-traffic').value) || 1;
+  const days = parseInt(document.getElementById('bulk-days').value) || 30;
+  const numbered = document.getElementById('bulk-numbered').value === '1';
+  const start = parseInt(document.getElementById('bulk-start').value) || 1;
+  const pad = parseInt(document.getElementById('bulk-pad').value) || 3;
+  const apply = document.getElementById('bulk-apply').checked;
+
+  const totalNeeded = count * traffic;
+  if (totalNeeded > (agentInfo.traffic_remaining_gb || 0)) {
+    toast('Exceeds remaining quota: need ' + totalNeeded.toFixed(1) + ' GB, have ' + (agentInfo.traffic_remaining_gb||0).toFixed(1) + ' GB','error');
+    return;
+  }
+  if (apply && !confirm('Apply to server now? This may reload config.')) return;
+
+  const outEl = document.getElementById('bulk-output');
+  outEl.value = 'Creating...';
+  try {
+    const r = await fetch(API+'/bulk-users', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({prefix, count, traffic, days, numbered, start, pad, apply})
+    });
+    const d = await r.json();
+    if (!d.ok) { outEl.value = d.error || 'Error'; renderBulkQrGrid([]); toast(d.error||'Error','error'); return; }
+    _bulkLastUsers = d.users || [];
+    toast(`Created ${d.created} users` + (d.apply ? ' (applied)' : ' (not applied)'));
+    fetchUsers(); fetchMe();
+
+    const stamp = new Date();
+    const hh = String(stamp.getHours()).padStart(2,'0');
+    const mm = String(stamp.getMinutes()).padStart(2,'0');
+    const label = `${prefix} · ${traffic}GB · ${d.created} · ${hh}:${mm}`;
+    const text = formatBulkText({
+      prefix, created: d.created, traffic, days, numbered: !!d.numbered,
+      start: d.start, pad: d.pad, note: d.note, users: _bulkLastUsers
+    });
+    const runId = 'run_' + Date.now() + '_' + Math.random().toString(16).slice(2);
+    _bulkRuns.unshift({ id: runId, label, meta: {prefix, traffic, days, created: d.created}, users: _bulkLastUsers, text });
+    _bulkActiveRunId = runId;
+    renderBulkTabs(); setBulkOutputForActive();
+    try { openBulkInNewTab(); } catch(e) {}
+  } catch(e) {
+    outEl.value = 'Connection error'; renderBulkQrGrid([]); toast('Connection error','error');
+  }
+}
+
+function formatBulkText({prefix, created, traffic, days, numbered, start, pad, note, users}) {
+  const plan = (traffic !== '' && days !== '') ? `${traffic} GB for ${days} days` : '—';
+  const naming = (start !== '' && pad !== '') ? (numbered ? ('numbered from ' + start + ' (pad ' + pad + ')') : 'random') : (numbered ? 'numbered' : 'random');
+  const list = users || [];
+  let text = `# GROUP: ${prefix}\n# PLAN: ${plan}\n# NAMING: ${naming}\n# CREATED: ${created}\n# NOTE: ${note}\n#\n\n`;
+  const gap = '\n\n\n\n\n';
+  list.forEach((u, idx) => {
+    if (idx > 0) text += gap;
+    const n = idx + 1;
+    text += `<<<BEGIN:${u.name}>>>\n#${n} / ${list.length} — ${u.name}\n\n`;
+    if (u.vmess) text += `VMess:\n${u.vmess}\n\n`;
+    if (u.vless) text += `VLESS:\n${u.vless}\n\n`;
+    if (u.cdn_vmess) text += `CDN VMess:\n${u.cdn_vmess}\n\n`;
+    if (u.trojan) text += `Trojan:\n${u.trojan}\n\n`;
+    if (u.grpc_vmess) text += `gRPC VMess:\n${u.grpc_vmess}\n\n`;
+    if (u.httpupgrade_vmess) text += `HTTPUpgrade VMess:\n${u.httpupgrade_vmess}\n\n`;
+    if (u.ss2022) text += `SS2022:\n${u.ss2022}\n\n`;
+    if (u.vless_ws) text += `VLESS-WS:\n${u.vless_ws}\n\n`;
+    text += `<<<END:${u.name}>>>\n`;
+  });
+  return text;
+}
+
+function renderBulkTabs() {
+  const tabsEl = document.getElementById('bulk-tabs');
+  if (!_bulkRuns.length) { tabsEl.style.display='none'; tabsEl.innerHTML=''; return; }
+  tabsEl.style.display = '';
+  tabsEl.innerHTML = _bulkRuns.slice(0, 12).map(r => {
+    const active = r.id === _bulkActiveRunId;
+    return `<button class="bulk-tab ${active?'active':''}" onclick="selectBulkRun('${r.id}')">${esc(r.label||'group')}</button>`;
+  }).join('');
+}
+
+function selectBulkRun(id) {
+  _bulkActiveRunId = id;
+  renderBulkTabs(); setBulkOutputForActive();
+}
+
+function getActiveBulkRun() {
+  return _bulkRuns.find(r => r.id === _bulkActiveRunId) || _bulkRuns[0] || null;
+}
+
+function setBulkOutputForActive() {
+  const outEl = document.getElementById('bulk-output');
+  const run = getActiveBulkRun();
+  if (!run) { outEl.value = ''; renderBulkQrGrid([]); return; }
+  _bulkLastUsers = run.users || [];
+  outEl.value = run.text || '';
+  renderBulkQrGrid(run.users || []);
+}
+
+function renderBulkQrGrid(users) {
+  const wrap = document.getElementById('bulk-qr-wrap');
+  if (!wrap) return;
+  if (!users || !users.length) { wrap.innerHTML = ''; wrap.style.display = 'none'; return; }
+  if (typeof qrcode !== 'function') {
+    wrap.innerHTML = '<div style="color:var(--t3);font-size:12px">QR library not loaded.</div>';
+    wrap.style.display = 'block'; return;
+  }
+  wrap.style.display = 'grid';
+  wrap.innerHTML = users.map((u, i) => {
+    const addQr = (label, link) => {
+      if (!link) return '';
+      try {
+        const qr = qrcode(0, 'M'); qr.addData(link); qr.make();
+        return `<div class="bulk-qr-item"><span class="bulk-qr-lbl">${esc(label)}</span>${qr.createSvgTag(3, 0)}</div>`;
+      } catch (e) { return ''; }
+    };
+    const bits = [addQr('VMess', u.vmess), addQr('VLESS', u.vless), addQr('CDN', u.cdn_vmess), addQr('Trojan', u.trojan), addQr('gRPC', u.grpc_vmess), addQr('HU', u.httpupgrade_vmess), addQr('SS2022', u.ss2022), addQr('VL-WS', u.vless_ws)].filter(Boolean).join('');
+    if (!bits) return '';
+    return `<div class="bulk-qr-card">
+      <div class="bulk-qr-title">${esc(u.name)}<small>#${i + 1}/${users.length}</small></div>
+      <div class="bulk-qr-row">${bits}</div>
+    </div>`;
+  }).join('');
+}
+
+async function downloadBulkZip() {
+  const run = getActiveBulkRun();
+  if (!run || !run.users || !run.users.length) return toast('No bulk results yet','error');
+  const prefix = (run.meta && run.meta.prefix) != null ? String(run.meta.prefix) : 'bulk';
+  try {
+    const r = await fetch(API + '/bulk-export-zip', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prefix, users: run.users }), credentials: 'same-origin'
+    });
+    if (!r.ok) {
+      let msg = 'ZIP failed';
+      try { const d = await r.json(); if (d.error) msg = d.error; } catch(e) {}
+      toast(msg, 'error'); return;
+    }
+    const blob = await r.blob();
+    const safePrefix = prefix.replace(/[^a-zA-Z0-9._-]+/g, '_').slice(0, 80) || 'bulk';
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${safePrefix}-vpn-configs.zip`;
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2500);
+    toast('ZIP downloaded');
+  } catch(e) { toast('Connection error', 'error'); }
+}
+
+function copyBulkOutput() {
+  const ta = document.getElementById('bulk-output');
+  if (!ta.value) return toast('Nothing to copy','error');
+  _copyText(ta.value).then(()=>toast('Copied')).catch(()=>toast('Copied'));
+}
+
+function downloadBulkCSV() {
+  if (!_bulkLastUsers.length) return toast('No bulk results yet','error');
+  const rows = [['name','vmess','vless','cdn_vmess','trojan','grpc_vmess','httpupgrade_vmess','ss2022','vless_ws']];
+  _bulkLastUsers.forEach(u => rows.push([u.name, u.vmess||'', u.vless||'', u.cdn_vmess||'', u.trojan||'', u.grpc_vmess||'', u.httpupgrade_vmess||'', u.ss2022||'', u.vless_ws||'']));
+  const csv = rows.map(r => r.map(v => '"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  const run = getActiveBulkRun();
+  const p = (run && run.meta && run.meta.prefix) ? run.meta.prefix : 'bulk';
+  a.download = `${p}-bulk-configs.csv`;
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 500);
+}
+
+function openBulkInNewTab() {
+  const run = getActiveBulkRun();
+  if (!run || !run.text) return toast('No bulk results yet','error');
+  const w = window.open('', '_blank');
+  if (!w) { toast('Popup blocked — allow popups for this site','error'); return; }
+  const safe = run.text.replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const usersArr = (run.users || []).map(u => ({
+    name: String(u.name || ''), vmess: u.vmess || '', vless: u.vless || '', cdn: u.cdn_vmess || '',
+    trojan: u.trojan || '', grpc: u.grpc_vmess || '', httpupgrade: u.httpupgrade_vmess || '',
+    ss2022: u.ss2022 || '', vless_ws: u.vless_ws || ''
+  }));
+  let usersJson = JSON.stringify(usersArr).replace(/</g, '\\u003c');
+  const ttl = String((run.meta && run.meta.prefix) || 'Bulk Configs')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+  w.document.open();
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>VIP Agent Panel</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body{margin:0;background:#0b1020;color:#e6edf3;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}
+    .bar{position:sticky;top:0;background:#0d1117;border-bottom:1px solid #2d333b;padding:10px 12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;z-index:10}
+    button{background:#1f6feb;border:none;color:#fff;border-radius:10px;padding:8px 12px;font-weight:800;cursor:pointer}
+    button.secondary{background:transparent;border:1px solid #3d444d;color:#c9d1d9}
+    .wrap{padding:14px;max-width:1200px;margin:0 auto}
+    h2{font-size:15px;color:#58a6ff;margin:20px 0 12px;font-family:system-ui,sans-serif}
+    .qr-user{margin:0 0 20px;padding:16px;border:1px solid #2d333b;border-radius:14px;background:#0d1117}
+    .qr-user h3{margin:0 0 12px;font-size:14px;color:#58a6ff;font-family:system-ui,sans-serif}
+    .qr-row{display:flex;flex-wrap:wrap;gap:18px;align-items:flex-start}
+    .qr-item{text-align:center}
+    .qr-item .lbl{font-size:11px;color:#8b949e;margin-bottom:6px}
+    .qr-item svg{display:block;background:#fff;border-radius:10px;padding:6px}
+    pre{white-space:pre-wrap;word-break:break-word;background:#0d1117;border:1px solid #2d333b;border-radius:14px;padding:14px;line-height:1.5}
+    .hint{color:#8b949e;font-family:system-ui,sans-serif;font-size:12px;max-width:520px}
+  </style></head><body>
+    <div class="bar">
+      <button id="copy">Copy text</button>
+      <button class="secondary" id="close">Close</button>
+      <span class="hint">QRs for all users below.</span>
+    </div>
+    <div class="wrap">
+      <h2>QR codes (all)</h2>
+      <div id="qr-root"></div>
+      <h2>Text export</h2>
+      <pre id="txt">${safe}</pre>
+    </div>
+    <script type="application/json" id="bulk-json">${usersJson}<\/script>
+    <script src="${QR_LIB_URL}"><\/script>
+    <script>
+      (function(){
+        var users = JSON.parse(document.getElementById('bulk-json').textContent);
+        var root = document.getElementById('qr-root');
+        users.forEach(function(u, i) {
+          var sec = document.createElement('section');
+          sec.className = 'qr-user';
+          var h = document.createElement('h3');
+          h.textContent = u.name + '  (' + (i+1) + '/' + users.length + ')';
+          sec.appendChild(h);
+          var row = document.createElement('div');
+          row.className = 'qr-row';
+          function add(label, link) {
+            if (!link) return;
+            var qr = qrcode(0, 'M'); qr.addData(link); qr.make();
+            var box = document.createElement('div'); box.className = 'qr-item';
+            var lbl = document.createElement('div'); lbl.className = 'lbl'; lbl.textContent = label;
+            box.appendChild(lbl);
+            var holder = document.createElement('div'); holder.innerHTML = qr.createSvgTag(4, 0);
+            box.appendChild(holder); row.appendChild(box);
+          }
+          add('VMess', u.vmess); add('VLESS', u.vless); add('CDN', u.cdn);
+          add('Trojan', u.trojan); add('gRPC', u.grpc); add('HU', u.httpupgrade);
+          add('SS2022', u.ss2022); add('VL-WS', u.vless_ws);
+          sec.appendChild(row); root.appendChild(sec);
+        });
+        var t = document.getElementById('txt').innerText;
+        document.getElementById('copy').onclick = function(){
+          if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(t);return;}
+          var a=document.createElement('textarea');a.value=t;a.style.cssText='position:fixed;left:-9999px;opacity:0';
+          document.body.appendChild(a);a.focus();a.select();try{document.execCommand('copy')}catch(e){}
+          document.body.removeChild(a);
+        };
+        document.getElementById('close').onclick = function(){ window.close(); };
+      })();
+    <\/script>
+  </body></html>`);
+  w.document.close();
+}
+
+async function deleteBulkGroup() {
+  const run = getActiveBulkRun();
+  if (!run || !run.users || !run.users.length) return toast('No group selected','error');
+  const applyNow = document.getElementById('bulk-apply').checked;
+  const prefix = run.meta?.prefix || 'group';
+  if (!confirm(`Delete this group? (${run.users.length} users)`)) return;
+  try {
+    const r = await fetch(API+'/bulk-delete', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ names: run.users.map(u=>u.name), apply: applyNow })
+    });
+    const d = await r.json();
+    if (!d.ok) { toast(d.error||'Error','error'); return; }
+    toast(`Deleted ${d.deleted} users`);
+    _bulkRuns = _bulkRuns.filter(x => x.id !== run.id);
+    _bulkActiveRunId = _bulkRuns[0]?.id || '';
+    renderBulkTabs(); setBulkOutputForActive();
+    fetchUsers(); fetchMe();
+  } catch(e) { toast('Connection error','error'); }
+}
+
+async function toggleUser(name) {
+  const u = users.find(x=>x.name===name);
+  const action = u && u.active ? 'disconnect' : 'reconnect';
+  if (!confirm(`${action === 'disconnect' ? 'Disconnect' : 'Reconnect'} "${name}"?`)) return;
+  const r = await fetch(API+'/users/'+encodeURIComponent(name)+'/toggle', {method:'POST'});
+  const d = await r.json();
+  if (d.ok) { toast(d.message); fetchUsers(); }
+  else toast(d.error||'Error','error');
+}
+
+async function deleteUser(name) {
+  if (!confirm('Are you sure you want to delete "'+name+'"?')) return;
+  const r = await fetch(API+'/users/'+encodeURIComponent(name), {method:'DELETE'});
+  const d = await r.json();
+  if (d.ok) { toast(name+' deleted'); fetchUsers(); fetchMe(); }
+  else toast(d.error||'Error','error');
+}
+
+function showRenew(name) {
+  renewTarget = name;
+  document.getElementById('renew-name').textContent = name;
+  const u = users.find(x=>x.name===name);
+  if (u) {
+    document.getElementById('renew-traffic').value = u.traffic_limit;
+    document.getElementById('renew-days').value = 30;
+  }
+  const hint = document.getElementById('renew-quota-hint');
+  if (hint) hint.textContent = 'Remaining quota: ' + (agentInfo.traffic_remaining_gb||0).toFixed(1) + ' GB';
+  showModal('renew-modal');
+}
+
+async function doRenewUser() {
+  const traffic = parseFloat(document.getElementById('renew-traffic').value);
+  const days = parseInt(document.getElementById('renew-days').value);
+  const r = await fetch(API+'/users/'+encodeURIComponent(renewTarget)+'/renew',
+    {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({traffic, days})});
+  const d = await r.json();
+  if (d.ok) { closeModal('renew-modal'); toast(renewTarget+' renewed'); fetchUsers(); fetchMe(); }
+  else toast(d.error||'Error','error');
+}
+
+/* ── Config Modal ── */
+function showConfig(name) {
+  const u = users.find(x=>x.name===name);
+  if (!u) return;
+  configTarget = u;
+  document.getElementById('config-name').textContent = name;
+  const vlTab = document.getElementById('ct-vless');
+  const cdTab = document.getElementById('ct-cdn');
+  const trTab = document.getElementById('ct-trojan');
+  const grTab = document.getElementById('ct-grpc');
+  const huTab = document.getElementById('ct-httpupgrade');
+  const ssTab = document.getElementById('ct-ss2022');
+  const vwTab = document.getElementById('ct-vless_ws');
+  vlTab.style.display = serverInfo.vless ? '' : 'none';
+  cdTab.style.display = serverInfo.cdn ? '' : 'none';
+  trTab.style.display = serverInfo.trojan ? '' : 'none';
+  grTab.style.display = serverInfo.grpc ? '' : 'none';
+  huTab.style.display = serverInfo.httpupgrade ? '' : 'none';
+  ssTab.style.display = serverInfo.ss2022 ? '' : 'none';
+  vwTab.style.display = serverInfo.vless_ws ? '' : 'none';
+  configTab = 'vmess';
+  document.querySelectorAll('.config-tab').forEach(t => t.classList.remove('active'));
+  document.querySelector('.tab-vmess').classList.add('active');
+  renderConfigTab();
+  // Sub link
+  const subUrl = location.origin + '/sub/' + u.uuid;
+  document.getElementById('config-sub-url').value = subUrl;
+  document.getElementById('config-sub-open').href = subUrl;
+  showModal('config-modal');
+}
+
+function switchConfigTab(tab) {
+  configTab = tab;
+  document.querySelectorAll('.config-tab').forEach(t => t.classList.remove('active'));
+  document.querySelector('.tab-'+tab).classList.add('active');
+  renderConfigTab();
+}
+
+function renderConfigTab() {
+  const u = configTarget;
+  if (!u) return;
+  let link = '', label = '', info = '';
+  if (configTab === 'vmess') {
+    link = u.vmess;
+    label = 'VMess Link';
+    info = `
+      <span class="ck">Protocol</span><span class="cv" style="color:var(--accent)">VMess + WS + TLS</span>
+      <span class="ck">Server</span><span class="cv">${SERVER_INFO.ip}</span>
+      <span class="ck">Port</span><span class="cv">${SERVER_INFO.port}</span>
+      <span class="ck">UUID</span><span class="cv" style="font-size:10px;word-break:break-all">${u.uuid}</span>
+      <span class="ck">Network</span><span class="cv">WebSocket</span>
+      <span class="ck">Path</span><span class="cv">${SERVER_INFO.path}</span>
+      <span class="ck">TLS</span><span class="cv">Enabled</span>
+      <span class="ck">SNI</span><span class="cv">${SERVER_INFO.sni}</span>`;
+  } else if (configTab === 'vless') {
+    link = u.vless || '';
+    label = 'VLESS Link';
+    info = `
+      <span class="ck">Protocol</span><span class="cv" style="color:var(--purple)">VLESS + Reality</span>
+      <span class="ck">Server</span><span class="cv">${SERVER_INFO.ip}</span>
+      <span class="ck">Port</span><span class="cv">${serverInfo.vless_port || 2053}</span>
+      <span class="ck">UUID</span><span class="cv" style="font-size:10px;word-break:break-all">${u.uuid}</span>
+      <span class="ck">Flow</span><span class="cv">xtls-rprx-vision</span>
+      <span class="ck">Security</span><span class="cv">Reality</span>
+      <span class="ck">SNI</span><span class="cv">${serverInfo.vless_sni || ''}</span>
+      <span class="ck">Fingerprint</span><span class="cv">chrome</span>`;
+  } else if (configTab === 'cdn') {
+    link = u.cdn_vmess || '';
+    label = 'CDN VMess Link';
+    info = `
+      <span class="ck">Protocol</span><span class="cv" style="color:var(--orange)">VMess + WS + TLS (CDN)</span>
+      <span class="ck">Server</span><span class="cv">${serverInfo.cdn_domain || ''}</span>
+      <span class="ck">Port</span><span class="cv">443</span>
+      <span class="ck">UUID</span><span class="cv" style="font-size:10px;word-break:break-all">${u.uuid}</span>
+      <span class="ck">Network</span><span class="cv">WebSocket</span>
+      <span class="ck">Path</span><span class="cv">${serverInfo.cdn_ws_path || '/cdn-ws'}</span>
+      <span class="ck">TLS</span><span class="cv">Enabled (Cloudflare)</span>
+      <span class="ck">Host</span><span class="cv">${serverInfo.cdn_domain || ''}</span>`;
+  } else if (configTab === 'trojan') {
+    link = u.trojan || '';
+    label = 'Trojan Link';
+    info = `
+      <span class="ck">Protocol</span><span class="cv" style="color:#e74c3c">Trojan + TLS</span>
+      <span class="ck">Server</span><span class="cv">${SERVER_INFO.ip}</span>
+      <span class="ck">Port</span><span class="cv">${serverInfo.trojan_port || 2083}</span>
+      <span class="ck">Password</span><span class="cv" style="font-size:10px;word-break:break-all">${u.uuid}</span>
+      <span class="ck">Network</span><span class="cv">TCP</span>
+      <span class="ck">Security</span><span class="cv">TLS</span>`;
+  } else if (configTab === 'grpc') {
+    link = u.grpc_vmess || '';
+    label = 'gRPC VMess Link';
+    info = `
+      <span class="ck">Protocol</span><span class="cv" style="color:#2ecc71">VMess + gRPC + TLS</span>
+      <span class="ck">Server</span><span class="cv">${SERVER_INFO.ip}</span>
+      <span class="ck">Port</span><span class="cv">${serverInfo.grpc_port || 2054}</span>
+      <span class="ck">UUID</span><span class="cv" style="font-size:10px;word-break:break-all">${u.uuid}</span>
+      <span class="ck">Network</span><span class="cv">gRPC (multi-mode)</span>
+      <span class="ck">Service</span><span class="cv">${serverInfo.grpc_service || 'GunService'}</span>
+      <span class="ck">TLS</span><span class="cv">Enabled</span>`;
+  } else if (configTab === 'httpupgrade') {
+    link = u.httpupgrade_vmess || '';
+    label = 'HTTPUpgrade VMess Link';
+    info = `
+      <span class="ck">Protocol</span><span class="cv" style="color:#3498db">VMess + HTTPUpgrade + TLS</span>
+      <span class="ck">Server</span><span class="cv">${SERVER_INFO.ip}</span>
+      <span class="ck">Port</span><span class="cv">${serverInfo.httpupgrade_port || 2055}</span>
+      <span class="ck">UUID</span><span class="cv" style="font-size:10px;word-break:break-all">${u.uuid}</span>
+      <span class="ck">Network</span><span class="cv">HTTPUpgrade</span>
+      <span class="ck">Path</span><span class="cv">${serverInfo.httpupgrade_path || '/httpupgrade'}</span>
+      <span class="ck">TLS</span><span class="cv">Enabled</span>`;
+  } else if (configTab === 'ss2022') {
+    link = u.ss2022 || '';
+    label = 'ShadowSocks 2022 Link';
+    info = `
+      <span class="ck">Protocol</span><span class="cv" style="color:#e67e22">ShadowSocks 2022</span>
+      <span class="ck">Server</span><span class="cv">${SERVER_INFO.ip}</span>
+      <span class="ck">Port</span><span class="cv">${serverInfo.ss2022_port || 2056}</span>
+      <span class="ck">Method</span><span class="cv">AEAD-2022-BLAKE3</span>
+      <span class="ck">Network</span><span class="cv">TCP + UDP</span>`;
+  } else if (configTab === 'vless_ws') {
+    link = u.vless_ws || '';
+    label = 'VLESS WebSocket Link';
+    info = `
+      <span class="ck">Protocol</span><span class="cv" style="color:#1abc9c">VLESS + WS + TLS</span>
+      <span class="ck">Server</span><span class="cv">${SERVER_INFO.ip}</span>
+      <span class="ck">Port</span><span class="cv">${serverInfo.vless_ws_port || 2057}</span>
+      <span class="ck">UUID</span><span class="cv" style="font-size:10px;word-break:break-all">${u.uuid}</span>
+      <span class="ck">Network</span><span class="cv">WebSocket</span>
+      <span class="ck">Path</span><span class="cv">${serverInfo.vless_ws_path || '/vless-ws'}</span>
+      <span class="ck">TLS</span><span class="cv">Enabled</span>`;
+  }
+  document.getElementById('config-link-label').textContent = label;
+  document.getElementById('config-vmess').value = link;
+  document.getElementById('config-info').innerHTML = info;
+  try {
+    if (link) {
+      const qr = qrcode(0, 'M'); qr.addData(link); qr.make();
+      document.getElementById('config-qr').innerHTML = qr.createSvgTag(5, 0);
+    } else {
+      document.getElementById('config-qr').innerHTML = '<small style="color:var(--t3)">Not configured</small>';
+    }
+  } catch(e) { document.getElementById('config-qr').innerHTML = '<small style="color:var(--t3)">QR Error</small>'; }
+}
+
+function _copyText(text) {
+  if (navigator.clipboard && window.isSecureContext) {
+    return navigator.clipboard.writeText(text);
+  }
+  const ta = document.createElement('textarea');
+  ta.value = text; ta.style.cssText = 'position:fixed;left:-9999px;top:-9999px;opacity:0';
+  document.body.appendChild(ta); ta.focus(); ta.select();
+  try { document.execCommand('copy'); } catch(e) {}
+  document.body.removeChild(ta);
+  return Promise.resolve();
+}
+
+function copyConfigLink() {
+  const ta = document.getElementById('config-vmess');
+  if (!ta.value) { toast('No link available','error'); return; }
+  _copyText(ta.value).then(()=>toast('Link copied')).catch(()=>toast('Link copied'));
+}
+
+function copySubUrl() {
+  const v = document.getElementById('config-sub-url').value;
+  if (!v) return;
+  _copyText(v).then(()=>toast('Sub link copied')).catch(()=>toast('Sub link copied'));
+}
+
+async function forceSync() {
+  const r = await fetch(API+'/sync', {method:'POST'});
+  const d = await r.json();
+  if (d.ok) {
+    toast('Sync complete' + (d.disabled > 0 ? ' — '+d.disabled+' user(s) disabled' : ''));
+    fetchUsers();
+  }
+}
+
+/* ── Helpers ── */
+function showModal(id) {
+  if (id === 'brand-modal') {
+    const cur = agentInfo.brand_name || '';
+    document.getElementById('brand-input').value = cur;
+    document.getElementById('brand-preview').textContent = cur || 'VPN';
+  }
+  document.getElementById(id).classList.add('show');
+}
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+function esc(s) { if(!s)return ''; return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+function fmtTraffic(bytes) {
+  if (bytes <= 0) return '0 B';
+  if (bytes < 1024) return bytes.toFixed(0) + ' B';
+  if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
+  if (bytes < 1024*1024*1024) return (bytes/(1024*1024)).toFixed(2) + ' MB';
+  return (bytes/(1024*1024*1024)).toFixed(2) + ' GB';
+}
+function fmtBytes(b) {
+  if (b < 1) return '0 B';
+  const u = ['B','KB','MB','GB'];
+  const i = Math.min(Math.floor(Math.log(b)/Math.log(1024)), 3);
+  return (b/Math.pow(1024,i)).toFixed(i>1?2:i>0?1:0)+' '+u[i];
+}
+function fmtSpeed(bps) { return fmtBytes(bps)+'/s'; }
+
+function toast(msg, type) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast show'+(type==='error'?' error':'');
+  setTimeout(()=>el.className='toast', 3000);
+}
+
+/* ── Init ── */
+(async function(){
+  try {
+    const r = await fetch(API + '/me', { credentials: 'same-origin' });
+    if (r.ok) {
+      document.getElementById('login-screen').style.display='none';
+      document.getElementById('panel').style.display='block';
+      agentInfo = await r.json();
+      document.getElementById('agent-name-top').textContent = agentInfo.name || '';
+      applyBrand(agentInfo.brand_name || '');
+      updateQuotaBar();
+      startPolling();
+    }
+  } catch(e){}
+  document.getElementById('login-user').focus();
+})();
+</script>
+</body>
+</html>

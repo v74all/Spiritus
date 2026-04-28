@@ -1,0 +1,43 @@
+# VPN Panel Requirements
+# Core dependencies for VPN Management Panel
+
+# Web Framework
+Flask==3.0.0
+Werkzeug==3.0.1
+
+# Database
+# (sqlite3 is built-in with Python)
+
+# System Monitoring
+psutil==5.9.6
+
+# Security & Cryptography
+cryptography==41.0.7
+
+# HTTP Requests
+requests==2.31.0
+aiohttp==3.9.1
+
+# Network Tools
+scapy==2.5.0
+
+# DNS Tools
+dnspython==2.4.2
+aiodns==3.1.1
+
+# Additional Network Libraries
+netaddr==0.8.0
+python-whois==0.8.0
+
+# QUIC Protocol
+aioquic==0.9.20
+hyperframe==6.0.1
+
+# HTTP/2 Support
+h2==4.1.0
+hpack==4.0.0
+
+# Traffic Analysis
+dpkt==1.9.8
+
+# Note: Some features require root privileges for raw socket operations

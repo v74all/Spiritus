@@ -1,0 +1,35 @@
+[Unit]
+Description=Spiritus VPN Management Panel
+Documentation=https://github.com/v74all/Spiritus
+After=network.target xray.service v2ray.service
+Wants=xray.service v2ray.service
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/spiritus
+Environment="PYTHONUNBUFFERED=1"
+Environment="PATH=/opt/spiritus/venv/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=/opt/spiritus/venv/bin/python3 /opt/spiritus/vpn-web.py
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=always
+RestartSec=10
+StartLimitInterval=60
+StartLimitBurst=3
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/opt/spiritus /tmp
+ProtectControlGroups=true
+ProtectKernelModules=true
+RestrictRealtime=true
+LimitNOFILE=65536
+
+StandardOutput=append:/opt/spiritus/vpn-panel.log
+StandardError=append:/opt/spiritus/vpn-panel.log
+SyslogIdentifier=spiritus
+
+[Install]
+WantedBy=multi-user.target

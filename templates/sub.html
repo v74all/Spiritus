@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ user.name }} — VPN Subscription</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg0:#06080f;--bg1:#0d1117;--bg2:#161b22;--bg3:#1c2333;--bg4:#252d3a;
+  --border:#2d333b;--border2:#3d444d;
+  --t0:#f0f6fc;--t1:#c9d1d9;--t2:#8b949e;--t3:#636c76;
+  --accent:#58a6ff;--accent2:#388bfd;
+  --green:#3fb950;--green-bg:rgba(63,185,80,.12);
+  --yellow:#d29922;--yellow-bg:rgba(210,153,34,.12);
+  --red:#f85149;--red-bg:rgba(248,81,73,.12);
+  --purple:#bc8cff;--orange:#f0883e;
+  --radius:14px;--radius-sm:10px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',system-ui,sans-serif;background:var(--bg0);color:var(--t1);
+  min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:20px;
+  background:radial-gradient(ellipse at 50% 0%,#0d1a2e 0%,var(--bg0) 70%)}
+::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:var(--bg1)}::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:3px}
+
+.container{width:100%;max-width:520px}
+
+.header{text-align:center;margin-bottom:28px;padding-top:10px}
+.logo{font-size:36px;font-weight:800;letter-spacing:4px;
+  background:linear-gradient(135deg,var(--accent),var(--purple));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.user-tag{margin-top:6px;font-size:14px;color:var(--t2)}
+.user-tag b{color:var(--accent);font-weight:700;font-size:16px}
+
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);
+  padding:22px;margin-bottom:16px}
+.card-title{font-size:13px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:16px}
+
+/* Status */
+.status-row{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.status-dot{width:12px;height:12px;border-radius:50%}
+.status-dot.active{background:var(--green);box-shadow:0 0 8px var(--green)}
+.status-dot.inactive{background:var(--red);box-shadow:0 0 8px var(--red)}
+.status-text{font-size:15px;font-weight:600}
+.status-text.active{color:var(--green)}
+.status-text.inactive{color:var(--red)}
+
+/* Stats grid */
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:6px}
+.stat{background:var(--bg3);border-radius:var(--radius-sm);padding:14px;text-align:center}
+.stat-val{display:block;font-size:22px;font-weight:700;color:var(--t0)}
+.stat-lbl{font-size:11px;color:var(--t3);margin-top:3px}
+
+/* Traffic bar */
+.traffic-bar{margin-top:16px}
+.bar-head{display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px}
+.bar-head .used{color:var(--t1);font-weight:600}.bar-head .limit{color:var(--t3)}
+.bar-track{height:10px;background:var(--bg4);border-radius:5px;overflow:hidden}
+.bar-fill{height:100%;border-radius:5px;transition:width .8s}
+
+/* Config links */
+.config-section{margin-top:4px}
+.config-item{margin-bottom:14px}
+.config-label{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;margin-bottom:6px}
+.config-badge{padding:3px 8px;border-radius:12px;font-size:10px;font-weight:700}
+.badge-vmess{background:rgba(88,166,255,.12);color:var(--accent)}
+.badge-vless{background:rgba(188,140,255,.12);color:var(--purple)}
+.badge-cdn{background:rgba(240,136,62,.12);color:var(--orange)}
+.config-box{display:flex;gap:8px}
+.config-link{flex:1;padding:10px 12px;background:var(--bg1);border:1px solid var(--border);
+  border-radius:var(--radius-sm);color:var(--accent);font-size:10px;font-family:monospace;
+  word-break:break-all;overflow:hidden;max-height:60px;line-height:1.4}
+.btn-copy{padding:10px 16px;background:var(--accent2);color:#fff;border:none;border-radius:var(--radius-sm);
+  font-size:12px;font-weight:600;cursor:pointer;transition:all .2s;white-space:nowrap;flex-shrink:0}
+.btn-copy:hover{background:var(--accent);transform:translateY(-1px)}
+.btn-copy.copied{background:var(--green)}
+
+/* QR */
+.qr-section{text-align:center;margin-top:8px}
+.qr-tabs{display:flex;gap:6px;justify-content:center;margin-bottom:14px}
+.qr-tab{padding:6px 14px;border-radius:16px;font-size:11px;font-weight:600;cursor:pointer;
+  border:1px solid var(--border);background:transparent;color:var(--t2);transition:all .2s}
+.qr-tab.active{background:var(--accent2);border-color:var(--accent2);color:#fff}
+.qr-box{background:#fff;border-radius:12px;padding:14px;display:inline-block;margin-bottom:10px}
+.qr-box svg{display:block}
+
+/* Sub link */
+.sub-section{margin-top:6px}
+.sub-box{display:flex;gap:8px;align-items:center}
+.sub-url{flex:1;padding:10px 12px;background:var(--bg1);border:1px solid var(--border);
+  border-radius:var(--radius-sm);color:var(--green);font-size:11px;font-family:monospace;
+  word-break:break-all;overflow:hidden}
+
+/* Apps */
+.apps-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.app-btn{display:flex;align-items:center;gap:10px;padding:14px;background:var(--bg3);
+  border:1px solid var(--border);border-radius:var(--radius-sm);text-decoration:none;
+  color:var(--t1);transition:all .2s}
+.app-btn:hover{border-color:var(--accent);transform:translateY(-2px);box-shadow:0 4px 20px rgba(0,0,0,.3)}
+.app-icon{font-size:28px;flex-shrink:0}
+.app-name{font-size:13px;font-weight:600;color:var(--t0)}
+.app-platform{font-size:11px;color:var(--t3)}
+
+/* Info rows */
+.info-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px}
+.info-row:last-child{border-bottom:none}
+.info-key{color:var(--t3)}.info-val{color:var(--t1);font-weight:500;direction:ltr;text-align:right}
+
+.footer{text-align:center;padding:20px 0;color:var(--t3);font-size:11px}
+
+/* Toast */
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(80px);
+  padding:12px 24px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius-sm);
+  color:var(--t0);font-size:13px;font-weight:500;z-index:999;transition:transform .3s;
+  box-shadow:0 8px 24px rgba(0,0,0,.4)}
+.toast.show{transform:translateX(-50%) translateY(0)}
+
+@media(max-width:500px){
+  body{padding:12px}
+  .stats{grid-template-columns:1fr 1fr;gap:8px}
+  .stat{padding:10px}
+  .stat-val{font-size:18px}
+  .apps-grid{grid-template-columns:1fr}
+  .qr-box svg{max-width:200px;max-height:200px;width:100%;height:auto}
+}
+</style>
+</head>
+<body>
+
+<div class="container">
+  <!-- Header -->
+  <div class="header">
+    <div class="logo">VPN</div>
+    <div class="user-tag">Account: <b>{{ user.name }}</b></div>
+  </div>
+
+  <!-- Status & Traffic -->
+  <div class="card">
+    <div class="card-title">Account Status</div>
+    <div class="status-row">
+      <span class="status-dot {{ 'active' if user.active else 'inactive' }}"></span>
+      <span class="status-text {{ 'active' if user.active else 'inactive' }}">
+        {{ 'Active' if user.active else 'Disabled' }}
+      </span>
+    </div>
+
+    <div class="stats">
+      <div class="stat">
+        <span class="stat-val" id="s-used">{{ "%.2f"|format(user.traffic_used_gb or 0) }} GB</span>
+        <span class="stat-lbl">Used Traffic</span>
+      </div>
+      <div class="stat">
+        <span class="stat-val">{{ "%.1f"|format(user.traffic_limit_gb or 0) }} GB</span>
+        <span class="stat-lbl">Total Limit</span>
+      </div>
+      <div class="stat">
+        <span class="stat-val" id="s-days">—</span>
+        <span class="stat-lbl">Days Left</span>
+      </div>
+    </div>
+
+    {% set used = user.traffic_used_gb or 0 %}
+    {% set limit = user.traffic_limit_gb or 1 %}
+    {% set pct = (used / limit * 100)|int %}
+    {% set pct = [pct, 100]|min %}
+    <div class="traffic-bar">
+      <div class="bar-head">
+        <span class="used">{{ "%.2f"|format(used) }} GB used</span>
+        <span class="limit">{{ pct }}% of {{ "%.1f"|format(limit) }} GB</span>
+      </div>
+      <div class="bar-track">
+        <div class="bar-fill" style="width:{{ pct }}%;background:{{ 'var(--green)' if pct < 60 else 'var(--yellow)' if pct < 85 else 'var(--red)' }}"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Live Speed -->
+  <div class="card">
+    <div class="card-title">Live Connection</div>
+    <div class="stats" style="margin-top:0;margin-bottom:0">
+      <div class="stat">
+        <span class="stat-val" style="color:var(--green)" id="speed-up">{{ "%.1f"|format(live_up / 1024 / 1024) if live_up > 0 else '0' }} MB</span>
+        <span class="stat-lbl">↑ Upload (session)</span>
+      </div>
+      <div class="stat">
+        <span class="stat-val" style="color:var(--accent)" id="speed-down">{{ "%.1f"|format(live_down / 1024 / 1024) if live_down > 0 else '0' }} MB</span>
+        <span class="stat-lbl">↓ Download (session)</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- QR Codes -->
+  <div class="card">
+    <div class="card-title">QR Code</div>
+    <div class="qr-section">
+      <div class="qr-tabs" style="flex-wrap:wrap;gap:4px">
+        {% if links.vmess %}<button class="qr-tab active" onclick="showQr('vmess')">VMess</button>{% endif %}
+        {% if links.vless %}<button class="qr-tab" onclick="showQr('vless')">VLESS</button>{% endif %}
+        {% if links.cdn_vmess %}<button class="qr-tab" onclick="showQr('cdn')">CDN</button>{% endif %}
+        {% if links.trojan %}<button class="qr-tab" onclick="showQr('trojan')">Trojan</button>{% endif %}
+        {% if links.grpc_vmess %}<button class="qr-tab" onclick="showQr('grpc')">gRPC</button>{% endif %}
+        {% if links.httpupgrade_vmess %}<button class="qr-tab" onclick="showQr('httpupgrade')">HU</button>{% endif %}
+        {% if links.ss2022 %}<button class="qr-tab" onclick="showQr('ss2022')">SS2022</button>{% endif %}
+        {% if links.vless_ws %}<button class="qr-tab" onclick="showQr('vless_ws')">VLESS-WS</button>{% endif %}
+      </div>
+      <div class="qr-box" id="qr-display"></div>
+    </div>
+  </div>
+
+  <!-- Config Links -->
+  <div class="card">
+    <div class="card-title">Config Links</div>
+    <div class="config-section">
+      {% if links.vmess %}
+      <div class="config-item">
+        <div class="config-label"><span class="config-badge badge-vmess">VMess</span> WS + TLS</div>
+        <div class="config-box">
+          <div class="config-link" id="link-vmess">{{ links.vmess }}</div>
+          <button class="btn-copy" onclick="copyLink('vmess')">Copy</button>
+        </div>
+      </div>
+      {% endif %}
+      {% if links.vless %}
+      <div class="config-item">
+        <div class="config-label"><span class="config-badge badge-vless">VLESS</span> Reality</div>
+        <div class="config-box">
+          <div class="config-link" id="link-vless">{{ links.vless }}</div>
+          <button class="btn-copy" onclick="copyLink('vless')">Copy</button>
+        </div>
+      </div>
+      {% endif %}
+      {% if links.cdn_vmess %}
+      <div class="config-item">
+        <div class="config-label"><span class="config-badge badge-cdn">CDN</span> VMess + WS</div>
+        <div class="config-box">
+          <div class="config-link" id="link-cdn_vmess">{{ links.cdn_vmess }}</div>
+          <button class="btn-copy" onclick="copyLink('cdn_vmess')">Copy</button>
+        </div>
+      </div>
+      {% endif %}
+      {% if links.trojan %}
+      <div class="config-item">
+        <div class="config-label"><span class="config-badge" style="background:#e74c3c22;color:#e74c3c">Trojan</span> TLS</div>
+        <div class="config-box">
+          <div class="config-link" id="link-trojan">{{ links.trojan }}</div>
+          <button class="btn-copy" onclick="copyLink('trojan')">Copy</button>
+        </div>
+      </div>
+      {% endif %}
+      {% if links.grpc_vmess %}
+      <div class="config-item">
+        <div class="config-label"><span class="config-badge" style="background:#2ecc7122;color:#2ecc71">gRPC</span> VMess + TLS</div>
+        <div class="config-box">
+          <div class="config-link" id="link-grpc_vmess">{{ links.grpc_vmess }}</div>
+          <button class="btn-copy" onclick="copyLink('grpc_vmess')">Copy</button>
+        </div>
+      </div>
+      {% endif %}
+      {% if links.httpupgrade_vmess %}
+      <div class="config-item">
+        <div class="config-label"><span class="config-badge" style="background:#3498db22;color:#3498db">HU</span> VMess + TLS</div>
+        <div class="config-box">
+          <div class="config-link" id="link-httpupgrade_vmess">{{ links.httpupgrade_vmess }}</div>
+          <button class="btn-copy" onclick="copyLink('httpupgrade_vmess')">Copy</button>
+        </div>
+      </div>
+      {% endif %}
+      {% if links.ss2022 %}
+      <div class="config-item">
+        <div class="config-label"><span class="config-badge" style="background:#e67e2222;color:#e67e22">SS2022</span> ShadowSocks 2022</div>
+        <div class="config-box">
+          <div class="config-link" id="link-ss2022">{{ links.ss2022 }}</div>
+          <button class="btn-copy" onclick="copyLink('ss2022')">Copy</button>
+        </div>
+      </div>
+      {% endif %}
+      {% if links.vless_ws %}
+      <div class="config-item">
+        <div class="config-label"><span class="config-badge" style="background:#1abc9c22;color:#1abc9c">VLESS-WS</span> WS + TLS</div>
+        <div class="config-box">
+          <div class="config-link" id="link-vless_ws">{{ links.vless_ws }}</div>
+          <button class="btn-copy" onclick="copyLink('vless_ws')">Copy</button>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Subscription Link -->
+  <div class="card">
+    <div class="card-title">Subscription Link</div>
+    <p style="font-size:12px;color:var(--t3);margin-bottom:12px">
+      Use this link to auto-import configs in V2RayNG, Streisand, Hiddify, etc.
+    </p>
+    <div class="sub-box">
+      <div class="sub-url" id="sub-url">{{ request.url_root }}sub-api/{{ user.uuid }}</div>
+      <button class="btn-copy" onclick="copyLink('sub')">Copy</button>
+    </div>
+    <div style="margin-top:12px">
+      <p style="font-size:12px;color:var(--t3);margin-bottom:8px">
+        📦 JSON Config (includes Fragment + MUX + all protocols in one config):
+      </p>
+      <div class="sub-box">
+        <div class="sub-url" id="sub-json-url">{{ request.url_root }}sub-json/{{ user.uuid }}</div>
+        <button class="btn-copy" onclick="copyLink('sub_json')">Copy</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Download Apps -->
+  <div class="card">
+    <div class="card-title">Download Apps</div>
+
+    <!-- Dedicated App — Android -->
+    <a class="app-btn dedicated-app" href="/download/app" style="margin-bottom:8px;border:1px solid var(--accent);background:linear-gradient(135deg,rgba(88,166,255,.08),rgba(188,140,255,.08));position:relative;overflow:hidden">
+      <span class="app-icon" style="font-size:34px">🚀</span>
+      <div style="flex:1">
+        <div class="app-name" style="font-size:15px;display:flex;align-items:center;gap:8px">
+          اپلیکیشن اختصاصی
+          <span style="padding:2px 8px;border-radius:10px;font-size:9px;font-weight:700;background:var(--green-bg);color:var(--green)">پیشنهادی</span>
+        </div>
+        <div class="app-platform" style="color:var(--t2);font-size:12px;margin-top:4px;direction:rtl">سرعت بالاتر • کیفیت بهتر • اتصال پایدار</div>
+        <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">
+          <span style="padding:2px 8px;border-radius:8px;font-size:9px;font-weight:600;background:rgba(88,166,255,.12);color:var(--accent)">Android</span>
+          <span style="padding:2px 8px;border-radius:8px;font-size:9px;font-weight:600;background:rgba(63,185,80,.12);color:var(--green)">Fragment + MUX</span>
+        </div>
+      </div>
+      <span style="color:var(--accent);font-size:20px;flex-shrink:0">⬇</span>
+    </a>
+
+    <!-- Dedicated App — Windows -->
+    <a class="app-btn dedicated-app" href="/download/app-windows" style="margin-bottom:14px;border:1px solid var(--purple);background:linear-gradient(135deg,rgba(188,140,255,.08),rgba(88,166,255,.08));position:relative;overflow:hidden">
+      <span class="app-icon" style="font-size:34px">💻</span>
+      <div style="flex:1">
+        <div class="app-name" style="font-size:15px;display:flex;align-items:center;gap:8px">
+          نسخه ویندوز
+          <span style="padding:2px 8px;border-radius:10px;font-size:9px;font-weight:700;background:rgba(188,140,255,.12);color:var(--purple)">جدید</span>
+        </div>
+        <div class="app-platform" style="color:var(--t2);font-size:12px;margin-top:4px;direction:rtl">سرعت بالاتر • MUX • پروکسی سیستم خودکار</div>
+        <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">
+          <span style="padding:2px 8px;border-radius:8px;font-size:9px;font-weight:600;background:rgba(188,140,255,.12);color:var(--purple)">Windows</span>
+          <span style="padding:2px 8px;border-radius:8px;font-size:9px;font-weight:600;background:rgba(63,185,80,.12);color:var(--green)">Fragment + MUX</span>
+        </div>
+      </div>
+      <span style="color:var(--purple);font-size:20px;flex-shrink:0">⬇</span>
+    </a>
+
+    <div style="font-size:11px;color:var(--t3);margin-bottom:14px;direction:rtl;text-align:center;line-height:1.6">
+      سایر اپلیکیشن‌ های پشتیبانی شده:
+    </div>
+
+    <div class="apps-grid">
+      <a class="app-btn" href="https://play.google.com/store/apps/details?id=com.v2ray.ang" target="_blank" rel="noopener">
+        <span class="app-icon">📱</span>
+        <div><div class="app-name">V2RayNG</div><div class="app-platform">Android</div></div>
+      </a>
+      <a class="app-btn" href="https://apps.apple.com/app/streisand/id6450534064" target="_blank" rel="noopener">
+        <span class="app-icon">🍎</span>
+        <div><div class="app-name">Streisand</div><div class="app-platform">iOS / macOS</div></div>
+      </a>
+      <a class="app-btn" href="https://apps.apple.com/app/hiddify-proxy-vpn/id6596777532" target="_blank" rel="noopener">
+        <span class="app-icon">🔒</span>
+        <div><div class="app-name">Hiddify</div><div class="app-platform">iOS / Android</div></div>
+      </a>
+      <a class="app-btn" href="https://github.com/2dust/v2rayN/releases/latest" target="_blank" rel="noopener">
+        <span class="app-icon">💻</span>
+        <div><div class="app-name">V2RayN</div><div class="app-platform">Windows</div></div>
+      </a>
+      <a class="app-btn" href="https://github.com/MatsuriDayo/nekoray/releases/latest" target="_blank" rel="noopener">
+        <span class="app-icon">🐱</span>
+        <div><div class="app-name">Nekoray</div><div class="app-platform">Windows / Linux</div></div>
+      </a>
+      <a class="app-btn" href="https://apps.apple.com/app/foxray/id6448898396" target="_blank" rel="noopener">
+        <span class="app-icon">🦊</span>
+        <div><div class="app-name">FoXray</div><div class="app-platform">iOS / macOS</div></div>
+      </a>
+    </div>
+  </div>
+
+  <!-- Connection Details -->
+  <div class="card">
+    <div class="card-title">Connection Details</div>
+    <div class="info-row"><span class="info-key">Server</span><span class="info-val">{{ server_ip }}</span></div>
+    <div class="info-row"><span class="info-key">Port</span><span class="info-val">{{ server_port }}</span></div>
+    <div class="info-row"><span class="info-key">Protocol</span><span class="info-val">VMess + WS + TLS</span></div>
+    <div class="info-row"><span class="info-key">SNI</span><span class="info-val">{{ sni_host }}</span></div>
+    <div class="info-row"><span class="info-key">Path</span><span class="info-val">{{ ws_path }}</span></div>
+    <div class="info-row"><span class="info-key">Created</span><span class="info-val">{{ user.created_at[:10] if user.created_at else '—' }}</span></div>
+    <div class="info-row"><span class="info-key">Expires</span><span class="info-val">{{ user.expire_at[:10] if user.expire_at else '—' }}</span></div>
+  </div>
+
+  <div class="footer"></div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script src="{{ url_for('static', filename='js/qrcode.js') }}"></script>
+<script>
+const LINKS = {{ links | tojson }};
+const EXPIRE = {{ (user.expire_at or '') | tojson }};
+let activeQr = 'vmess';
+
+/* Days left */
+(function(){
+  if (!EXPIRE) { document.getElementById('s-days').textContent = '—'; return; }
+  const exp = new Date(EXPIRE);
+  const now = new Date();
+  const diff = Math.ceil((exp - now) / 86400000);
+  const el = document.getElementById('s-days');
+  el.textContent = diff > 0 ? diff : 0;
+  if (diff <= 3) el.style.color = 'var(--red)';
+  else if (diff <= 7) el.style.color = 'var(--yellow)';
+  else el.style.color = 'var(--green)';
+})();
+
+/* QR */
+function showQr(type) {
+  activeQr = type;
+  document.querySelectorAll('.qr-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.qr-tab').forEach(t => {
+    const txt = t.textContent.toLowerCase();
+    if (type === 'cdn' && txt.includes('cdn')) t.classList.add('active');
+    else if (type === 'grpc' && txt.includes('grpc')) t.classList.add('active');
+    else if (type === 'httpupgrade' && txt.includes('hu')) t.classList.add('active');
+    else if (txt === type.toLowerCase()) t.classList.add('active');
+  });
+  const keyMap = {cdn: 'cdn_vmess', grpc: 'grpc_vmess', httpupgrade: 'httpupgrade_vmess', ss2022: 'ss2022', vless_ws: 'vless_ws'};
+  const key = keyMap[type] || type;
+  const link = LINKS[key] || '';
+  const box = document.getElementById('qr-display');
+  if (!link) { box.innerHTML = '<small style="color:var(--t3)">Not available</small>'; return; }
+  try {
+    const qr = qrcode(0, 'M'); qr.addData(link); qr.make();
+    box.innerHTML = qr.createSvgTag(5, 0);
+  } catch(e) { box.innerHTML = '<small style="color:var(--t3)">QR Error</small>'; }
+}
+showQr('vmess');
+
+/* Copy */
+function _copyText(text) {
+  if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(text);
+  const ta = document.createElement('textarea');
+  ta.value = text; ta.style.cssText = 'position:fixed;left:-9999px;top:-9999px;opacity:0';
+  document.body.appendChild(ta); ta.focus(); ta.select();
+  try { document.execCommand('copy'); } catch(e) {}
+  document.body.removeChild(ta);
+  return Promise.resolve();
+}
+
+function copyLink(type) {
+  let text = '';
+  if (type === 'sub') {
+    text = document.getElementById('sub-url').textContent.trim();
+  } else if (type === 'sub_json') {
+    text = document.getElementById('sub-json-url').textContent.trim();
+  } else {
+    text = LINKS[type] || '';
+  }
+  if (!text) { toast('Not available'); return; }
+  _copyText(text).then(() => {
+    toast('Copied!');
+    const btns = document.querySelectorAll('.btn-copy');
+    btns.forEach(b => { if (b.classList.contains('copied')) b.classList.remove('copied'); });
+    event.target.classList.add('copied');
+    event.target.textContent = '✓';
+    setTimeout(() => { event.target.classList.remove('copied'); event.target.textContent = 'Copy'; }, 2000);
+  });
+}
+
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast show';
+  setTimeout(() => el.className = 'toast', 2500);
+}
+</script>
+</body>
+</html>

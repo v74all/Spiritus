@@ -1,0 +1,225 @@
+# =============================================
+# VPN Management Panel - .gitignore
+# =============================================
+
+# --- Sensitive Files ---
+vpn-panel-password
+vpn-panel-password-hash
+vpn-settings.json
+*.secret
+*.key
+*.pem
+
+# --- Database Files ---
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+vpn_users.db
+*.sqlite
+*.sqlite3
+
+# --- Logs ---
+*.log
+access.log
+kill-switch.log
+vpn-panel.log
+
+# --- Backups ---
+backups/
+*.zip
+*.tar.gz
+*.bak
+*.orig
+*.rej
+*.backup
+vpn_backup_*
+
+# --- Temporary Files ---
+*.tmp
+*.swp
+*.swo
+*~
+*.temp
+logo_temp.png
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# --- Virtual Environment ---
+venv/
+env/
+ENV/
+.venv
+
+# --- IDE and Editor Files ---
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.DS_Store
+
+# --- OS Generated Files ---
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+
+# --- Test/Coverage ---
+*.test
+*.spec
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+nosetests.xml
+coverage.xml
+*.cover
+.pytest_cache/
+
+# --- Compiled Binaries ---
+*.exe
+*.dll
+*.dylib
+
+# --- Miscellaneous ---
+*.patch
+*.key
+*.pem
+*.crt
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
+
+# OS
+Thumbs.db
+.DS_Store
+*.swp
+
+# Static files (generated)
+static/downloads/*
+!static/downloads/.gitkeep
+
+# Test files
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Session data
+sessions/
+*.session
+
+# Certificates
+certs/
+ssl/
+*.crt
+*.key
+*.p12
+*.pfx
+
+# Xray/V2Ray
+xray/
+v2ray/
+config.json.bak
+
+# User data
+users/
+configs/
+qrcodes/
+
+# Debug
+debug/
+debug.log
+*.debug
+
+# Build artifacts
+*.o
+*.a
+*.exe
+*.dll
+*.dylib
+
+# Package files
+*.tar.gz
+*.zip
+*.rar
+*.7z
+
+# Documentation builds
+docs/_build/
+site/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pyenv
+.python-version
+
+# celery beat schedule
+celerybeat-schedule
+
+# SageMath parsed files
+*.sage.py
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# pytype static type analyzer
+.pytype/
+
+# Cython debug symbols
+cython_debug/
+
+# Keep important files
+!requirements.txt
+!requirements-*.txt
+!README.md
+!INSTALL.md
+!CHANGELOG.md
+!LICENSE
+!.gitignore
