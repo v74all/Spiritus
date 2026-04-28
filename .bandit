@@ -1,0 +1,25 @@
+[bandit]
+# Bandit security scanning configuration
+
+# Test cases to skip
+skips = B101  # assert_used (needed for tests)
+
+# Directories to exclude
+exclude_dirs = 
+    /test/,
+    /tests/,
+    /.venv/,
+    /venv/,
+    /__pycache__/
+
+# Severity level (LOW, MEDIUM, HIGH)
+severity_level = MEDIUM
+
+# Confidence level (LOW, MEDIUM, HIGH)
+confidence_level = MEDIUM
+
+# Output format (txt, json, csv, custom)
+format = json
+
+# Report verbose output
+verbose = true
