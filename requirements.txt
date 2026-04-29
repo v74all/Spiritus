@@ -38,26 +38,16 @@ httpx>=0.25.0
 
 # ═══ Protocol Dependencies ═══
 
-# Hysteria2 (QUIC-based proxy)
-hysteria2-sdk>=0.1.0; python_version >= "3.10"
-
-# TUIC v5 (QUIC proxy with UDP relay)
-tuic-sdk>=0.1.0; python_version >= "3.10"
-
 # WireGuard / AmneziaWG
 python-wireguard>=0.1.0
 
 # OpenVPN management
 openvpn-api>=0.1.0
 
-# NaiveProxy management
-naiveproxy-manager>=0.1.0
-
-# ShadowTLS management
-shadowtls-manager>=0.1.0
-
-# Mieru management
-mieru-sdk>=0.1.0
+# NOTE: Hysteria2, TUIC, NaiveProxy, ShadowTLS, and Mieru are managed
+# via their own CLI binaries (not Python packages). The panel generates
+# config files and controls them through subprocess calls to the
+# installed binaries — no pip SDK needed.
 
 # ═══ General Utilities ═══
 
