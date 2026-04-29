@@ -174,7 +174,8 @@ input,button,textarea,select{font-family:inherit;font-size:inherit}
 .modal::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;
   background:linear-gradient(90deg,transparent,rgba(108,159,255,.3),transparent)}
 .modal-lg{max-width:560px}
-.modal-xl{max-width:700px}
+.modal-xl{max-width:860px}
+.modal-xxl{max-width:960px;max-height:calc(100vh - 40px);overflow-y:auto;-webkit-overflow-scrolling:touch}
 @keyframes modalIn{from{opacity:0;transform:scale(.92) translateY(20px)}to{opacity:1;transform:scale(1) translateY(0)}}
 .modal h3{font-size:18px;color:var(--t0);margin-bottom:24px;font-weight:700;
   display:flex;align-items:center;gap:8px}
@@ -190,15 +191,20 @@ input,button,textarea,select{font-family:inherit;font-size:inherit}
 
 /* Config modal */
 .config-tabs{display:flex;gap:4px;border:1px solid var(--border);border-radius:var(--radius-sm);
-  overflow:hidden;margin-bottom:20px;background:rgba(10,15,26,.4);padding:4px}
-.config-tab{flex:1;padding:10px;text-align:center;font-size:11px;font-weight:700;cursor:pointer;
+  overflow:visible;margin-bottom:20px;background:rgba(10,15,26,.4);padding:4px;flex-wrap:wrap}
+.config-tab{flex:1;min-width:80px;padding:10px 6px;text-align:center;font-size:11px;font-weight:700;cursor:pointer;
   background:transparent;border:none;color:var(--t3);transition:var(--transition);border-radius:var(--radius-xs);
-  letter-spacing:.3px}
+  letter-spacing:.3px;white-space:nowrap}
 .config-tab:hover{color:var(--t1);background:rgba(255,255,255,.03)}
 .config-tab.active{color:#fff;box-shadow:0 2px 8px rgba(0,0,0,.3)}
 .config-tab.tab-vmess.active{background:linear-gradient(135deg,var(--accent2),var(--accent))}
 .config-tab.tab-vless.active{background:linear-gradient(135deg,#7c3aed,#a78bfa)}
 .config-tab.tab-cdn.active{background:linear-gradient(135deg,#ea580c,var(--orange))}
+.config-tab.tab-trojan.active{background:linear-gradient(135deg,#0891b2,#22d3ee)}
+.config-tab.tab-grpc.active{background:linear-gradient(135deg,#0d9488,#2dd4bf)}
+.config-tab.tab-httpupgrade.active{background:linear-gradient(135deg,#7c3aed,#c084fc)}
+.config-tab.tab-grpc2.active{background:linear-gradient(135deg,#ca8a04,#facc15)}
+.config-tab.tab-firewall.active{background:linear-gradient(135deg,#dc2626,#f87171)}
 .qr-box{background:#fff;border-radius:14px;padding:18px;display:inline-block;margin:0 auto 20px;
   box-shadow:0 4px 20px rgba(0,0,0,.2)}
 .qr-box svg{display:block}
@@ -557,7 +563,7 @@ input,button,textarea,select{font-family:inherit;font-size:inherit}
   .modal-overlay{padding:10px;align-items:flex-start;padding-top:20px}
   .modal{padding:20px 16px;margin:0;max-height:calc(100vh - 40px);overflow-y:auto;-webkit-overflow-scrolling:touch;
     backdrop-filter:blur(16px)}
-  .modal-lg,.modal-xl{max-width:100%}
+  .modal-lg,.modal-xl,.modal-xxl{max-width:100%}
   .modal h3{font-size:16px;margin-bottom:16px}
   .qr-box{padding:10px;margin-bottom:14px}
   .qr-box svg{max-width:180px;max-height:180px;width:100%;height:auto}
@@ -571,6 +577,8 @@ input,button,textarea,select{font-family:inherit;font-size:inherit}
   .sysmon-bar{flex-wrap:wrap}
   .sysmon-item{min-width:33%;border-bottom:1px solid var(--glass-border)}
   .settings-section{padding:14px}
+  .config-tabs{gap:3px;padding:3px}
+  .config-tab{min-width:60px;padding:8px 4px;font-size:10px;flex:1 1 calc(33% - 4px)}
   .bulk-qr-wrap{grid-template-columns:1fr}
   .deep-stats{grid-template-columns:1fr}
 }
