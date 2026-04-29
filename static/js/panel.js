@@ -1620,7 +1620,7 @@ function switchSettingsTab(tabName) {
 /* ── Helpers ── */
 function showModal(id) {
   document.getElementById(id).classList.add('show');
-  if (id === 'settings-modal') loadSettings();
+  if (id === 'settings-modal') { loadSettings(); switchSettingsTab('protocols'); }
   if (id === 'agents-modal') fetchAgents();
   if (id === 'sysmon-modal') openSysmonDetail();
   if (id === 'online-modal') fetchOnlineUsers();
