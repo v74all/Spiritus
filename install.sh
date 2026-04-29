@@ -133,18 +133,14 @@ RestartSec=10
 StartLimitInterval=60
 StartLimitBurst=3
 
-NoNewPrivileges=true
 PrivateTmp=true
-ProtectSystem=strict
-ReadWritePaths=${INSTALL_DIR} /tmp
-ProtectControlGroups=true
-ProtectKernelModules=true
-RestrictRealtime=true
+ProtectSystem=full
+ReadWritePaths=${INSTALL_DIR} /usr/local/etc/xray /var/log/xray /tmp
 LimitNOFILE=65536
 
 StandardOutput=append:${INSTALL_DIR}/vpn-panel.log
 StandardError=append:${INSTALL_DIR}/vpn-panel.log
-SyslogIdentifier=spiritus
+SyslogIdentifier=v7lthronyx
 
 [Install]
 WantedBy=multi-user.target

@@ -26,8 +26,14 @@ import ipaddress
 import threading
 import random
 import string
-import speed_manager
-import scripts.dpi_evasion as dpi_evasion
+import scripts.speed_manager as speed_manager
+
+try:
+    import scripts.dpi_evasion as dpi_evasion
+    DPI_EVASION_AVAILABLE = True
+except ImportError:
+    dpi_evasion = None
+    DPI_EVASION_AVAILABLE = False
 
 # Configure logging
 logging.basicConfig(
@@ -42,9 +48,9 @@ logger = logging.getLogger('VPNPanel')
 
 # ── Core Constants ─────────────────────────────────────
 DB = "vpn_users.db"
-XRAY_CONFIG = "/usr/local/etc/v2ray/config.json"
+XRAY_CONFIG = "/usr/local/etc/xray/config.json"
 XRAY_BIN = "/usr/local/bin/xray"
-V2RAY_BIN = "/usr/local/bin/v2ray"
+V2RAY_BIN = "/usr/local/bin/xray"
 SERVER_IP = os.environ.get("VPN_SERVER_IP", "127.0.0.1")
 SERVER_PORT = os.environ.get("VPN_SERVER_PORT", "443")
 SNI_HOST = os.environ.get("VPN_SNI_HOST", "www.google.com")
@@ -1860,8 +1866,8 @@ def build_xray_config(active_users):
                 "tlsSettings": {
                     "allowInsecure": True,
                     "certificates": [{
-                        "certificateFile": "/usr/local/etc/v2ray/cert.crt",
-                        "keyFile": "/usr/local/etc/v2ray/cert.key",
+                        "certificateFile": "/usr/local/etc/xray/cert.crt",
+                        "keyFile": "/usr/local/etc/xray/cert.key",
                     }],
                 },
                 "wsSettings": {"path": vmess_ws_path, "headers": {"Host": vmess_sni}},
@@ -1922,8 +1928,8 @@ def build_xray_config(active_users):
                 "tlsSettings": {
                     "allowInsecure": True,
                     "certificates": [{
-                        "certificateFile": "/usr/local/etc/v2ray/cert.crt",
-                        "keyFile": "/usr/local/etc/v2ray/cert.key",
+                        "certificateFile": "/usr/local/etc/xray/cert.crt",
+                        "keyFile": "/usr/local/etc/xray/cert.key",
                     }],
                 },
             },
@@ -1942,8 +1948,8 @@ def build_xray_config(active_users):
                 "tlsSettings": {
                     "allowInsecure": True,
                     "certificates": [{
-                        "certificateFile": "/usr/local/etc/v2ray/cert.crt",
-                        "keyFile": "/usr/local/etc/v2ray/cert.key",
+                        "certificateFile": "/usr/local/etc/xray/cert.crt",
+                        "keyFile": "/usr/local/etc/xray/cert.key",
                     }],
                 },
                 "grpcSettings": {"serviceName": grpc_svc, "multiMode": True},
@@ -1963,8 +1969,8 @@ def build_xray_config(active_users):
                 "tlsSettings": {
                     "allowInsecure": True,
                     "certificates": [{
-                        "certificateFile": "/usr/local/etc/v2ray/cert.crt",
-                        "keyFile": "/usr/local/etc/v2ray/cert.key",
+                        "certificateFile": "/usr/local/etc/xray/cert.crt",
+                        "keyFile": "/usr/local/etc/xray/cert.key",
                     }],
                 },
                 "httpupgradeSettings": {"path": hu_path, "host": vmess_sni},
@@ -2003,8 +2009,8 @@ def build_xray_config(active_users):
                 "tlsSettings": {
                     "allowInsecure": True,
                     "certificates": [{
-                        "certificateFile": "/usr/local/etc/v2ray/cert.crt",
-                        "keyFile": "/usr/local/etc/v2ray/cert.key",
+                        "certificateFile": "/usr/local/etc/xray/cert.crt",
+                        "keyFile": "/usr/local/etc/xray/cert.key",
                     }],
                 },
                 "wsSettings": {"path": vlws_path, "headers": {"Host": vmess_sni}},
@@ -2014,7 +2020,7 @@ def build_xray_config(active_users):
     return {
         "log": {
             "access": ACCESS_LOG,
-            "error": "/var/log/v2ray/error.log",
+            "error": "/var/log/xray/error.log",
             "loglevel": "warning",
         },
         "stats": {},
@@ -2094,7 +2100,7 @@ def build_xray_config(active_users):
 
 
 def write_xray_config():
-    os.makedirs("/usr/local/etc/v2ray", exist_ok=True)
+    os.makedirs("/usr/local/etc/xray", exist_ok=True)
     config = build_xray_config(get_active_users_list())
     with open(XRAY_CONFIG, "w") as f:
         json.dump(config, f, indent=2)
@@ -4649,6 +4655,8 @@ _dpi_utility = None
 def _get_dpi_utility():
     """Lazy init DPI utility"""
     global _dpi_utility
+    if not DPI_EVASION_AVAILABLE:
+        return None
     if _dpi_utility is None:
         _dpi_utility = dpi_evasion._U()
     return _dpi_utility
