@@ -62,8 +62,28 @@ class User(Base):
     max_connections = Column(Integer, default=1)
     max_devices = Column(Integer, default=1)
     
-    # Protocols
-    protocols = Column(JSON, default={})  # {"vmess": true, "vless": false, ...}
+    # Protocols — Full support for all Spiritus protocols
+    protocols = Column(JSON, default={
+        # ── Xray-Core Protocols ──
+        "vless_xhttp_reality": False,   # VLESS+XHTTP+REALITY (relay-fronted)
+        "vless_vision_reality": False,  # VLESS+REALITY+Vision (direct, fresh IP)
+        "vless_reverse_reality": False, # Reverse-tunneled VLESS-Reality (Backhaul/Rathole)
+        "trojan_cdn": False,            # Trojan+WS/gRPC+TLS over Cloudflare CDN
+        "vmess_ws": True,               # VMess+WS+TLS
+        "vless_ws": False,              # VLESS+WS+TLS (CDN compatible)
+        "ss2022": False,                # Shadowsocks-2022
+        "grpc": False,                  # gRPC transport
+        "httpupgrade": False,           # HTTPUpgrade transport
+        # ── Standalone Protocols (Non-Xray) ──
+        "hysteria2": False,             # Hysteria2+Salamander+port-hop
+        "tuic_v5": False,               # TUIC v5
+        "amneziawg": False,             # AmneziaWG 2.0
+        "shadowtls_v3": False,          # ShadowTLS v3
+        "mieru": False,                 # Mieru
+        "naiveproxy": False,            # NaiveProxy (official)
+        "wireguard": False,             # Plain WireGuard
+        "openvpn": False,               # Plain OpenVPN
+    })
     custom_dns = Column(String(255), nullable=True)
     
     # Notes & Tags
@@ -137,6 +157,32 @@ class Agent(Base):
     current_users = Column(Integer, default=0)
     cpu_usage = Column(Float, default=0.0)
     memory_usage = Column(Float, default=0.0)
+    
+    # Supported protocols on this agent node
+    supported_protocols = Column(JSON, default={
+        # Xray-Core
+        "vless_xhttp_reality": False,
+        "vless_vision_reality": False,
+        "vless_reverse_reality": False,
+        "trojan_cdn": False,
+        "vmess_ws": True,
+        "vless_ws": False,
+        "ss2022": False,
+        "grpc": False,
+        "httpupgrade": False,
+        # Standalone
+        "hysteria2": False,
+        "tuic_v5": False,
+        "amneziawg": False,
+        "shadowtls_v3": False,
+        "mieru": False,
+        "naiveproxy": False,
+        "wireguard": False,
+        "openvpn": False,
+    })
+    
+    # Backend type: xray / sing-box / hysteria2 / wireguard / openvpn
+    backend_type = Column(String(50), default="xray")
     
     # Relations
     users = relationship(

@@ -34,19 +34,36 @@
 
 ## 🛰️ پروتکل‌های جدید (اولویت ۲)
 
-### Protocol Support
-- [ ] Hysteria 2
-- [ ] TUIC v5
-- [ ] AmneziaWG
-- [ ] WireGuard with obfuscation
-- [ ] Sing-box backend
-- [ ] ECH (Encrypted Client Hello)
+### Xray-Core Protocols (Enhanced)
+- [ ] VLESS+XHTTP+REALITY (relay-fronted) — XHTTP transport with REALITY TLS, relay-domain fronting
+- [ ] VLESS+REALITY+Vision (direct, fresh IP) — Vision flow for direct fresh-IP connections, no CDN
+- [ ] Reverse-tunneled VLESS-Reality (Backhaul/Rathole) — Reverse tunnel via VLESS-Reality for backhaul/rathole relay
+- [ ] Trojan+WS/gRPC+TLS over Cloudflare CDN — Full CDN-compatible Trojan with WS+gRPC dual transport
+- [ ] Shadowsocks-2022 (blake3) — Already supported, needs config UI
+
+### Standalone Protocols (Non-Xray)
+- [ ] Hysteria2+Salamander+port-hop — QUIC-based with Salamander obfuscation + automatic port-hopping
+- [ ] TUIC v5 — QUIC-based proxy with UDP relay and multiplexing
+- [ ] AmneziaWG 2.0 — Amnezia's WireGuard fork with advanced obfuscation (Junk packets, Magic headers)
+- [ ] ShadowTLS v3 — TLS-encrypted SOCKS5 proxy with custom TLS fingerprint
+- [ ] Mieru — TCP/UDP multiplexing proxy with encryption and traffic shaping
+- [ ] NaiveProxy (official) — Chromium network stack proxy with Chrome TLS fingerprint
+- [ ] Plain WireGuard — Standard WireGuard tunnel (no obfuscation)
+- [ ] Plain OpenVPN — Standard OpenVPN tunnel (UDP/TCP)
+
+### Protocol Infrastructure
+- [ ] Sing-box backend — Multi-protocol backend as alternative to Xray-core
+- [ ] ECH (Encrypted Client Hello) — TLS extension for SNI encryption
+- [ ] Multi-backend orchestrator — Unified interface for Xray/Hysteria/sing-box/WG
 
 ### Traffic Obfuscation
-- [ ] uTLS fingerprint rotation
-- [ ] Auto protocol rotation
-- [ ] Traffic morphing (WhatsApp/Zoom patterns)
-- [ ] Snowflake/meek bridge fallback
+- [ ] uTLS fingerprint rotation — Auto-rotate Chrome/Firefox/Safari fingerprints
+- [ ] Auto protocol rotation — Switch protocols on detection/blocking
+- [ ] Traffic morphing (WhatsApp/Zoom patterns) — Shape traffic to mimic legit apps
+- [ ] Snowflake/meek bridge fallback — Tor bridge integration
+- [ ] XHTTP transport — HTTP/2 and HTTP/3 transport with streaming
+- [ ] Salamander obfuscation — Hysteria2-specific traffic obfuscation
+- [ ] Port-hopping — Automatic port rotation to evade port-based blocking
 
 ---
 
