@@ -1,5 +1,5 @@
 [Unit]
-Description=Spiritus VPN Management Panel
+Description=V7LTHRONYX VPN Management Panel
 Documentation=https://github.com/v74all/Spiritus
 After=network.target xray.service v2ray.service
 Wants=xray.service v2ray.service
@@ -29,7 +29,7 @@ LimitNOFILE=65536
 
 StandardOutput=append:/opt/spiritus/vpn-panel.log
 StandardError=append:/opt/spiritus/vpn-panel.log
-SyslogIdentifier=spiritus
+SyslogIdentifier=v7lthronyx
 
 [Install]
 WantedBy=multi-user.target
