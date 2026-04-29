@@ -1617,6 +1617,24 @@ function switchSettingsTab(tabName) {
   if (btn) btn.classList.add('active');
 }
 
+function switchAggressiveTab(tab) {
+  document.querySelectorAll('.aggressive-tab-content').forEach(el => el.style.display = 'none');
+  document.querySelectorAll('#aggressive-modal .config-tab').forEach(el => el.classList.remove('active'));
+  const content = document.getElementById('aggressive-tab-' + tab);
+  if (content) content.style.display = 'block';
+  const btn = document.querySelector('#aggressive-modal .config-tab[onclick*="'+tab+'"]');
+  if (btn) btn.classList.add('active');
+}
+
+function switchFightbackTab(tab) {
+  document.querySelectorAll('.fightback-tab-content').forEach(el => el.style.display = 'none');
+  document.querySelectorAll('#fightback-modal .config-tab').forEach(el => el.classList.remove('active'));
+  const content = document.getElementById('fightback-tab-' + tab);
+  if (content) content.style.display = 'block';
+  const btn = document.querySelector('#fightback-modal .config-tab[onclick*="'+tab+'"]');
+  if (btn) btn.classList.add('active');
+}
+
 /* ── Helpers ── */
 function showModal(id) {
   document.getElementById(id).classList.add('show');

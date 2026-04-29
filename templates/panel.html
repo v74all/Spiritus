@@ -1470,146 +1470,169 @@ const SERVER_INFO = {{ {'ip': server_ip, 'port': server_port, 'sni': sni_host, '
 
 <!-- Resilience Operations Modal -->
 <div class="modal-overlay" id="aggressive-modal">
-  <div class="modal modal-xl">
-    <h3>⚔️ Network Resilience Tools</h3>
-    <div class="alert-banner alert-warning" style="margin-bottom:16px">
-      <span class="alert-icon">⚠️</span>
-      <span class="alert-text">WARNING: These attacks are for educational purposes only. Use only on systems you own or have explicit permission to test.</span>
+  <div class="modal modal-xxl">
+    <h3>⚔️ Network Resilience Tools / ابزارهای تاب‌آوری شبکه</h3>
+    <div class="help-box" style="margin-bottom:16px">
+      <div class="help-en">⚔️ <b>Network Resilience Tools</b> test your network's ability to withstand attacks. Select attack type, configure target, and run simulations. <b>Warning:</b> For authorized testing only.</div>
+      <div class="help-fa">⚔️ <b>ابزارهای تاب‌آوری شبکه</b> توانایی شبکه شما در مقابله با حملات را تست می‌کند. نوع حمله را انتخاب، هدف را تنظیم و شبیه‌سازی اجرا کنید. <b>هشدار:</b> فقط برای تست مجاز.</div>
     </div>
-    
-    <div class="form-group" style="margin-bottom:16px">
-      <label>Target IP:</label>
-      <input type="text" id="aggressive-target-ip" placeholder="192.168.1.1" value="127.0.0.1">
+
+    <div class="config-tabs" style="margin-bottom:16px">
+      <button class="config-tab tab-vmess active" onclick="switchAggressiveTab('config')">⚙️ Config</button>
+      <button class="config-tab tab-grpc" onclick="switchAggressiveTab('advanced')">🔧 Advanced</button>
+      <button class="config-tab tab-trojan" onclick="switchAggressiveTab('status')">📊 Status</button>
     </div>
-    
-    <div class="form-group" style="margin-bottom:16px">
-      <label>Target Port:</label>
-      <input type="number" id="aggressive-target-port" placeholder="443" value="443">
+
+    <!-- Config Tab -->
+    <div id="aggressive-tab-config" class="aggressive-tab-content">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label>Target IP / آدرس هدف</label>
+          <input type="text" id="aggressive-target-ip" placeholder="192.168.1.1" value="127.0.0.1">
+        </div>
+        <div class="form-group">
+          <label>Target Port / پورت هدف</label>
+          <input type="number" id="aggressive-target-port" placeholder="443" value="443">
+        </div>
+        <div class="form-group">
+          <label>Duration (sec) / مدت (ثانیه)</label>
+          <input type="number" id="aggressive-duration" placeholder="60" value="10">
+        </div>
+        <div class="form-group">
+          <label>Attack Type / نوع حمله</label>
+          <select id="resilience-op-type">
+            <option value="syn_flood">Massive SYN Flood</option>
+            <option value="udp_flood">UDP Flood Multi-Port</option>
+            <option value="icmp_flood">ICMP Flood Variety</option>
+            <option value="http_flood">HTTP Flood Layer 7</option>
+            <option value="dns_amp">DNS Amplification</option>
+            <option value="ntp_amp">NTP Amplification</option>
+            <option value="combined">Combined Attack</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-orange" onclick="startResilienceOp()">▶ Start Operation</button>
+        <button class="btn btn-danger" onclick="stopResilienceOps()">⏹ Stop All</button>
+        <button class="btn btn-outline" onclick="hideModal('aggressive-modal')">✕ Close</button>
+      </div>
     </div>
-    
-    <div class="form-group" style="margin-bottom:16px">
-      <label>Duration (seconds):</label>
-      <input type="number" id="aggressive-duration" placeholder="60" value="10">
+
+    <!-- Advanced Tab -->
+    <div id="aggressive-tab-advanced" class="aggressive-tab-content" style="display:none">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group" id="aggressive-ports-group">
+          <label>UDP Ports / پورت‌های UDP</label>
+          <input type="text" id="aggressive-ports" placeholder="53,80,443,8080" value="53,80,443">
+        </div>
+        <div class="form-group" id="aggressive-dns-group">
+          <label>DNS Servers / سرورهای DNS</label>
+          <input type="text" id="aggressive-dns-servers" placeholder="8.8.8.8,1.1.1.1" value="8.8.8.8,1.1.1.1">
+        </div>
+        <div class="form-group" id="aggressive-ntp-group">
+          <label>NTP Servers / سرورهای NTP</label>
+          <input type="text" id="aggressive-ntp-servers" placeholder="pool.ntp.org,time.nist.gov" value="pool.ntp.org">
+        </div>
+        <div class="form-group" id="aggressive-url-group">
+          <label>Target URL / آدرس هدف</label>
+          <input type="text" id="aggressive-target-url" placeholder="https://example.com" value="http://127.0.0.1">
+        </div>
+      </div>
     </div>
-    
-    <div class="form-group" style="margin-bottom:16px">
-      <label>Attack Type:</label>
-      <select id="resilience-op-type">
-        <option value="syn_flood">Massive SYN Flood</option>
-        <option value="udp_flood">UDP Flood Multi-Port</option>
-        <option value="icmp_flood">ICMP Flood Variety</option>
-        <option value="http_flood">HTTP Flood Layer 7</option>
-        <option value="dns_amp">DNS Amplification</option>
-        <option value="ntp_amp">NTP Amplification</option>
-        <option value="combined">Combined Attack</option>
-      </select>
-    </div>
-    
-    <div class="form-group" style="margin-bottom:16px" id="aggressive-ports-group" style="display:none">
-      <label>UDP Ports (comma-separated):</label>
-      <input type="text" id="aggressive-ports" placeholder="53,80,443,8080" value="53,80,443">
-    </div>
-    
-    <div class="form-group" style="margin-bottom:16px" id="aggressive-dns-group" style="display:none">
-      <label>DNS Servers (comma-separated):</label>
-      <input type="text" id="aggressive-dns-servers" placeholder="8.8.8.8,1.1.1.1" value="8.8.8.8,1.1.1.1">
-    </div>
-    
-    <div class="form-group" style="margin-bottom:16px" id="aggressive-ntp-group" style="display:none">
-      <label>NTP Servers (comma-separated):</label>
-      <input type="text" id="aggressive-ntp-servers" placeholder="pool.ntp.org,time.nist.gov" value="pool.ntp.org">
-    </div>
-    
-    <div class="form-group" style="margin-bottom:16px" id="aggressive-url-group" style="display:none">
-      <label>Target URL:</label>
-      <input type="text" id="aggressive-target-url" placeholder="https://example.com" value="http://127.0.0.1">
-    </div>
-    
-    <div class="modal-actions">
-      <button class="btn btn-orange" onclick="startResilienceOp()">Start Operation</button>
-      <button class="btn btn-danger" onclick="stopResilienceOps()">Stop All Operations</button>
-      <button class="btn btn-outline" onclick="hideModal('aggressive-modal')">Close</button>
-    </div>
-    
-    <div id="aggressive-status" style="margin-top:16px;padding:12px;background:rgba(255,255,255,.02);border-radius:var(--radius-sm);display:none">
-      <div style="font-size:12px;color:var(--t2);margin-bottom:8px">Attack Status:</div>
-      <div id="aggressive-status-text" style="font-size:13px;color:var(--t0)">No active attacks</div>
+
+    <!-- Status Tab -->
+    <div id="aggressive-tab-status" class="aggressive-tab-content" style="display:none">
+      <div id="aggressive-status" style="padding:16px;background:rgba(255,255,255,.02);border-radius:var(--radius-sm)">
+        <div style="font-size:12px;color:var(--t2);margin-bottom:8px">Attack Status / وضعیت حمله:</div>
+        <div id="aggressive-status-text" style="font-size:13px;color:var(--t0)">No active attacks / حمله فعالی وجود ندارد</div>
+      </div>
     </div>
   </div>
 </div>
 
 <!-- Counter Techniques Modal -->
 <div class="modal-overlay" id="fightback-modal">
-  <div class="modal modal-xl">
-    <h3>🛡️ Counter Techniques</h3>
-    <div class="alert-banner alert-danger" style="margin-bottom:16px">
-      <span class="alert-icon">⚠️</span>
-      <span class="alert-text">CRITICAL WARNING: These techniques can disrupt network infrastructure. Use only for authorized testing and with extreme caution.</span>
+  <div class="modal modal-xxl">
+    <h3>🛡️ Counter Techniques / تکنیک‌های متقابل</h3>
+    <div class="help-box" style="margin-bottom:16px">
+      <div class="help-en">🛡️ <b>Counter Techniques</b> provide active defense measures against network attacks. Select technique, configure target, and deploy countermeasures. <b>Warning:</b> Can disrupt infrastructure — authorized testing only.</div>
+      <div class="help-fa">🛡️ <b>تکنیک‌های متقابل</b> اقدامات دفاعی فعال در برابر حملات شبکه را ارائه می‌دهد. نوع تکنیک را انتخاب، هدف را تنظیم و اقدام متقابل را اجرا کنید. <b>هشدار:</b> فقط برای تست مجاز.</div>
     </div>
-    
-    <div class="form-group" style="margin-bottom:16px">
-      <label>Target IP:</label>
-      <input type="text" id="fightback-target-ip" placeholder="192.168.1.1" value="127.0.0.1">
+
+    <div class="config-tabs" style="margin-bottom:16px">
+      <button class="config-tab tab-firewall active" onclick="switchFightbackTab('config')">⚙️ Config</button>
+      <button class="config-tab tab-grpc" onclick="switchFightbackTab('advanced')">🔧 Advanced</button>
+      <button class="config-tab tab-trojan" onclick="switchFightbackTab('status')">📊 Status</button>
     </div>
-    
-    <div class="form-group" style="margin-bottom:16px">
-      <label>Target Port:</label>
-      <input type="number" id="fightback-target-port" placeholder="443" value="443">
+
+    <!-- Config Tab -->
+    <div id="fightback-tab-config" class="fightback-tab-content">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label>Target IP / آدرس هدف</label>
+          <input type="text" id="fightback-target-ip" placeholder="192.168.1.1" value="127.0.0.1">
+        </div>
+        <div class="form-group">
+          <label>Target Port / پورت هدف</label>
+          <input type="number" id="fightback-target-port" placeholder="443" value="443">
+        </div>
+        <div class="form-group">
+          <label>Duration (sec) / مدت (ثانیه)</label>
+          <input type="number" id="fightback-duration" placeholder="60" value="10">
+        </div>
+        <div class="form-group">
+          <label>Counter Technique / تکنیک متقابل</label>
+          <select id="fightback-technique">
+            <option value="rst_flood">TCP RST Flood</option>
+            <option value="fin_flood">TCP FIN Flood</option>
+            <option value="icmp_redirect">ICMP Redirect</option>
+            <option value="arp_spoofing">ARP Spoofing</option>
+            <option value="dns_poisoning">DNS Poisoning</option>
+            <option value="tcp_hijacking">TCP Hijacking</option>
+            <option value="session_hijacking">Session Hijacking</option>
+            <option value="combined">Combined Counter</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-danger" onclick="startCounter()">▶ Start Counter</button>
+        <button class="btn btn-orange" onclick="stopFightBack()">⏹ Stop All</button>
+        <button class="btn btn-outline" onclick="hideModal('fightback-modal')">✕ Close</button>
+      </div>
     </div>
-    
-    <div class="form-group" style="margin-bottom:16px">
-      <label>Duration (seconds):</label>
-      <input type="number" id="fightback-duration" placeholder="60" value="10">
+
+    <!-- Advanced Tab -->
+    <div id="fightback-tab-advanced" class="fightback-tab-content" style="display:none">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group" id="fightback-gateway-group">
+          <label>Gateway IP / IP گیت‌وی</label>
+          <input type="text" id="fightback-gateway-ip" placeholder="192.168.1.254" value="192.168.1.254">
+        </div>
+        <div class="form-group" id="fightback-dns-group">
+          <label>DNS Server / سرور DNS</label>
+          <input type="text" id="fightback-dns-server" placeholder="8.8.8.8" value="8.8.8.8">
+        </div>
+        <div class="form-group" id="fightback-domain-group">
+          <label>Domain / دامنه</label>
+          <input type="text" id="fightback-domain" placeholder="google.com" value="google.com">
+        </div>
+        <div class="form-group" id="fightback-fake-ip-group">
+          <label>Fake IP / IP جعلی</label>
+          <input type="text" id="fightback-fake-ip" placeholder="1.2.3.4" value="1.2.3.4">
+        </div>
+        <div class="form-group" id="fightback-session-group" style="grid-column:span 2">
+          <label>Session ID / شناسه نشست</label>
+          <input type="text" id="fightback-session-id" placeholder="abc123def456" value="test-session-id">
+        </div>
+      </div>
     </div>
-    
-    <div class="form-group" style="margin-bottom:16px">
-      <label>Counter Technique:</label>
-      <select id="fightback-technique">
-        <option value="rst_flood">TCP RST Flood</option>
-        <option value="fin_flood">TCP FIN Flood</option>
-        <option value="icmp_redirect">ICMP Redirect</option>
-        <option value="arp_spoofing">ARP Spoofing</option>
-        <option value="dns_poisoning">DNS Poisoning</option>
-        <option value="tcp_hijacking">TCP Hijacking</option>
-        <option value="session_hijacking">Session Hijacking</option>
-        <option value="combined">Combined Counter</option>
-      </select>
-    </div>
-    
-    <div class="form-group" style="margin-bottom:16px" id="fightback-gateway-group" style="display:none">
-      <label>Gateway IP:</label>
-      <input type="text" id="fightback-gateway-ip" placeholder="192.168.1.254" value="192.168.1.254">
-    </div>
-    
-    <div class="form-group" style="margin-bottom:16px" id="fightback-dns-group" style="display:none">
-      <label>DNS Server:</label>
-      <input type="text" id="fightback-dns-server" placeholder="8.8.8.8" value="8.8.8.8">
-    </div>
-    
-    <div class="form-group" style="margin-bottom:16px" id="fightback-domain-group" style="display:none">
-      <label>Domain:</label>
-      <input type="text" id="fightback-domain" placeholder="google.com" value="google.com">
-    </div>
-    
-    <div class="form-group" style="margin-bottom:16px" id="fightback-fake-ip-group" style="display:none">
-      <label>Fake IP:</label>
-      <input type="text" id="fightback-fake-ip" placeholder="1.2.3.4" value="1.2.3.4">
-    </div>
-    
-    <div class="form-group" style="margin-bottom:16px" id="fightback-session-group" style="display:none">
-      <label>Session ID:</label>
-      <input type="text" id="fightback-session-id" placeholder="abc123def456" value="test-session-id">
-    </div>
-    
-    <div class="modal-actions">
-      <button class="btn btn-danger" onclick="startCounter()">Start Counter</button>
-      <button class="btn btn-orange" onclick="stopFightBack()">Stop All Techniques</button>
-      <button class="btn btn-outline" onclick="hideModal('fightback-modal')">Close</button>
-    </div>
-    
-    <div id="fightback-status" style="margin-top:16px;padding:12px;background:rgba(255,255,255,.02);border-radius:var(--radius-sm);display:none">
-      <div style="font-size:12px;color:var(--t2);margin-bottom:8px">Counter Status:</div>
-      <div id="fightback-status-text" style="font-size:13px;color:var(--t0)">No active techniques</div>
+
+    <!-- Status Tab -->
+    <div id="fightback-tab-status" class="fightback-tab-content" style="display:none">
+      <div id="fightback-status" style="padding:16px;background:rgba(255,255,255,.02);border-radius:var(--radius-sm)">
+        <div style="font-size:12px;color:var(--t2);margin-bottom:8px">Counter Status / وضعیت اقدام متقابل:</div>
+        <div id="fightback-status-text" style="font-size:13px;color:var(--t0)">No active techniques / تکنیک فعالی وجود ندارد</div>
+      </div>
     </div>
   </div>
 </div>

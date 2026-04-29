@@ -176,6 +176,11 @@ input,button,textarea,select{font-family:inherit;font-size:inherit}
 .modal-lg{max-width:560px}
 .modal-xl{max-width:860px}
 .modal-xxl{max-width:960px;max-height:calc(100vh - 40px);overflow-y:auto;-webkit-overflow-scrolling:touch}
+.modal-xxl .form-group{margin-bottom:12px}
+.modal-xxl .form-group label{font-size:11px;margin-bottom:4px}
+.modal-xxl .form-group input,.modal-xxl .form-group select{padding:10px 14px;font-size:13px}
+.modal-xxl .modal-actions{margin-top:16px;gap:8px}
+.modal-xxl .modal-actions .btn{padding:10px 16px;font-size:12px}
 @keyframes modalIn{from{opacity:0;transform:scale(.92) translateY(20px)}to{opacity:1;transform:scale(1) translateY(0)}}
 .modal h3{font-size:18px;color:var(--t0);margin-bottom:24px;font-weight:700;
   display:flex;align-items:center;gap:8px}
@@ -564,6 +569,7 @@ input,button,textarea,select{font-family:inherit;font-size:inherit}
   .modal{padding:20px 16px;margin:0;max-height:calc(100vh - 40px);overflow-y:auto;-webkit-overflow-scrolling:touch;
     backdrop-filter:blur(16px)}
   .modal-lg,.modal-xl,.modal-xxl{max-width:100%}
+  .modal-xxl [style*="grid-template-columns:1fr 1fr"]{grid-template-columns:1fr!important}
   .modal h3{font-size:16px;margin-bottom:16px}
   .qr-box{padding:10px;margin-bottom:14px}
   .qr-box svg{max-width:180px;max-height:180px;width:100%;height:auto}
