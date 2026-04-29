@@ -9,12 +9,12 @@ CYAN='\033[0;36m'
 NC='\033[0m'
 
 BANNER='
-  ███████╗██╗███████╗██████╗ ██╗   ██╗██╗  ██╗███████╗██╗     ██╗     
-  ██╔════╝██║██╔════╝██╔══██╗██║   ██║██║ ██╔╝██╔════╝██║     ██║     
-  ███████╗██║█████╗  ██████╔╝██║   ██║█████╔╝ █████╗  ██║     ██║     
-  ╚════██║██║██╔══╝  ██╔══██╗██║   ██║██╔═██╗ ██╔══╝  ██║     ██║     
-  ███████║██║███████╗██║  ██║╚██████╔╝██║  ██╗███████╗███████╗███████╗
-  ╚══════╝╚═╝╚══════╝╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═╝╚══════╝╚══════╝╚══════╝
+ __      ________ _   _______ _    _ _____   ____  _   ___     ____   __
+ \ \    / /____  | | |__   __| |  | |  __ \ / __ \| \ | \ \   / /\ \ / /
+  \ \  / /    / /| |    | |  | |__| | |__) | |  | |  \| |\ \_/ /  \ V /
+   \ \/ /    / / | |    | |  |  __  |  _  /| |  | | . ` | \   /    > <
+    \  /    / /  | |____| |  | |  | | | \ \| |__| | |\  |  | |    / . \
+     \/    /_/   |______|_|  |_|  |_|_|  \_\\____/|_| \_|  |_|   /_/ \_\
 '
 
 REPO_URL="https://github.com/v74all/Spiritus.git"
@@ -74,7 +74,7 @@ install_xray() {
 
 clone_or_update() {
     if [[ -d "$INSTALL_DIR/.git" ]]; then
-        print_info "Updating Spiritus..."
+        print_info "Updating V7LTHRONYX..."
         cd "$INSTALL_DIR"
         git fetch origin
         LOCAL=$(git rev-parse HEAD)
@@ -85,15 +85,15 @@ clone_or_update() {
             git stash 2>/dev/null || true
             git pull origin main 2>/dev/null || git pull origin master 2>/dev/null
             git stash pop 2>/dev/null || true
-            print_success "Spiritus updated to latest version"
+            print_success "V7LTHRONYX updated to latest version"
         else
-            print_success "Spiritus is already up to date"
+            print_success "V7LTHRONYX is already up to date"
         fi
     else
         print_info "Cloning Spiritus from GitHub..."
         rm -rf "$INSTALL_DIR" 2>/dev/null || true
         git clone "$REPO_URL" "$INSTALL_DIR"
-        print_success "Spiritus cloned successfully"
+        print_success "V7LTHRONYX cloned successfully"
     fi
 }
 
@@ -115,7 +115,7 @@ configure_systemd() {
     
     cat > /etc/systemd/system/${SERVICE_NAME}.service << EOF
 [Unit]
-Description=Spiritus VPN Management Panel
+Description=V7LTHRONYX VPN Management Panel
 After=network.target xray.service
 Wants=xray.service
 
@@ -200,14 +200,14 @@ UPDATEEOF
 }
 
 start_panel() {
-    print_info "Starting Spiritus panel..."
+    print_info "Starting V7LTHRONYX panel..."
     systemctl restart ${SERVICE_NAME}
     sleep 2
     
     if systemctl is-active --quiet ${SERVICE_NAME}; then
-        print_success "Spiritus is running!"
+        print_success "V7LTHRONYX is running!"
     else
-        print_error "Failed to start Spiritus. Check logs: journalctl -u ${SERVICE_NAME} -f"
+        print_error "Failed to start V7LTHRONYX. Check logs: journalctl -u ${SERVICE_NAME} -f"
         exit 1
     fi
 }
@@ -215,7 +215,7 @@ start_panel() {
 show_info() {
     echo ""
     echo -e "${CYAN}═══════════════════════════════════════════════════════════${NC}"
-    echo -e "${GREEN}  Spiritus VPN Panel - Installation Complete!${NC}"
+    echo -e "${GREEN}  V7LTHRONYX VPN Panel - Installation Complete!${NC}"
     echo -e "${CYAN}═══════════════════════════════════════════════════════════${NC}"
     echo ""
     echo -e "  ${YELLOW}Panel URL:${NC}     http://$(hostname -I | awk '{print $1}'):38471"
@@ -236,7 +236,7 @@ show_info() {
 
 main() {
     print_banner
-    echo -e "${YELLOW}  Spiritus v${VERSION} - Easy Installer${NC}"
+    echo -e "${YELLOW}  V7LTHRONYX v${VERSION} - Easy Installer${NC}"
     echo ""
     
     check_root
