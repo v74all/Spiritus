@@ -1,8 +1,19 @@
-# ═══ V7LTHRONYX VPN Panel - Python Dependencies ═══
+# ═══ V7LTHRONYX VPN Panel v2.0 - Python Dependencies ═══
 
-# Core Framework
-flask>=3.0.0
-werkzeug>=3.0.0
+# Core Framework (FastAPI)
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+
+# Database (PostgreSQL)
+sqlalchemy>=2.0.0
+alembic>=1.12.0
+psycopg[binary]>=3.1.0
+asyncpg>=0.29.0
+
+# Caching & Rate Limiting
+redis>=5.0.0
 
 # Security & Crypto
 argon2-cffi>=21.3.0
@@ -10,12 +21,17 @@ pyotp>=2.8.0
 python-jose[cryptography]>=3.3.0
 cryptography>=41.0.0
 pycryptodome>=3.18.0
+passlib>=1.7.4
+
+# Background Jobs
+celery>=5.3.0
 
 # System & Process
 psutil>=5.9.0
 
 # HTTP Client (Xray API calls)
 requests>=2.31.0
+httpx>=0.25.0
 
 # ═══ Protocol Dependencies ═══
 

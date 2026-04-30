@@ -1,0 +1,68 @@
+"""
+Database module for V7LTHRONYX VPN Panel.
+
+Uses SQLAlchemy 2.0 with async support and PostgreSQL.
+"""
+
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy.ext.declarative import declared_attr
+from typing import AsyncGenerator
+import logging
+
+from .config import settings
+
+# Configure logging
+logger = logging.getLogger(__name__)
+
+# SQLAlchemy base class
+Base = declarative_base()
+
+class CustomBase:
+    """Custom base class with common attributes."""
+    
+    @declared_attr
+    def __tablename__(cls):
+        return cls.__name__.lower()
+
+# Async engine
+async_engine = create_async_engine(
+    str(settings.database_url).replace("postgresql://", "postgresql+asyncpg://"),
+    pool_size=settings.database_pool_size,
+    max_overflow=settings.database_max_overflow,
+    echo=settings.debug,
+    future=True
+)
+
+# Async session factory
+AsyncSessionLocal = async_sessionmaker(
+    bind=async_engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
+    autocommit=False,
+    autoflush=False
+)
+
+async def get_async_db() -> AsyncGenerator[AsyncSession, None]:
+    """Dependency to get async database session."""
+    async with AsyncSessionLocal() as session:
+        try:
+            yield session
+        except Exception as e:
+            logger.error(f"Database session error: {e}")
+            await session.rollback()
+            raise
+        finally:
+            await session.close()
+
+async def init_db():
+    """Initialize database and create tables."""
+    async with async_engine.begin() as conn:
+        logger.info("Creating database tables...")
+        await conn.run_sync(Base.metadata.create_all)
+        logger.info("Database tables created successfully")
+
+async def shutdown_db():
+    """Close database connections on shutdown."""
+    await async_engine.dispose()
+    logger.info("Database connections closed")

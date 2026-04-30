@@ -53,9 +53,9 @@ install_dependencies() {
     
     if [[ "$PKG_MANAGER" == "apt" ]]; then
         apt update -y
-        apt install -y python3 python3-pip python3-venv curl wget unzip
+        apt install -y python3 python3-pip python3-venv curl wget unzip postgresql postgresql-contrib redis-server
     elif [[ "$PKG_MANAGER" == "yum" ]]; then
-        yum install -y python3 python3-pip curl wget unzip
+        yum install -y python3 python3-pip curl wget unzip postgresql-server redis
     fi
     
     print_success "System dependencies installed"
@@ -110,14 +110,86 @@ setup_python() {
     print_success "Python environment configured"
 }
 
+setup_postgresql() {
+    print_info "Setting up PostgreSQL..."
+    
+    if systemctl is-active --quiet postgresql; then
+        print_success "PostgreSQL is already running"
+    else
+        # Initialize and start PostgreSQL
+        if [[ "$PKG_MANAGER" == "apt" ]]; then
+            systemctl start postgresql
+            systemctl enable postgresql
+        elif [[ "$PKG_MANAGER" == "yum" ]]; then
+            postgresql-setup initdb 2>/dev/null || true
+            systemctl start postgresql
+            systemctl enable postgresql
+        fi
+        print_success "PostgreSQL started"
+    fi
+    
+    # Create database and user
+    DB_USER="vpnadmin"
+    DB_PASS="securepassword"
+    DB_NAME="vpnpanel"
+    
+    # Check if database already exists
+    DB_EXISTS=$(sudo -u postgres psql -lqt 2>/dev/null | grep -c "^ ${DB_NAME} " || echo "0")
+    if [[ "$DB_EXISTS" == "0" ]]; then
+        sudo -u postgres psql -c "CREATE USER ${DB_USER} WITH PASSWORD '${DB_PASS}';" 2>/dev/null || true
+        sudo -u postgres psql -c "CREATE DATABASE ${DB_NAME} OWNER ${DB_USER};" 2>/dev/null || true
+        sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE ${DB_NAME} TO ${DB_USER};" 2>/dev/null || true
+        print_success "PostgreSQL database created"
+    else
+        print_success "PostgreSQL database already exists"
+    fi
+}
+
+setup_redis() {
+    print_info "Setting up Redis..."
+    
+    if systemctl is-active --quiet redis-server || systemctl is-active --quiet redis; then
+        print_success "Redis is already running"
+    else
+        if [[ "$PKG_MANAGER" == "apt" ]]; then
+            systemctl start redis-server
+            systemctl enable redis-server
+        elif [[ "$PKG_MANAGER" == "yum" ]]; then
+            systemctl start redis
+            systemctl enable redis
+        fi
+        print_success "Redis started"
+    fi
+}
+
+setup_env() {
+    print_info "Setting up environment configuration..."
+    cd "$INSTALL_DIR"
+    
+    if [[ ! -f .env ]]; then
+        cp .env.example .env
+        
+        # Generate a random secret key
+        SECRET=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
+        sed -i "s/change-me-to-a-random-secret-key/${SECRET}/" .env
+        
+        # Set database URL
+        sed -i "s|postgresql://vpnadmin:securepassword@localhost:5432/vpnpanel|postgresql://vpnadmin:securepassword@localhost:5432/vpnpanel|" .env
+        
+        print_success "Environment configuration created (.env)"
+    else
+        print_success "Environment configuration already exists"
+    fi
+}
+
 configure_systemd() {
     print_info "Configuring systemd service..."
     
     cat > /etc/systemd/system/${SERVICE_NAME}.service << EOF
 [Unit]
 Description=V7LTHRONYX VPN Management Panel
-After=network.target xray.service
-Wants=xray.service
+After=network.target xray.service postgresql.service redis-server.service
+Wants=xray.service postgresql.service redis-server.service
 
 [Service]
 Type=simple
@@ -126,7 +198,7 @@ Group=root
 WorkingDirectory=${INSTALL_DIR}
 Environment="PYTHONUNBUFFERED=1"
 Environment="PATH=${INSTALL_DIR}/venv/bin:/usr/local/bin:/usr/bin:/bin"
-ExecStart=${INSTALL_DIR}/venv/bin/python3 ${INSTALL_DIR}/vpn-web.py
+ExecStart=${INSTALL_DIR}/venv/bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port 38471 --workers 2
 ExecReload=/bin/kill -HUP \$MAINPID
 Restart=always
 RestartSec=10
@@ -146,9 +218,63 @@ SyslogIdentifier=v7lthronyx
 WantedBy=multi-user.target
 EOF
 
+    # Celery worker service
+    cat > /etc/systemd/system/${SERVICE_NAME}-worker.service << EOF
+[Unit]
+Description=V7LTHRONYX Celery Worker
+After=network.target redis-server.service
+Wants=redis-server.service
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=${INSTALL_DIR}
+Environment="PYTHONUNBUFFERED=1"
+Environment="PATH=${INSTALL_DIR}/venv/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=${INSTALL_DIR}/venv/bin/celery -A app.celery_tasks worker --loglevel=info --concurrency=2
+Restart=always
+RestartSec=10
+
+StandardOutput=append:${INSTALL_DIR}/celery-worker.log
+StandardError=append:${INSTALL_DIR}/celery-worker.log
+SyslogIdentifier=v7lthronyx-worker
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    # Celery beat scheduler
+    cat > /etc/systemd/system/${SERVICE_NAME}-beat.service << EOF
+[Unit]
+Description=V7LTHRONYX Celery Beat Scheduler
+After=network.target redis-server.service
+Wants=redis-server.service
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=${INSTALL_DIR}
+Environment="PYTHONUNBUFFERED=1"
+Environment="PATH=${INSTALL_DIR}/venv/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=${INSTALL_DIR}/venv/bin/celery -A app.celery_tasks beat --loglevel=info
+Restart=always
+RestartSec=10
+
+StandardOutput=append:${INSTALL_DIR}/celery-beat.log
+StandardError=append:${INSTALL_DIR}/celery-beat.log
+SyslogIdentifier=v7lthronyx-beat
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
     systemctl daemon-reload
     systemctl enable ${SERVICE_NAME}
-    print_success "Systemd service configured"
+    systemctl enable ${SERVICE_NAME}-worker 2>/dev/null || true
+    systemctl enable ${SERVICE_NAME}-beat 2>/dev/null || true
+    print_success "Systemd services configured"
 }
 
 setup_auto_update() {
@@ -198,6 +324,8 @@ UPDATEEOF
 start_panel() {
     print_info "Starting V7LTHRONYX panel..."
     systemctl restart ${SERVICE_NAME}
+    systemctl restart ${SERVICE_NAME}-worker 2>/dev/null || true
+    systemctl restart ${SERVICE_NAME}-beat 2>/dev/null || true
     sleep 3
     
     if systemctl is-active --quiet ${SERVICE_NAME}; then
@@ -221,14 +349,17 @@ show_info() {
     
     echo ""
     echo -e "${CYAN}═══════════════════════════════════════════════════════════${NC}"
-    echo -e "${GREEN}  V7LTHRONYX VPN Panel - Installation Complete!${NC}"
+    echo -e "${GREEN}  V7LTHRONYX VPN Panel v2.0 - Installation Complete!${NC}"
     echo -e "${CYAN}═══════════════════════════════════════════════════════════${NC}"
     echo ""
     echo -e "  ${YELLOW}Panel URL:${NC}     http://$(hostname -I | awk '{print $1}'):38471"
+    echo -e "  ${YELLOW}API Docs:${NC}     http://$(hostname -I | awk '{print $1}'):38471/api/docs"
     echo -e "  ${YELLOW}Password:${NC}     ${PANEL_PASSWORD}"
     echo -e "  ${YELLOW}Config Dir:${NC}    ${INSTALL_DIR}"
     echo -e "  ${YELLOW}Log File:${NC}     ${INSTALL_DIR}/vpn-panel.log"
-    echo -e "  ${YELLOW}Service:${NC}       systemctl status ${SERVICE_NAME}"
+    echo -e "  ${YELLOW}Database:${NC}     PostgreSQL (vpnpanel)"
+    echo -e "  ${YELLOW}Cache:${NC}        Redis (localhost:6379)"
+    echo -e "  ${YELLOW}Services:${NC}     ${SERVICE_NAME} + ${SERVICE_NAME}-worker + ${SERVICE_NAME}-beat"
     echo -e "  ${YELLOW}Auto Update:${NC}   Daily at 4:00 AM"
     echo ""
     echo -e "  ${BLUE}Commands:${NC}"
@@ -249,25 +380,34 @@ main() {
     check_root
     check_os
     
-    echo -e "${CYAN}[1/7]${NC} Installing system dependencies..."
+    echo -e "${CYAN}[1/10]${NC} Installing system dependencies..."
     install_dependencies
     
-    echo -e "${CYAN}[2/7]${NC} Installing Xray..."
+    echo -e "${CYAN}[2/10]${NC} Installing Xray..."
     install_xray
     
-    echo -e "${CYAN}[3/7]${NC} Downloading Spiritus..."
+    echo -e "${CYAN}[3/10]${NC} Downloading V7LTHRONYX..."
     clone_or_update
     
-    echo -e "${CYAN}[4/7]${NC} Setting up Python environment..."
+    echo -e "${CYAN}[4/10]${NC} Setting up PostgreSQL..."
+    setup_postgresql
+    
+    echo -e "${CYAN}[5/10]${NC} Setting up Redis..."
+    setup_redis
+    
+    echo -e "${CYAN}[6/10]${NC} Setting up Python environment..."
     setup_python
     
-    echo -e "${CYAN}[5/7]${NC} Configuring service..."
+    echo -e "${CYAN}[7/10]${NC} Setting up environment config..."
+    setup_env
+    
+    echo -e "${CYAN}[8/10]${NC} Configuring services..."
     configure_systemd
     
-    echo -e "${CYAN}[6/7]${NC} Setting up auto-update..."
+    echo -e "${CYAN}[9/10]${NC} Setting up auto-update..."
     setup_auto_update
     
-    echo -e "${CYAN}[7/7]${NC} Starting panel..."
+    echo -e "${CYAN}[10/10]${NC} Starting panel..."
     start_panel
     
     show_info
