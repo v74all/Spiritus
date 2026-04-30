@@ -25,14 +25,18 @@ class CustomBase:
     def __tablename__(cls):
         return cls.__name__.lower()
 
-# Async engine
-async_engine = create_async_engine(
-    str(settings.database_url).replace("postgresql://", "postgresql+asyncpg://"),
-    pool_size=settings.database_pool_size,
-    max_overflow=settings.database_max_overflow,
-    echo=settings.debug,
-    future=True
-)
+# Build engine URL - support both PostgreSQL and SQLite for testing
+_db_url = str(settings.database_url)
+if _db_url.startswith("postgresql://"):
+    _db_url = _db_url.replace("postgresql://", "postgresql+asyncpg://")
+
+# Async engine (SQLite doesn't support pool_size/max_overflow)
+_engine_kwargs = {"echo": settings.debug, "future": True}
+if not _db_url.startswith("sqlite"):
+    _engine_kwargs["pool_size"] = settings.database_pool_size
+    _engine_kwargs["max_overflow"] = settings.database_max_overflow
+
+async_engine = create_async_engine(_db_url, **_engine_kwargs)
 
 # Async session factory
 AsyncSessionLocal = async_sessionmaker(

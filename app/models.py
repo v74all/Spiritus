@@ -272,6 +272,9 @@ class Payment(Base):
     paid_at = Column(DateTime, nullable=True)
     expired_at = Column(DateTime, nullable=True)
 
+    # Relationships
+    reseller = relationship("Reseller", back_populates="payments")
+
 
 # ═══════════════════════════════════════════════════════════════
 #  Resellers
@@ -339,7 +342,7 @@ class AuditLog(Base):
         Index("ix_audit_log_created_at", "created_at"),
     )
 
-    id = Column(BigInteger, primary_key=True, index=True)
+    id = Column(BigInteger, primary_key=True)
     admin_id = Column(Integer, ForeignKey("admins.id"), nullable=True)
     admin = relationship("Admin", back_populates="audit_entries")
 
@@ -350,7 +353,7 @@ class AuditLog(Base):
     ip_address = Column(String(45), nullable=True)
     user_agent = Column(String(500), nullable=True)
 
-    created_at = Column(DateTime, server_default=func.now(), index=True)
+    created_at = Column(DateTime, server_default=func.now())
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -360,7 +363,7 @@ class AuditLog(Base):
 class Fail2banBan(Base):
     __tablename__ = "fail2ban_bans"
 
-    id = Column(BigInteger, primary_key=True, index=True)
+    id = Column(BigInteger, primary_key=True)
     ip_address = Column(String(45), nullable=False, index=True)
     service = Column(String(50), nullable=False)  # panel, ssh, xray
     reason = Column(String(255), nullable=True)

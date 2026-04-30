@@ -409,7 +409,7 @@ server {{
 }}
 """
 
-    def verify_client_cert_cn(self, cn: str, db: AsyncSession) -> Optional[Admin]:
+    async def verify_client_cert_cn(self, cn: str, db: AsyncSession) -> Optional[Admin]:
         """Look up an admin by their mTLS certificate CN."""
         result = await db.execute(
             select(Admin).where(Admin.mtls_cn == cn)

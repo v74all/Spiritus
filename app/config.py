@@ -5,7 +5,7 @@ Uses Pydantic Settings for type-safe configuration with environment variables.
 """
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field, PostgresDsn, RedisDsn
+from pydantic import Field
 from typing import Optional
 import secrets
 
@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     api_port: int = Field(10085, env="VPN_API_PORT")
     
     # Database
-    database_url: PostgresDsn = Field(
+    database_url: str = Field(
         "postgresql://vpnadmin:securepassword@localhost:5432/vpnpanel",
         env="DATABASE_URL"
     )
@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     database_max_overflow: int = 10
     
     # Redis
-    redis_url: RedisDsn = Field(
+    redis_url: str = Field(
         "redis://localhost:6379/0",
         env="REDIS_URL"
     )
