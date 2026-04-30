@@ -45,6 +45,23 @@ openvpn-api>=0.1.0
 scapy>=2.5.0
 aiohttp>=3.9.0
 
+# ═══ Observability ═══
+
+# OpenTelemetry (optional - won't fail if not installed)
+opentelemetry-api>=1.20.0
+opentelemetry-sdk>=1.20.0
+opentelemetry-instrumentation-fastapi>=0.41b0
+opentelemetry-instrumentation-sqlalchemy>=0.41b0
+opentelemetry-instrumentation-redis>=0.41b0
+opentelemetry-instrumentation-httpx>=0.41b0
+opentelemetry-exporter-otlp>=1.20.0
+
+# ═══ Telegram Bot ═══
+# Uses httpx (already included above)
+
+# ═══ YAML (for Grafana provisioning) ═══
+pyyaml>=6.0
+
 # NOTE: Hysteria2, TUIC, NaiveProxy, ShadowTLS, and Mieru are managed
 # via their own CLI binaries (not Python packages). The panel generates
 # config files and controls them through subprocess calls to the

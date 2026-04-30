@@ -23,6 +23,11 @@ from ..auth import (
 )
 from ..config import settings
 from ..database import get_async_db
+from ..models import Admin
+from ..security import fail2ban_manager
+
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["authentication"])
@@ -74,18 +79,51 @@ def _clear_attempts(ip: str):
     _login_attempts.pop(ip, None)
 
 @router.post("/login", response_model=Token)
-async def login(request: LoginRequest, req: Request):
+async def login(request: LoginRequest, req: Request, db: AsyncSession = Depends(get_async_db)):
     """Login with username and password."""
     client_ip = req.client.host
-    
+
+    # Check fail2ban
+    if await fail2ban_manager.is_banned(client_ip, "panel", db):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"IP banned. Contact admin."
+        )
+
     if _is_locked_out(client_ip):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=f"Too many failed attempts. Try again in {settings.lockout_seconds}s"
         )
-    
-    # TODO: Query user from database
-    # For now, check against panel password file
+
+    # Try database admin lookup first
+    db_result = await db.execute(select(Admin).where(Admin.username == request.username))
+    admin_user = db_result.scalar_one_or_none()
+
+    if admin_user:
+        if not verify_password(request.password, admin_user.password_hash):
+            _record_failed_attempt(client_ip)
+            await fail2ban_manager.record_failed_attempt(client_ip, "panel", db, "Failed admin login")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid credentials"
+            )
+        _clear_attempts(client_ip)
+
+        totp_required = admin_user.totp_enabled and bool(admin_user.totp_secret)
+
+        access_token = create_access_token(
+            data={"sub": request.username, "is_admin": True, "user_id": admin_user.id}
+        )
+
+        return Token(
+            access_token=access_token,
+            token_type="bearer",
+            expires_in=settings.session_lifetime_hours * 3600,
+            totp_required=totp_required
+        )
+
+    # Fallback: check panel password file (for initial setup)
     import os
     pw_file = os.path.join(os.getcwd(), "vpn-panel-password")
     if os.path.exists(pw_file):
@@ -93,6 +131,7 @@ async def login(request: LoginRequest, req: Request):
             stored_pw = f.read().strip()
         if request.password != stored_pw:
             _record_failed_attempt(client_ip)
+            await fail2ban_manager.record_failed_attempt(client_ip, "panel", db, "Failed panel login")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid credentials"
@@ -102,22 +141,18 @@ async def login(request: LoginRequest, req: Request):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Panel not initialized"
         )
-    
+
     _clear_attempts(client_ip)
-    
-    # Check if 2FA is enabled
-    # TODO: Check user's TOTP secret in database
-    totp_required = False
-    
+
     access_token = create_access_token(
         data={"sub": request.username, "is_admin": True}
     )
-    
+
     return Token(
         access_token=access_token,
         token_type="bearer",
         expires_in=settings.session_lifetime_hours * 3600,
-        totp_required=totp_required
+        totp_required=False
     )
 
 @router.post("/login/2fa", response_model=Token)
@@ -169,13 +204,22 @@ async def login_with_2fa(request: Login2FARequest, req: Request):
     )
 
 @router.post("/setup-2fa", response_model=Setup2FAResponse)
-async def setup_2fa(current_user: User = Depends(get_current_user)):
+async def setup_2fa(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_db),
+):
     """Setup 2FA/TOTP for the current user."""
     secret = generate_totp_secret()
     uri = get_totp_uri(secret, current_user.username)
-    
-    # TODO: Save secret to database
-    
+
+    # Save secret to database
+    result = await db.execute(select(Admin).where(Admin.username == current_user.username))
+    admin_user = result.scalar_one_or_none()
+    if admin_user:
+        admin_user.totp_secret = secret
+        admin_user.totp_enabled = True
+        await db.commit()
+
     return Setup2FAResponse(
         secret=secret,
         uri=uri,

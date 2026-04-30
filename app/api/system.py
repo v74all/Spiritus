@@ -163,11 +163,13 @@ async def get_logs(
 @router.get("/metrics")
 async def get_metrics():
     """Prometheus-compatible metrics endpoint."""
+    import psutil
     cpu = psutil.cpu_percent(interval=0)
     mem = psutil.virtual_memory()
     disk = psutil.disk_usage('/')
-    
-    metrics = f"""# HELP vpn_panel_cpu_percent CPU usage percentage
+
+    # System metrics
+    system_metrics = f"""# HELP vpn_panel_cpu_percent CPU usage percentage
 # TYPE vpn_panel_cpu_percent gauge
 vpn_panel_cpu_percent {cpu}
 # HELP vpn_panel_memory_percent Memory usage percentage
@@ -183,4 +185,8 @@ vpn_panel_memory_total_bytes {mem.total}
 # TYPE vpn_panel_memory_available_bytes gauge
 vpn_panel_memory_available_bytes {mem.available}
 """
-    return {"metrics": metrics}
+    # Custom VPN metrics
+    from ..observability import prometheus_metrics
+    custom_metrics = prometheus_metrics.generate_metrics()
+
+    return {"metrics": system_metrics + custom_metrics}

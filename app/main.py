@@ -16,6 +16,7 @@ import os
 from .config import settings
 from .database import init_db, shutdown_db
 from .redis_client import close_redis
+from .observability import setup_opentelemetry, prometheus_metrics
 
 # Configure logging
 logging.basicConfig(
@@ -36,6 +37,42 @@ async def lifespan(app: FastAPI):
     logger.info("Starting V7LTHRONYX VPN Panel v2.0...")
     await init_db()
     logger.info("Database initialized")
+
+    # Setup OpenTelemetry (optional, won't fail if not installed)
+    setup_opentelemetry(app)
+
+    # Initialize Telegram bot
+    from .telegram_bot import telegram_bot
+    from .config import settings as s
+    if s.telegram_bot_token:
+        telegram_bot.token = s.telegram_bot_token
+        telegram_bot.chat_id = s.telegram_chat_id
+        if s.telegram_admin_chat_ids:
+            telegram_bot.admin_chat_ids = s.telegram_admin_chat_ids.split(",")
+        logger.info("Telegram bot configured")
+
+    # Initialize payment gateways
+    from .payments import payment_manager
+    if s.zarinpal_merchant_id:
+        payment_manager.setup_zarinpal(
+            merchant_id=s.zarinpal_merchant_id,
+            sandbox=s.zarinpal_sandbox,
+            callback_url=s.zarinpal_callback_url,
+        )
+        logger.info("Zarinpal gateway configured")
+    if s.idpay_api_key:
+        payment_manager.setup_idpay(
+            api_key=s.idpay_api_key,
+            sandbox=s.idpay_sandbox,
+            callback_url=s.idpay_callback_url,
+        )
+        logger.info("IDPay gateway configured")
+    if s.usdt_wallet_address:
+        payment_manager.setup_usdt(
+            wallet_address=s.usdt_wallet_address,
+            api_key=s.usdt_trongrid_api_key,
+        )
+        logger.info("USDT TRC-20 gateway configured")
     
     # Generate password if not exists
     pw_file = os.path.join(os.getcwd(), "vpn-panel-password")
@@ -108,12 +145,21 @@ from .api.users import router as users_router
 from .api.system import router as system_router
 from .api.protocols import router as protocols_router
 from .api.abuse import router as abuse_router
+from .api.security import router as security_router
+from .api.agents import router as agents_router
+from .api.payments import router as payments_router
+from .api.resellers import router as resellers_router, portal_router
 
 app.include_router(auth_router, prefix="/api")
 app.include_router(users_router, prefix="/api")
 app.include_router(system_router, prefix="/api")
 app.include_router(protocols_router, prefix="/api")
 app.include_router(abuse_router, prefix="/api")
+app.include_router(security_router, prefix="/api")
+app.include_router(agents_router, prefix="/api")
+app.include_router(payments_router, prefix="/api")
+app.include_router(resellers_router, prefix="/api")
+app.include_router(portal_router, prefix="/api")
 
 # ── Health check ────────────────────────────────────────
 

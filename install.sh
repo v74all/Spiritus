@@ -53,9 +53,9 @@ install_dependencies() {
     
     if [[ "$PKG_MANAGER" == "apt" ]]; then
         apt update -y
-        apt install -y python3 python3-pip python3-venv curl wget unzip postgresql postgresql-contrib redis-server
+        apt install -y python3 python3-pip python3-venv curl wget unzip postgresql postgresql-contrib redis-server fail2ban
     elif [[ "$PKG_MANAGER" == "yum" ]]; then
-        yum install -y python3 python3-pip curl wget unzip postgresql-server redis
+        yum install -y python3 python3-pip curl wget unzip postgresql-server redis fail2ban
     fi
     
     print_success "System dependencies installed"
@@ -160,6 +160,36 @@ setup_redis() {
         fi
         print_success "Redis started"
     fi
+}
+
+setup_fail2ban() {
+    print_info "Setting up Fail2ban..."
+    
+    if ! command -v fail2ban-client &> /dev/null; then
+        print_warning "Fail2ban not installed, skipping"
+        return
+    fi
+    
+    if systemctl is-active --quiet fail2ban; then
+        print_success "Fail2ban is already running"
+    else
+        systemctl start fail2ban
+        systemctl enable fail2ban
+        print_success "Fail2ban started"
+    fi
+    
+    # Install panel-specific filters and jails
+    cd "$INSTALL_DIR"
+    source venv/bin/activate 2>/dev/null || true
+    
+    python3 -c "
+from app.security import fail2ban_manager
+results = fail2ban_manager.install_all()
+print('Fail2ban setup:', results)
+" 2>/dev/null || true
+    
+    systemctl reload fail2ban 2>/dev/null || true
+    print_success "Fail2ban configured"
 }
 
 setup_env() {
@@ -380,34 +410,37 @@ main() {
     check_root
     check_os
     
-    echo -e "${CYAN}[1/10]${NC} Installing system dependencies..."
+    echo -e "${CYAN}[1/11]${NC} Installing system dependencies..."
     install_dependencies
     
-    echo -e "${CYAN}[2/10]${NC} Installing Xray..."
+    echo -e "${CYAN}[2/11]${NC} Installing Xray..."
     install_xray
     
-    echo -e "${CYAN}[3/10]${NC} Downloading V7LTHRONYX..."
+    echo -e "${CYAN}[3/11]${NC} Downloading V7LTHRONYX..."
     clone_or_update
     
-    echo -e "${CYAN}[4/10]${NC} Setting up PostgreSQL..."
+    echo -e "${CYAN}[4/11]${NC} Setting up PostgreSQL..."
     setup_postgresql
     
-    echo -e "${CYAN}[5/10]${NC} Setting up Redis..."
+    echo -e "${CYAN}[5/11]${NC} Setting up Redis..."
     setup_redis
     
-    echo -e "${CYAN}[6/10]${NC} Setting up Python environment..."
+    echo -e "${CYAN}[6/11]${NC} Setting up Fail2ban..."
+    setup_fail2ban
+    
+    echo -e "${CYAN}[7/11]${NC} Setting up Python environment..."
     setup_python
     
-    echo -e "${CYAN}[7/10]${NC} Setting up environment config..."
+    echo -e "${CYAN}[8/11]${NC} Setting up environment config..."
     setup_env
     
-    echo -e "${CYAN}[8/10]${NC} Configuring services..."
+    echo -e "${CYAN}[9/11]${NC} Configuring services..."
     configure_systemd
     
-    echo -e "${CYAN}[9/10]${NC} Setting up auto-update..."
+    echo -e "${CYAN}[10/11]${NC} Setting up auto-update..."
     setup_auto_update
     
-    echo -e "${CYAN}[10/10]${NC} Starting panel..."
+    echo -e "${CYAN}[11/11]${NC} Starting panel..."
     start_panel
     
     show_info

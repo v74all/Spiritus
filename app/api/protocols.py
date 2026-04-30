@@ -16,18 +16,28 @@ from typing import Dict, Any, Optional
 import logging
 
 from ..auth import get_current_admin, User
+from ..protocol_engine import PROTOCOLS, ProtocolSpec
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/protocols", tags=["protocols"])
 
-# Import protocol registry
-try:
-    from protocols import ProtocolRegistry
-    _registry = ProtocolRegistry()
-    PROTOCOLS_AVAILABLE = True
-except ImportError:
-    PROTOCOLS_AVAILABLE = False
-    logger.warning("Protocol registry not available")
+
+def _spec_to_dict(spec: ProtocolSpec, enabled: bool = False) -> Dict[str, Any]:
+    return {
+        "key": spec.key,
+        "name": spec.name,
+        "name_fa": spec.name_fa,
+        "category": spec.category.value,
+        "backend": spec.backend.value,
+        "description": spec.description,
+        "description_fa": spec.description_fa,
+        "config_fields": spec.config_fields,
+        "requires_tls": spec.requires_tls,
+        "supports_cdn": spec.supports_cdn,
+        "supports_reality": spec.supports_reality,
+        "supports_ech": spec.supports_ech,
+        "enabled": enabled,
+    }
 
 class ProtocolConfig(BaseModel):
     config: Dict[str, Any]
@@ -39,23 +49,9 @@ class MessageResponse(BaseModel):
 @router.get("")
 async def list_protocols(admin: User = Depends(get_current_admin)):
     """List all available protocols."""
-    if not PROTOCOLS_AVAILABLE:
-        return {"protocols": [], "error": "Protocol registry not available"}
-    
     protocols = []
-    for key, spec in _registry.all_protocols.items():
-        protocols.append({
-            "key": spec.key,
-            "name": spec.name,
-            "name_fa": spec.name_fa,
-            "category": spec.category.value,
-            "backend": spec.backend.value,
-            "description": spec.description,
-            "description_fa": spec.description_fa,
-            "config_fields": spec.config_fields,
-            "enabled": False  # TODO: Check from settings
-        })
-    
+    for key, spec in PROTOCOLS.items():
+        protocols.append(_spec_to_dict(spec, enabled=False))
     return {"protocols": protocols}
 
 @router.get("/{key}")
@@ -64,24 +60,10 @@ async def get_protocol(
     admin: User = Depends(get_current_admin)
 ):
     """Get details for a specific protocol."""
-    if not PROTOCOLS_AVAILABLE:
-        raise HTTPException(status_code=500, detail="Protocol registry not available")
-    
-    spec = _registry.all_protocols.get(key)
+    spec = PROTOCOLS.get(key)
     if not spec:
         raise HTTPException(status_code=404, detail=f"Protocol '{key}' not found")
-    
-    return {
-        "key": spec.key,
-        "name": spec.name,
-        "name_fa": spec.name_fa,
-        "category": spec.category.value,
-        "backend": spec.backend.value,
-        "description": spec.description,
-        "description_fa": spec.description_fa,
-        "config_fields": spec.config_fields,
-        "enabled": False  # TODO: Check from settings
-    }
+    return _spec_to_dict(spec, enabled=False)
 
 @router.post("/{key}/enable", response_model=MessageResponse)
 async def enable_protocol(
@@ -89,14 +71,10 @@ async def enable_protocol(
     admin: User = Depends(get_current_admin)
 ):
     """Enable a protocol."""
-    if not PROTOCOLS_AVAILABLE:
-        raise HTTPException(status_code=500, detail="Protocol registry not available")
-    
-    spec = _registry.all_protocols.get(key)
+    spec = PROTOCOLS.get(key)
     if not spec:
         raise HTTPException(status_code=404, detail=f"Protocol '{key}' not found")
-    
-    # TODO: Update settings in database
+    # TODO: Update ProtocolConfig in database
     return MessageResponse(message=f"Protocol '{spec.name}' enabled")
 
 @router.post("/{key}/disable", response_model=MessageResponse)
@@ -105,14 +83,10 @@ async def disable_protocol(
     admin: User = Depends(get_current_admin)
 ):
     """Disable a protocol."""
-    if not PROTOCOLS_AVAILABLE:
-        raise HTTPException(status_code=500, detail="Protocol registry not available")
-    
-    spec = _registry.all_protocols.get(key)
+    spec = PROTOCOLS.get(key)
     if not spec:
         raise HTTPException(status_code=404, detail=f"Protocol '{key}' not found")
-    
-    # TODO: Update settings in database
+    # TODO: Update ProtocolConfig in database
     return MessageResponse(message=f"Protocol '{spec.name}' disabled")
 
 @router.put("/{key}/config")
@@ -122,13 +96,9 @@ async def update_protocol_config(
     admin: User = Depends(get_current_admin)
 ):
     """Update protocol configuration."""
-    if not PROTOCOLS_AVAILABLE:
-        raise HTTPException(status_code=500, detail="Protocol registry not available")
-    
-    spec = _registry.all_protocols.get(key)
+    spec = PROTOCOLS.get(key)
     if not spec:
         raise HTTPException(status_code=404, detail=f"Protocol '{key}' not found")
-    
     # TODO: Save config to database
     return {"message": f"Protocol '{spec.name}' config updated", "success": True}
 
@@ -138,14 +108,10 @@ async def get_protocol_status(
     admin: User = Depends(get_current_admin)
 ):
     """Get protocol runtime status."""
-    if not PROTOCOLS_AVAILABLE:
-        raise HTTPException(status_code=500, detail="Protocol registry not available")
-    
-    spec = _registry.all_protocols.get(key)
+    spec = PROTOCOLS.get(key)
     if not spec:
         raise HTTPException(status_code=404, detail=f"Protocol '{key}' not found")
-    
-    # TODO: Check actual runtime status
+    # TODO: Check actual runtime status from agent
     return {
         "key": key,
         "running": False,
