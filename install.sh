@@ -363,12 +363,30 @@ start_panel() {
     systemctl restart ${SERVICE_NAME}
     systemctl restart ${SERVICE_NAME}-worker 2>/dev/null || true
     systemctl restart ${SERVICE_NAME}-beat 2>/dev/null || true
-    sleep 5
+    
+    print_info "Waiting for web application to start (this may take up to 20s)..."
+    HEALTH_STATUS="Failed"
+    for i in $(seq 1 10); do
+        if curl -s http://127.0.0.1:38471/api/health | grep -q "healthy"; then
+            HEALTH_STATUS="OK"
+            break
+        fi
+        sleep 2
+    done
+    
+    # Save the health status to a temporary file to be read by show_info
+    echo "$HEALTH_STATUS" > /tmp/vpn_panel_health_status
     
     if systemctl is-active --quiet ${SERVICE_NAME}; then
-        print_success "V7LTHRONYX is running!"
+        print_success "V7LTHRONYX service is running!"
+        if [[ "$HEALTH_STATUS" != "OK" ]]; then
+            print_error "Web application did not respond to health check."
+            print_info "Last 20 lines of log:"
+            tail -n 20 ${INSTALL_DIR}/vpn-panel.log
+        fi
     else
-        print_error "Failed to start V7LTHRONYX. Check logs: journalctl -u ${SERVICE_NAME} -f"
+        print_error "Failed to start V7LTHRONYX service. Check logs: journalctl -u ${SERVICE_NAME} -f"
+        tail -n 20 ${INSTALL_DIR}/vpn-panel.log
         exit 1
     fi
 }
@@ -386,9 +404,17 @@ show_info() {
     echo -e "${GREEN}  V7LTHRONYX VPN Panel v2.0 - Installation Complete!${NC}"
     echo -e "${CYAN}═══════════════════════════════════════════════════════════${NC}"
     echo ""
+    HEALTH_STATUS=$(cat /tmp/vpn_panel_health_status 2>/dev/null || echo "Failed")
+    if [[ "$HEALTH_STATUS" == "OK" ]]; then
+        HEALTH_MSG="${GREEN}✔ Web Application is UP and Healthy${NC}"
+    else
+        HEALTH_MSG="${RED}✖ Web Application Failed to Start (Check logs)${NC}"
+    fi
+
     echo -e "  ${YELLOW}Panel URL:${NC}     http://$(hostname -I | awk '{print $1}'):38471"
     echo -e "  ${YELLOW}API Docs:${NC}     http://$(hostname -I | awk '{print $1}'):38471/api/docs"
     echo -e "  ${YELLOW}Password:${NC}     ${PANEL_PASSWORD}"
+    echo -e "  ${YELLOW}System Health:${NC} ${HEALTH_MSG}"
     echo -e "  ${YELLOW}Config Dir:${NC}    ${INSTALL_DIR}"
     echo -e "  ${YELLOW}Log File:${NC}     ${INSTALL_DIR}/vpn-panel.log"
     echo -e "  ${YELLOW}Database:${NC}     PostgreSQL (vpnpanel)"
