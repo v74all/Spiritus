@@ -357,19 +357,184 @@ async def subscription_api(
 
 def _subscription_json_config(
     user: VpnUser,
-    links: dict,
     server_ip: str,
+    panel_settings: dict,
 ) -> dict:
     outbounds = []
-    for key, link in links.items():
-        outbounds.append(
-            {
-                "tag": f"{key}-{user.name}",
-                "protocol": "freedom",
-                "settings": {},
-                "metadata": {"share_link": link},
+    prefix = panel_settings.get("config_prefix") or "Proxy"
+    sni = panel_settings.get("vmess_sni") or settings.vless_ws_host or server_ip
+    fp = panel_settings.get("fingerprint") or "chrome"
+    uid = user.uuid
+
+    outbounds.append({
+        "tag": f"{prefix}-VMess-{user.name}",
+        "protocol": "vmess",
+        "settings": {
+            "vnext": [{
+                "address": server_ip,
+                "port": int(panel_settings.get("vmess_port") or 443),
+                "users": [{"id": uid, "alterId": 0, "security": "auto"}],
+            }],
+        },
+        "streamSettings": {
+            "network": "ws",
+            "security": "tls",
+            "wsSettings": {
+                "path": panel_settings.get("vmess_ws_path") or "/api/v1/stream",
+                "headers": {"Host": sni},
+            },
+            "tlsSettings": {"serverName": sni, "fingerprint": fp, "allowInsecure": True},
+        },
+    })
+
+    if panel_settings.get("reality_public_key"):
+        outbounds.append({
+            "tag": f"{prefix}-VLESS-{user.name}",
+            "protocol": "vless",
+            "settings": {
+                "vnext": [{
+                    "address": server_ip,
+                    "port": int(panel_settings.get("vless_port") or 2053),
+                    "users": [{"id": uid, "encryption": "none", "flow": "xtls-rprx-vision"}],
+                }],
+            },
+            "streamSettings": {
+                "network": "tcp",
+                "security": "reality",
+                "realitySettings": {
+                    "serverName": panel_settings.get("reality_sni") or "www.google.com",
+                    "fingerprint": fp,
+                    "publicKey": panel_settings.get("reality_public_key"),
+                    "shortId": panel_settings.get("reality_short_id") or "",
+                },
+            },
+        })
+
+    if panel_settings.get("cdn_enabled") and panel_settings.get("cdn_domain"):
+        cdn_domain = panel_settings.get("cdn_domain")
+        outbounds.append({
+            "tag": f"{prefix}-CDN-{user.name}",
+            "protocol": "vmess",
+            "settings": {
+                "vnext": [{
+                    "address": cdn_domain,
+                    "port": int(panel_settings.get("cdn_port") or 443),
+                    "users": [{"id": uid, "alterId": 0, "security": "auto"}],
+                }],
+            },
+            "streamSettings": {
+                "network": "ws",
+                "security": "tls",
+                "wsSettings": {
+                    "path": panel_settings.get("cdn_ws_path") or "/cdn-ws",
+                    "headers": {"Host": cdn_domain},
+                },
+                "tlsSettings": {"serverName": cdn_domain, "fingerprint": fp, "allowInsecure": True},
+            },
+        })
+
+    if panel_settings.get("trojan_enabled"):
+        outbounds.append({
+            "tag": f"{prefix}-Trojan-{user.name}",
+            "protocol": "trojan",
+            "settings": {
+                "servers": [{
+                    "address": server_ip,
+                    "port": int(panel_settings.get("trojan_port") or 2083),
+                    "password": uid,
+                }],
+            },
+            "streamSettings": {
+                "network": "tcp",
+                "security": "tls",
+                "tlsSettings": {"serverName": sni, "fingerprint": fp, "allowInsecure": True},
+            },
+        })
+
+    if panel_settings.get("grpc_enabled"):
+        outbounds.append({
+            "tag": f"{prefix}-gRPC-{user.name}",
+            "protocol": "vmess",
+            "settings": {
+                "vnext": [{
+                    "address": server_ip,
+                    "port": int(panel_settings.get("grpc_port") or 2054),
+                    "users": [{"id": uid, "alterId": 0, "security": "auto"}],
+                }],
+            },
+            "streamSettings": {
+                "network": "grpc",
+                "security": "tls",
+                "grpcSettings": {"serviceName": panel_settings.get("grpc_service_name") or "GunService"},
+                "tlsSettings": {"serverName": sni, "fingerprint": fp, "allowInsecure": True},
+            },
+        })
+
+    if panel_settings.get("httpupgrade_enabled"):
+        outbounds.append({
+            "tag": f"{prefix}-HU-{user.name}",
+            "protocol": "vmess",
+            "settings": {
+                "vnext": [{
+                    "address": server_ip,
+                    "port": int(panel_settings.get("httpupgrade_port") or 2055),
+                    "users": [{"id": uid, "alterId": 0, "security": "auto"}],
+                }],
+            },
+            "streamSettings": {
+                "network": "httpupgrade",
+                "security": "tls",
+                "httpupgradeSettings": {
+                    "path": panel_settings.get("httpupgrade_path") or "/httpupgrade",
+                    "host": sni,
+                },
+                "tlsSettings": {"serverName": sni, "fingerprint": fp, "allowInsecure": True},
+            },
+        })
+
+    if panel_settings.get("vless_ws_enabled"):
+        outbounds.append({
+            "tag": f"{prefix}-VLESS-WS-{user.name}",
+            "protocol": "vless",
+            "settings": {
+                "vnext": [{
+                    "address": server_ip,
+                    "port": int(panel_settings.get("vless_ws_port") or 2057),
+                    "users": [{"id": uid, "encryption": "none"}],
+                }],
+            },
+            "streamSettings": {
+                "network": "ws",
+                "security": "tls",
+                "wsSettings": {
+                    "path": panel_settings.get("vless_ws_path") or "/vless-ws",
+                    "headers": {"Host": sni},
+                },
+                "tlsSettings": {"serverName": sni, "fingerprint": fp, "allowInsecure": True},
+            },
+        })
+
+    if panel_settings.get("fragment_enabled") or panel_settings.get("noise_enabled"):
+        for outbound in outbounds:
+            stream_settings = outbound.setdefault("streamSettings", {})
+            sockopt = stream_settings.setdefault("sockopt", {})
+            if panel_settings.get("fragment_enabled"):
+                sockopt["fragment"] = {
+                    "packets": panel_settings.get("fragment_packets") or "tlshello",
+                    "length": panel_settings.get("fragment_length") or "100-200",
+                    "interval": panel_settings.get("fragment_interval") or "10-20",
+                }
+            if panel_settings.get("noise_enabled"):
+                sockopt["noisePacket"] = panel_settings.get("noise_packet") or "rand:50-100"
+                sockopt["noiseDelay"] = panel_settings.get("noise_delay") or "10-20"
+
+    if panel_settings.get("mux_enabled"):
+        for outbound in outbounds:
+            outbound["mux"] = {
+                "enabled": True,
+                "concurrency": int(panel_settings.get("mux_concurrency") or 8),
             }
-        )
+
     outbounds.append({"tag": "direct", "protocol": "freedom"})
     outbounds.append({"tag": "block", "protocol": "blackhole"})
     return {
@@ -406,9 +571,11 @@ async def subscription_json(
     user = await _subscription_user(user_uuid, db)
     if not user.active:
         raise HTTPException(status_code=404, detail="Not found")
-    links = await _subscription_links(user, request, db)
+    from .api.compat import _load_legacy_settings
+
+    panel_settings = await _load_legacy_settings(db)
     return JSONResponse(
-        content=_subscription_json_config(user, links, _public_server_ip(request)),
+        content=_subscription_json_config(user, _public_server_ip(request), panel_settings),
         headers={"Content-Disposition": f"inline; filename={user.name}.json"},
     )
 
