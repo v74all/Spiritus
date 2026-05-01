@@ -914,18 +914,18 @@ function showConfig(name) {
   const huTab = document.getElementById('ct-httpupgrade');
   const ssTab = document.getElementById('ct-ss2022');
   const vwTab = document.getElementById('ct-vless_ws');
-  vlTab.style.display = serverInfo.vless ? '' : 'none';
-  cdTab.style.display = serverInfo.cdn ? '' : 'none';
-  trTab.style.display = serverInfo.trojan ? '' : 'none';
-  grTab.style.display = serverInfo.grpc ? '' : 'none';
-  huTab.style.display = serverInfo.httpupgrade ? '' : 'none';
-  ssTab.style.display = serverInfo.ss2022 ? '' : 'none';
-  vwTab.style.display = serverInfo.vless_ws ? '' : 'none';
+  vlTab.style.display = serverInfo.reality_public_key ? '' : 'none';
+  cdTab.style.display = serverInfo.cdn_enabled ? '' : 'none';
+  trTab.style.display = serverInfo.trojan_enabled ? '' : 'none';
+  grTab.style.display = serverInfo.grpc_enabled ? '' : 'none';
+  huTab.style.display = serverInfo.httpupgrade_enabled ? '' : 'none';
+  ssTab.style.display = serverInfo.ss2022_enabled ? '' : 'none';
+  vwTab.style.display = serverInfo.vless_ws_enabled ? '' : 'none';
   const tabProtos = [
-    ['ct-vless_xhttp','vless_xhttp'],['ct-vless_vision','vless_vision'],['ct-vless_reverse','vless_reverse'],
-    ['ct-trojan_cdn','trojan_cdn'],['ct-hysteria2','hysteria2'],['ct-tuic','tuic'],
-    ['ct-amneziawg','amneziawg'],['ct-shadowtls','shadowtls'],['ct-mieru','mieru'],
-    ['ct-naiveproxy','naiveproxy'],['ct-wireguard','wireguard'],['ct-openvpn','openvpn'],
+    ['ct-vless_xhttp','vless_xhttp_enabled'],['ct-vless_vision','vless_vision_enabled'],['ct-vless_reverse','vless_reverse_enabled'],
+    ['ct-trojan_cdn','trojan_cdn_enabled'],['ct-hysteria2','hysteria2_enabled'],['ct-tuic','tuic_enabled'],
+    ['ct-amneziawg','amneziawg_enabled'],['ct-shadowtls','shadowtls_enabled'],['ct-mieru','mieru_enabled'],
+    ['ct-naiveproxy','naiveproxy_enabled'],['ct-wireguard','wireguard_enabled'],['ct-openvpn','openvpn_enabled'],
   ];
   tabProtos.forEach(([id, key]) => {
     const el = document.getElementById(id);
@@ -1488,25 +1488,25 @@ function updateSettingsStatus() {
     else el.lastChild.textContent = ' ' + label;
   };
   set('si-vmess', true, 'Active :' + (si.vmess_port || 443));
-  set('si-vless', si.vless, si.vless ? 'Active :' + (si.vless_port || 2053) : 'OFF — Keys needed');
-  set('si-trojan', si.trojan, si.trojan ? 'Active :' + (si.trojan_port || 2083) : 'OFF');
-  set('si-grpc', si.grpc, si.grpc ? 'Active :' + (si.grpc_port || 2054) : 'OFF');
-  set('si-hu', si.httpupgrade, si.httpupgrade ? 'Active :' + (si.httpupgrade_port || 2055) : 'OFF');
-  set('si-ss2022', si.ss2022, si.ss2022 ? 'Active :' + (si.ss2022_port || 2056) : 'OFF');
-  set('si-vless-ws', si.vless_ws, si.vless_ws ? 'Active :' + (si.vless_ws_port || 2057) : 'OFF');
-  set('si-vless-xhttp', si.vless_xhttp, si.vless_xhttp ? 'Active :' + (si.vless_xhttp_port || 2053) : 'OFF');
-  set('si-vless-vision', si.vless_vision, si.vless_vision ? 'Active :' + (si.vless_vision_port || 2058) : 'OFF');
-  set('si-vless-reverse', si.vless_reverse, si.vless_reverse ? 'Active :' + (si.vless_reverse_port || 2059) : 'OFF');
-  set('si-trojan-cdn', si.trojan_cdn, si.trojan_cdn ? 'Active :' + (si.trojan_cdn_port || 2083) : 'OFF');
-  set('si-hysteria2', si.hysteria2, si.hysteria2 ? 'Active :' + (si.hysteria2_port || 8443) : 'OFF');
-  set('si-tuic', si.tuic, si.tuic ? 'Active :' + (si.tuic_port || 8444) : 'OFF');
-  set('si-amneziawg', si.amneziawg, si.amneziawg ? 'Active :' + (si.amneziawg_port || 51820) : 'OFF');
-  set('si-shadowtls', si.shadowtls, si.shadowtls ? 'Active :' + (si.shadowtls_port || 8445) : 'OFF');
-  set('si-mieru', si.mieru, si.mieru ? 'Active :' + (si.mieru_port || 8446) : 'OFF');
-  set('si-naiveproxy', si.naiveproxy, si.naiveproxy ? 'Active :' + (si.naiveproxy_port || 8447) : 'OFF');
-  set('si-wireguard', si.wireguard, si.wireguard ? 'Active :' + (si.wireguard_port || 51821) : 'OFF');
-  set('si-openvpn', si.openvpn, si.openvpn ? 'Active :' + (si.openvpn_port || 1194) : 'OFF');
-  set('si-cdn', si.cdn, si.cdn ? 'Active — ' + (si.cdn_domain || '?') : 'OFF');
+  set('si-vless', si.reality_public_key, si.reality_public_key ? 'Active :' + (si.vless_port || 2053) : 'OFF — Keys needed');
+  set('si-trojan', si.trojan_enabled, si.trojan_enabled ? 'Active :' + (si.trojan_port || 2083) : 'OFF');
+  set('si-grpc', si.grpc_enabled, si.grpc_enabled ? 'Active :' + (si.grpc_port || 2054) : 'OFF');
+  set('si-hu', si.httpupgrade_enabled, si.httpupgrade_enabled ? 'Active :' + (si.httpupgrade_port || 2055) : 'OFF');
+  set('si-ss2022', si.ss2022_enabled, si.ss2022_enabled ? 'Active :' + (si.ss2022_port || 2056) : 'OFF');
+  set('si-vless-ws', si.vless_ws_enabled, si.vless_ws_enabled ? 'Active :' + (si.vless_ws_port || 2057) : 'OFF');
+  set('si-vless-xhttp', si.vless_xhttp_enabled, si.vless_xhttp_enabled ? 'Active :' + (si.vless_xhttp_port || 2053) : 'OFF');
+  set('si-vless-vision', si.vless_vision_enabled, si.vless_vision_enabled ? 'Active :' + (si.vless_vision_port || 2058) : 'OFF');
+  set('si-vless-reverse', si.vless_reverse_enabled, si.vless_reverse_enabled ? 'Active :' + (si.vless_reverse_port || 2059) : 'OFF');
+  set('si-trojan-cdn', si.trojan_cdn_enabled, si.trojan_cdn_enabled ? 'Active :' + (si.trojan_cdn_port || 2083) : 'OFF');
+  set('si-hysteria2', si.hysteria2_enabled, si.hysteria2_enabled ? 'Active :' + (si.hysteria2_port || 8443) : 'OFF');
+  set('si-tuic', si.tuic_enabled, si.tuic_enabled ? 'Active :' + (si.tuic_port || 8444) : 'OFF');
+  set('si-amneziawg', si.amneziawg_enabled, si.amneziawg_enabled ? 'Active :' + (si.amneziawg_port || 51820) : 'OFF');
+  set('si-shadowtls', si.shadowtls_enabled, si.shadowtls_enabled ? 'Active :' + (si.shadowtls_port || 8445) : 'OFF');
+  set('si-mieru', si.mieru_enabled, si.mieru_enabled ? 'Active :' + (si.mieru_port || 8446) : 'OFF');
+  set('si-naiveproxy', si.naiveproxy_enabled, si.naiveproxy_enabled ? 'Active :' + (si.naiveproxy_port || 8447) : 'OFF');
+  set('si-wireguard', si.wireguard_enabled, si.wireguard_enabled ? 'Active :' + (si.wireguard_port || 51821) : 'OFF');
+  set('si-openvpn', si.openvpn_enabled, si.openvpn_enabled ? 'Active :' + (si.openvpn_port || 1194) : 'OFF');
+  set('si-cdn', si.cdn_enabled, si.cdn_enabled ? 'Active — ' + (si.cdn_domain || '?') : 'OFF');
   const killSwitchOn = asBool(si.kill_switch);
   set('si-ks', killSwitchOn, killSwitchOn ? 'ON' : 'OFF');
   set('si-fragment', si.fragment_enabled, si.fragment_enabled ? 'ON (client)' : 'OFF');

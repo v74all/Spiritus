@@ -162,13 +162,19 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg0);color:var(--
     {% set limit = user.traffic_limit_gb or 1 %}
     {% set pct = (used / limit * 100)|int %}
     {% set pct = [pct, 100]|min %}
+    {% set bar_color = 'var(--green)' %}
+    {% if pct >= 60 and pct < 85 %}
+      {% set bar_color = 'var(--yellow)' %}
+    {% elif pct >= 85 %}
+      {% set bar_color = 'var(--red)' %}
+    {% endif %}
     <div class="traffic-bar">
       <div class="bar-head">
         <span class="used">{{ "%.2f"|format(used) }} GB used</span>
         <span class="limit">{{ pct }}% of {{ "%.1f"|format(limit) }} GB</span>
       </div>
       <div class="bar-track">
-        <div class="bar-fill" style="width:{{ pct }}%;background:{{ 'var(--green)' if pct < 60 else 'var(--yellow)' if pct < 85 else 'var(--red)' }}"></div>
+        <div class="bar-fill" style="width:{{ pct }}%;background:{{ bar_color }}"></div>
       </div>
     </div>
   </div>
@@ -201,6 +207,18 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg0);color:var(--
         {% if links.httpupgrade_vmess %}<button class="qr-tab" onclick="showQr('httpupgrade')">HU</button>{% endif %}
         {% if links.ss2022 %}<button class="qr-tab" onclick="showQr('ss2022')">SS2022</button>{% endif %}
         {% if links.vless_ws %}<button class="qr-tab" onclick="showQr('vless_ws')">VLESS-WS</button>{% endif %}
+        {% if links.vless_xhttp %}<button class="qr-tab" onclick="showQr('vless_xhttp')">VLESS-XHTTP</button>{% endif %}
+        {% if links.vless_vision %}<button class="qr-tab" onclick="showQr('vless_vision')">Vision</button>{% endif %}
+        {% if links.vless_reverse %}<button class="qr-tab" onclick="showQr('vless_reverse')">Reverse</button>{% endif %}
+        {% if links.trojan_cdn %}<button class="qr-tab" onclick="showQr('trojan_cdn')">Trojan-CDN</button>{% endif %}
+        {% if links.hysteria2 %}<button class="qr-tab" onclick="showQr('hysteria2')">Hy2</button>{% endif %}
+        {% if links.tuic %}<button class="qr-tab" onclick="showQr('tuic')">TUIC</button>{% endif %}
+        {% if links.amneziawg %}<button class="qr-tab" onclick="showQr('amneziawg')">Amnezia</button>{% endif %}
+        {% if links.shadowtls %}<button class="qr-tab" onclick="showQr('shadowtls')">ShadowTLS</button>{% endif %}
+        {% if links.mieru %}<button class="qr-tab" onclick="showQr('mieru')">Mieru</button>{% endif %}
+        {% if links.naiveproxy %}<button class="qr-tab" onclick="showQr('naiveproxy')">Naive</button>{% endif %}
+        {% if links.wireguard %}<button class="qr-tab" onclick="showQr('wireguard')">WG</button>{% endif %}
+        {% if links.openvpn %}<button class="qr-tab" onclick="showQr('openvpn')">OVPN</button>{% endif %}
       </div>
       <div class="qr-box" id="qr-display"></div>
     </div>
@@ -279,6 +297,114 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg0);color:var(--
         <div class="config-box">
           <div class="config-link" id="link-vless_ws">{{ links.vless_ws }}</div>
           <button class="btn-copy" onclick="copyLink('vless_ws')">Copy</button>
+        </div>
+      </div>
+      {% endif %}
+      {% if links.vless_xhttp %}
+      <div class="config-item">
+        <div class="config-label"><span class="config-badge" style="background:#9b59b622;color:#9b59b6">VLESS-XHTTP</span> XHTTP + Reality</div>
+        <div class="config-box">
+          <div class="config-link" id="link-vless_xhttp">{{ links.vless_xhttp }}</div>
+          <button class="btn-copy" onclick="copyLink('vless_xhttp')">Copy</button>
+        </div>
+      </div>
+      {% endif %}
+      {% if links.vless_vision %}
+      <div class="config-item">
+        <div class="config-label"><span class="config-badge" style="background:#8e44ad22;color:#8e44ad">VLESS-Vision</span> Vision + Reality</div>
+        <div class="config-box">
+          <div class="config-link" id="link-vless_vision">{{ links.vless_vision }}</div>
+          <button class="btn-copy" onclick="copyLink('vless_vision')">Copy</button>
+        </div>
+      </div>
+      {% endif %}
+      {% if links.vless_reverse %}
+      <div class="config-item">
+        <div class="config-label"><span class="config-badge" style="background:#34495e22;color:#34495e">VLESS-Reverse</span> Reverse Tunnel</div>
+        <div class="config-box">
+          <div class="config-link" id="link-vless_reverse">{{ links.vless_reverse }}</div>
+          <button class="btn-copy" onclick="copyLink('vless_reverse')">Copy</button>
+        </div>
+      </div>
+      {% endif %}
+      {% if links.trojan_cdn %}
+      <div class="config-item">
+        <div class="config-label"><span class="config-badge" style="background:#c0392b22;color:#c0392b">Trojan-CDN</span> WS + CDN</div>
+        <div class="config-box">
+          <div class="config-link" id="link-trojan_cdn">{{ links.trojan_cdn }}</div>
+          <button class="btn-copy" onclick="copyLink('trojan_cdn')">Copy</button>
+        </div>
+      </div>
+      {% endif %}
+      {% if links.hysteria2 %}
+      <div class="config-item">
+        <div class="config-label"><span class="config-badge" style="background:#f1c40f22;color:#f39c12">Hysteria2</span> UDP Proxy</div>
+        <div class="config-box">
+          <div class="config-link" id="link-hysteria2">{{ links.hysteria2 }}</div>
+          <button class="btn-copy" onclick="copyLink('hysteria2')">Copy</button>
+        </div>
+      </div>
+      {% endif %}
+      {% if links.tuic %}
+      <div class="config-item">
+        <div class="config-label"><span class="config-badge" style="background:#16a08522;color:#16a085">TUIC</span> QUIC Proxy</div>
+        <div class="config-box">
+          <div class="config-link" id="link-tuic">{{ links.tuic }}</div>
+          <button class="btn-copy" onclick="copyLink('tuic')">Copy</button>
+        </div>
+      </div>
+      {% endif %}
+      {% if links.amneziawg %}
+      <div class="config-item">
+        <div class="config-label"><span class="config-badge" style="background:#27ae6022;color:#27ae60">AmneziaWG</span> AWG</div>
+        <div class="config-box">
+          <div class="config-link" id="link-amneziawg">{{ links.amneziawg }}</div>
+          <button class="btn-copy" onclick="copyLink('amneziawg')">Copy</button>
+        </div>
+      </div>
+      {% endif %}
+      {% if links.shadowtls %}
+      <div class="config-item">
+        <div class="config-label"><span class="config-badge" style="background:#2c3e5022;color:#2c3e50">ShadowTLS</span> TLS Obfuscation</div>
+        <div class="config-box">
+          <div class="config-link" id="link-shadowtls">{{ links.shadowtls }}</div>
+          <button class="btn-copy" onclick="copyLink('shadowtls')">Copy</button>
+        </div>
+      </div>
+      {% endif %}
+      {% if links.mieru %}
+      <div class="config-item">
+        <div class="config-label"><span class="config-badge" style="background:#d3540022;color:#d35400">Mieru</span> TCP Proxy</div>
+        <div class="config-box">
+          <div class="config-link" id="link-mieru">{{ links.mieru }}</div>
+          <button class="btn-copy" onclick="copyLink('mieru')">Copy</button>
+        </div>
+      </div>
+      {% endif %}
+      {% if links.naiveproxy %}
+      <div class="config-item">
+        <div class="config-label"><span class="config-badge" style="background:#7f8c8d22;color:#7f8c8d">NaiveProxy</span> HTTP/2</div>
+        <div class="config-box">
+          <div class="config-link" id="link-naiveproxy">{{ links.naiveproxy }}</div>
+          <button class="btn-copy" onclick="copyLink('naiveproxy')">Copy</button>
+        </div>
+      </div>
+      {% endif %}
+      {% if links.wireguard %}
+      <div class="config-item">
+        <div class="config-label"><span class="config-badge" style="background:#2980b922;color:#2980b9">WireGuard</span> UDP Tunnel</div>
+        <div class="config-box">
+          <div class="config-link" id="link-wireguard">{{ links.wireguard }}</div>
+          <button class="btn-copy" onclick="copyLink('wireguard')">Copy</button>
+        </div>
+      </div>
+      {% endif %}
+      {% if links.openvpn %}
+      <div class="config-item">
+        <div class="config-label"><span class="config-badge" style="background:#e8439322;color:#e84393">OpenVPN</span> Classic VPN</div>
+        <div class="config-box">
+          <div class="config-link" id="link-openvpn">{{ links.openvpn }}</div>
+          <button class="btn-copy" onclick="copyLink('openvpn')">Copy</button>
         </div>
       </div>
       {% endif %}
