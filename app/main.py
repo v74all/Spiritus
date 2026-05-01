@@ -9,11 +9,9 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
 from contextlib import asynccontextmanager
 import logging
 import os
-import json
 
 from .config import settings
 from .database import init_db, shutdown_db
@@ -130,12 +128,10 @@ async def add_security_headers(request: Request, call_next):
 # Exception handlers
 @app.exception_handler(Exception)
 async def generic_exception_handler(request: Request, exc: Exception):
-    import traceback
-    tb = traceback.format_exc()
-    logger.error(f"Unhandled error: {exc}\n{tb}", exc_info=True)
+    logger.error(f"Unhandled error: {exc}", exc_info=True)
     return JSONResponse(
         status_code=500,
-        content={"message": "Internal server error", "detail": str(exc), "traceback": tb},
+        content={"message": "Internal server error", "detail": str(exc)},
     )
 
 # Mount static files
@@ -184,18 +180,13 @@ async def liveness_check():
 
 # ── Panel HTML (serves the frontend) ───────────────────
 
-# Setup templates
-templates = Jinja2Templates(directory="templates")
-# Ensure tojson filter exists (built into jinja2, but good to be safe)
-if "tojson" not in templates.env.filters:
-    templates.env.filters["tojson"] = lambda obj: json.dumps(obj)
-
 @app.get("/", response_class=HTMLResponse)
 async def serve_panel(request: Request):
     """Serve the main panel HTML."""
     template_path = os.path.join(os.getcwd(), "templates", "panel.html")
     if os.path.exists(template_path):
-        return templates.TemplateResponse("panel.html", {"request": request})
+        with open(template_path, "r", encoding="utf-8") as f:
+            return HTMLResponse(content=f.read())
     return HTMLResponse("<h1>V7LTHRONYX VPN Panel v2.0</h1><p>Panel template not found</p>")
 
 if __name__ == "__main__":
