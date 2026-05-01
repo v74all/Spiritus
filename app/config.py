@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     
     # Database
     database_url: str = Field(
-        "postgresql://vpnadmin:securepassword@localhost:5432/vpnpanel",
+        "postgresql://vpnadmin:securepassword@127.0.0.1:5432/vpnpanel",
         env="DATABASE_URL"
     )
     database_pool_size: int = 20

@@ -215,6 +215,13 @@ setup_env() {
     else
         print_success "Environment configuration already exists"
     fi
+    
+    # Ensure DATABASE_URL is strictly correct (forces IPv4 and correct credentials)
+    if grep -q "^DATABASE_URL=" .env; then
+        sed -i 's|^DATABASE_URL=.*|DATABASE_URL=postgresql://vpnadmin:securepassword@127.0.0.1:5432/vpnpanel|' .env
+    else
+        echo "DATABASE_URL=postgresql://vpnadmin:securepassword@127.0.0.1:5432/vpnpanel" >> .env
+    fi
 }
 
 configure_systemd() {
