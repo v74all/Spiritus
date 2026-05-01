@@ -260,8 +260,13 @@ def _build_share_links(u: VpnUser) -> Dict[str, str]:
 
 
 def _user_to_legacy(u: VpnUser) -> Dict[str, Any]:
-    traffic_limit_gb = (u.traffic_limit / (1024**3)) if u.traffic_limit else 0
-    traffic_used_gb = (u.traffic_used / (1024**3)) if u.traffic_used else 0
+    traffic_limit_bytes = int(u.traffic_limit or 0)
+    traffic_used_bytes = int(u.traffic_used or 0)
+    traffic_limit_gb = traffic_limit_bytes / (1024**3) if traffic_limit_bytes else 0
+    traffic_used_gb = traffic_used_bytes / (1024**3) if traffic_used_bytes else 0
+    traffic_percent = 0
+    if traffic_limit_bytes > 0:
+        traffic_percent = round(min((traffic_used_bytes / traffic_limit_bytes) * 100, 100), 1)
     links = _build_share_links(u)
     return {
         "id": u.id,
@@ -269,14 +274,19 @@ def _user_to_legacy(u: VpnUser) -> Dict[str, Any]:
         "uuid": u.uuid,
         "active": bool(u.active),
         "traffic_limit": traffic_limit_gb,
+        "traffic_limit_gb": traffic_limit_gb,
+        "traffic_limit_bytes": traffic_limit_bytes,
+        "traffic_used": traffic_used_gb,
         "traffic_used_gb": traffic_used_gb,
-        "traffic_used_bytes": u.traffic_used or 0,
-        "expire_at": u.expire_at.isoformat() if u.expire_at else None,
+        "traffic_used_bytes": traffic_used_bytes,
+        "traffic_percent": traffic_percent,
+        "expire_at": u.expire_at.date().isoformat() if u.expire_at else None,
         "days_left": _days_left(u.expire_at),
         "agent_id": u.agent_id,
         "speed_limit_up": u.speed_limit_up or 0,
         "speed_limit_down": u.speed_limit_down or 0,
         "note": u.note or "",
+        "created_at": u.created_at.date().isoformat() if u.created_at else "",
         "online_ip_count": 0,
         "online_ips": [],
         "vmess": links.get("vmess", ""),
