@@ -5,8 +5,8 @@ This module initializes the FastAPI application, configures middleware,
 and mounts the API routers.
 """
 
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
@@ -208,6 +208,44 @@ async def serve_panel(request: Request):
         ws_path=settings.vless_ws_path,
     )
     return HTMLResponse(content=html)
+
+
+@app.get("/agent", response_class=HTMLResponse)
+async def serve_agent_panel(request: Request):
+    """Serve the reseller/agent panel HTML."""
+    template_path = os.path.join(_templates_dir, "agent-panel.html")
+    if not os.path.exists(template_path):
+        return HTMLResponse("<h1>V7LTHRONYX Agent Panel</h1><p>Agent template not found</p>")
+
+    template = _jinja_env.get_template("agent-panel.html")
+    apk_path = os.path.join(os.getcwd(), "static", "downloads", "app-release.apk")
+    html = template.render(
+        server_ip=settings.host if settings.host != "0.0.0.0" else "",
+        server_port=settings.web_port,
+        sni_host=settings.vless_ws_host,
+        ws_path=settings.vless_ws_path,
+        apk_available=os.path.isfile(apk_path),
+    )
+    return HTMLResponse(content=html)
+
+
+@app.get("/download/app")
+async def download_app():
+    apk_path = os.path.join(os.getcwd(), "static", "downloads", "app-release.apk")
+    if not os.path.isfile(apk_path):
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(apk_path, filename="vpn-app.apk")
+
+
+@app.get("/download/app-windows")
+async def download_app_windows():
+    win_path = os.path.join(os.getcwd(), "static", "downloads", "vpn-windows.zip")
+    if not os.path.isfile(win_path):
+        raise HTTPException(
+            status_code=404,
+            detail="Windows build not uploaded on this server yet.",
+        )
+    return FileResponse(win_path, filename="vpn-windows.zip")
 
 if __name__ == "__main__":
     import uvicorn
