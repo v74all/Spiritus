@@ -277,19 +277,67 @@ PROTOCOL_ENABLE_KEYS = {
     "openvpn_enabled",
 }
 
+BOOLEAN_SETTING_KEYS = {
+    "kill_switch_enabled",
+    "cdn_enabled",
+    "trojan_enabled",
+    "grpc_enabled",
+    "httpupgrade_enabled",
+    "fragment_enabled",
+    "mux_enabled",
+    "ss2022_enabled",
+    "vless_ws_enabled",
+    "telegram_enabled",
+    "telegram_notify_user_disabled",
+    "telegram_notify_user_expired",
+    "telegram_notify_kill_switch",
+    "telegram_notify_traffic_exhausted",
+    "telegram_notify_user_created",
+    "telegram_notify_user_deleted",
+    "dpi_tcp_fragment",
+    "dpi_tls_fragment",
+    "dpi_ip_fragment",
+    "dpi_tcp_keepalive",
+    "dpi_dns_tunnel",
+    "dpi_icmp_tunnel",
+    "dpi_domain_front",
+    "dpi_cdn_front_enabled",
+    "noise_enabled",
+    *PROTOCOL_ENABLE_KEYS,
+}
+
+
+def _as_bool(value):
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return False
+
+
+def _normalize_settings_types(data):
+    normalized = dict(data)
+    for key in BOOLEAN_SETTING_KEYS:
+        if key in normalized:
+            normalized[key] = _as_bool(normalized[key])
+    return normalized
+
 
 def load_settings():
     if os.path.exists(SETTINGS_FILE):
         try:
             with open(SETTINGS_FILE) as f:
                 saved = json.load(f)
-            return {**DEFAULT_SETTINGS, **saved}
+            return _normalize_settings_types({**DEFAULT_SETTINGS, **saved})
         except Exception:
             pass
-    return dict(DEFAULT_SETTINGS)
+    return _normalize_settings_types(DEFAULT_SETTINGS)
 
 
 def save_settings(s):
+    s = _normalize_settings_types(s)
     with open(SETTINGS_FILE, "w") as f:
         json.dump(s, f, indent=2)
     os.chmod(SETTINGS_FILE, 0o600)
@@ -2786,7 +2834,7 @@ def api_add_user():
 @app.route("/api/bulk-users", methods=["POST"])
 @require_auth
 def api_bulk_users():
-    data = request.json or {}
+    data = _normalize_settings_types(request.json or {})
     try:
         count = int(data.get("count", 10))
         traffic = float(data.get("traffic", 1))
@@ -3990,12 +4038,12 @@ def api_system_monitor():
 def api_server_info():
     s = settings
     has_vless = bool(s.get("reality_public_key"))
-    has_cdn = s.get("cdn_enabled") and bool(s.get("cdn_domain"))
-    has_trojan = bool(s.get("trojan_enabled"))
-    has_grpc = bool(s.get("grpc_enabled"))
-    has_hu = bool(s.get("httpupgrade_enabled"))
-    has_ss2022 = s.get("ss2022_enabled") and bool(s.get("ss2022_server_key"))
-    has_vless_ws = bool(s.get("vless_ws_enabled"))
+    has_cdn = _as_bool(s.get("cdn_enabled")) and bool(s.get("cdn_domain"))
+    has_trojan = _as_bool(s.get("trojan_enabled"))
+    has_grpc = _as_bool(s.get("grpc_enabled"))
+    has_hu = _as_bool(s.get("httpupgrade_enabled"))
+    has_ss2022 = _as_bool(s.get("ss2022_enabled")) and bool(s.get("ss2022_server_key"))
+    has_vless_ws = _as_bool(s.get("vless_ws_enabled"))
     return jsonify({
         "vmess": True,
         "vless": has_vless,
@@ -4021,9 +4069,9 @@ def api_server_info():
         "ss2022_port": s.get("ss2022_port", 2056),
         "vless_ws_port": s.get("vless_ws_port", 2057),
         "vless_ws_path": s.get("vless_ws_path", "/vless-ws"),
-        "kill_switch": s.get("kill_switch_enabled", True),
-        "fragment_enabled": s.get("fragment_enabled", False),
-        "mux_enabled": s.get("mux_enabled", False),
+        "kill_switch": _as_bool(s.get("kill_switch_enabled", False)),
+        "fragment_enabled": _as_bool(s.get("fragment_enabled", False)),
+        "mux_enabled": _as_bool(s.get("mux_enabled", False)),
     })
 
 
@@ -4494,12 +4542,12 @@ def api_agent_live():
 def api_agent_server_info():
     s = settings
     has_vless = bool(s.get("reality_public_key"))
-    has_cdn = s.get("cdn_enabled") and bool(s.get("cdn_domain"))
-    has_trojan = bool(s.get("trojan_enabled"))
-    has_grpc = bool(s.get("grpc_enabled"))
-    has_hu = bool(s.get("httpupgrade_enabled"))
-    has_ss2022 = s.get("ss2022_enabled") and bool(s.get("ss2022_server_key"))
-    has_vless_ws = bool(s.get("vless_ws_enabled"))
+    has_cdn = _as_bool(s.get("cdn_enabled")) and bool(s.get("cdn_domain"))
+    has_trojan = _as_bool(s.get("trojan_enabled"))
+    has_grpc = _as_bool(s.get("grpc_enabled"))
+    has_hu = _as_bool(s.get("httpupgrade_enabled"))
+    has_ss2022 = _as_bool(s.get("ss2022_enabled")) and bool(s.get("ss2022_server_key"))
+    has_vless_ws = _as_bool(s.get("vless_ws_enabled"))
     return jsonify({
         "vmess": True,
         "vless": has_vless,
@@ -4524,9 +4572,9 @@ def api_agent_server_info():
         "ss2022_port": s.get("ss2022_port", 2056),
         "vless_ws_port": s.get("vless_ws_port", 2057),
         "vless_ws_path": s.get("vless_ws_path", "/vless-ws"),
-        "kill_switch": s.get("kill_switch_enabled", True),
-        "fragment_enabled": s.get("fragment_enabled", False),
-        "mux_enabled": s.get("mux_enabled", False),
+        "kill_switch": _as_bool(s.get("kill_switch_enabled", False)),
+        "fragment_enabled": _as_bool(s.get("fragment_enabled", False)),
+        "mux_enabled": _as_bool(s.get("mux_enabled", False)),
     })
 
 

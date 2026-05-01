@@ -81,6 +81,34 @@ _PROTOCOL_ENABLE_KEYS = {
     "wireguard_enabled",
     "openvpn_enabled",
 }
+_BOOLEAN_SETTING_KEYS = {
+    "kill_switch_enabled",
+    "cdn_enabled",
+    "trojan_enabled",
+    "grpc_enabled",
+    "httpupgrade_enabled",
+    "fragment_enabled",
+    "mux_enabled",
+    "ss2022_enabled",
+    "vless_ws_enabled",
+    "telegram_enabled",
+    "telegram_notify_user_disabled",
+    "telegram_notify_user_expired",
+    "telegram_notify_kill_switch",
+    "telegram_notify_traffic_exhausted",
+    "telegram_notify_user_created",
+    "telegram_notify_user_deleted",
+    "dpi_tcp_fragment",
+    "dpi_tls_fragment",
+    "dpi_ip_fragment",
+    "dpi_tcp_keepalive",
+    "dpi_dns_tunnel",
+    "dpi_icmp_tunnel",
+    "dpi_domain_front",
+    "dpi_cdn_front_enabled",
+    "noise_enabled",
+    *_PROTOCOL_ENABLE_KEYS,
+}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -103,6 +131,24 @@ def _record_failed_attempt(ip: str) -> None:
 
 def _clear_attempts(ip: str) -> None:
     _login_attempts.pop(ip, None)
+
+
+def _as_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return False
+
+
+def _normalize_settings_types(data: Dict[str, Any]) -> Dict[str, Any]:
+    normalized = dict(data)
+    for key in _BOOLEAN_SETTING_KEYS:
+        if key in normalized:
+            normalized[key] = _as_bool(normalized[key])
+    return normalized
 
 
 def _read_password_file() -> Optional[str]:
@@ -302,6 +348,7 @@ def _user_to_legacy(u: VpnUser) -> Dict[str, Any]:
 
 async def _load_legacy_settings(db: AsyncSession) -> Dict[str, Any]:
     if _settings_state:
+        _settings_state.update(_normalize_settings_types(_settings_state))
         return dict(_settings_state)
 
     file_settings: Dict[str, Any] = {}
@@ -330,7 +377,7 @@ async def _load_legacy_settings(db: AsyncSession) -> Dict[str, Any]:
     if isinstance(loaded_db, dict):
         db_settings = loaded_db
 
-    _settings_state.update({**file_settings, **db_settings})
+    _settings_state.update(_normalize_settings_types({**file_settings, **db_settings}))
     return dict(_settings_state)
 
 
@@ -350,6 +397,7 @@ def _preserve_protocols_on_dpi_update(
 
 async def _save_legacy_settings(db: AsyncSession, data: Dict[str, Any]) -> None:
     current = await _load_legacy_settings(db)
+    data = _normalize_settings_types(data)
     data = _preserve_protocols_on_dpi_update(current, data)
     _settings_state.update(data)
     result = await db.execute(select(Setting).where(Setting.key == _LEGACY_SETTINGS_KEY))
@@ -905,27 +953,27 @@ async def legacy_server_info(
         "vless_sni": s.get("reality_sni", "www.google.com"),
         "vless_public_key": s.get("reality_public_key", ""),
         "vless_short_id": s.get("reality_short_id", ""),
-        "trojan": s.get("trojan_enabled", False),
+        "trojan": _as_bool(s.get("trojan_enabled", False)),
         "trojan_port": s.get("trojan_port", 2083),
-        "grpc": s.get("grpc_enabled", False),
+        "grpc": _as_bool(s.get("grpc_enabled", False)),
         "grpc_port": s.get("grpc_port", 2054),
         "grpc_service": s.get("grpc_service_name", "GunService"),
-        "httpupgrade": s.get("httpupgrade_enabled", False),
+        "httpupgrade": _as_bool(s.get("httpupgrade_enabled", False)),
         "httpupgrade_port": s.get("httpupgrade_port", 2055),
         "httpupgrade_path": s.get("httpupgrade_path", "/httpupgrade"),
         "ss2022": bool(s.get("ss2022_server_key")),
         "ss2022_port": s.get("ss2022_port", 2056),
-        "vless_ws": s.get("vless_ws_enabled", settings.vless_ws_enabled),
+        "vless_ws": _as_bool(s.get("vless_ws_enabled", settings.vless_ws_enabled)),
         "vless_ws_port": s.get("vless_ws_port", settings.vless_ws_port),
         "vless_ws_path": s.get("vless_ws_path", settings.vless_ws_path),
-        "cdn": s.get("cdn_enabled", settings.cdn_enabled),
+        "cdn": _as_bool(s.get("cdn_enabled", settings.cdn_enabled)),
         "cdn_domain": s.get("cdn_domain", settings.cdn_domain),
         "cdn_ws_path": s.get("cdn_ws_path", settings.cdn_ws_path),
         "cdn_port": s.get("cdn_port", settings.cdn_port),
-        "fragment_enabled": s.get("fragment_enabled", False),
-        "mux_enabled": s.get("mux_enabled", False),
-        "kill_switch": s.get("kill_switch_enabled", False),
-        "telegram_enabled": s.get("telegram_enabled", False),
+        "fragment_enabled": _as_bool(s.get("fragment_enabled", False)),
+        "mux_enabled": _as_bool(s.get("mux_enabled", False)),
+        "kill_switch": _as_bool(s.get("kill_switch_enabled", False)),
+        "telegram_enabled": _as_bool(s.get("telegram_enabled", False)),
     }
 
 
@@ -1090,7 +1138,7 @@ async def legacy_get_settings(
         "dpi_cdn_front_enabled": False,
         "dpi_cdn_front": "",
     }
-    merged = {**defaults, **await _load_legacy_settings(db)}
+    merged = _normalize_settings_types({**defaults, **await _load_legacy_settings(db)})
     return merged
 
 

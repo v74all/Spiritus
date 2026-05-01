@@ -13,6 +13,26 @@ let groups = [];
 let _settingsLoaded = false;
 let _settingsLoading = null;
 let _settingsCache = {};
+
+function asBool(v) {
+  if (typeof v === 'boolean') return v;
+  if (typeof v === 'number') return v !== 0;
+  if (typeof v === 'string') return ['1', 'true', 'yes', 'on'].includes(v.trim().toLowerCase());
+  return false;
+}
+
+function setKillSwitchCheckboxes(on) {
+  ['set-ks', 'set-security-ks'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.checked = !!on;
+  });
+}
+
+function getKillSwitchValue() {
+  const primary = document.getElementById('set-ks');
+  const secondary = document.getElementById('set-security-ks');
+  return !!((primary && primary.checked) || (secondary && secondary.checked));
+}
 // SERVER_INFO is injected by the template in panel.html
 
 /* ── Auth ── */
@@ -216,8 +236,9 @@ function updateProtoBar() {
   } else { vw.style.display = 'none'; }
   fr.style.display = serverInfo.fragment_enabled ? '' : 'none';
   mx.style.display = serverInfo.mux_enabled ? '' : 'none';
-  ks.textContent = 'Kill Switch: ' + (serverInfo.kill_switch ? 'ON' : 'OFF');
-  ks.className = 'proto-badge proto-ks' + (serverInfo.kill_switch ? '' : ' off');
+  const killSwitchOn = asBool(serverInfo.kill_switch);
+  ks.textContent = 'Kill Switch: ' + (killSwitchOn ? 'ON' : 'OFF');
+  ks.className = 'proto-badge proto-ks' + (killSwitchOn ? '' : ' off');
 }
 
 /* ── Filtering ── */
@@ -1338,7 +1359,8 @@ function updateSettingsStatus() {
   set('si-ss2022', si.ss2022, si.ss2022 ? 'Active :' + (si.ss2022_port || 2056) : 'OFF');
   set('si-vless-ws', si.vless_ws, si.vless_ws ? 'Active :' + (si.vless_ws_port || 2057) : 'OFF');
   set('si-cdn', si.cdn, si.cdn ? 'Active — ' + (si.cdn_domain || '?') : 'OFF');
-  set('si-ks', si.kill_switch, si.kill_switch ? 'ON' : 'OFF');
+  const killSwitchOn = asBool(si.kill_switch);
+  set('si-ks', killSwitchOn, killSwitchOn ? 'ON' : 'OFF');
   set('si-fragment', si.fragment_enabled, si.fragment_enabled ? 'ON (client)' : 'OFF');
   set('si-mux', si.mux_enabled, si.mux_enabled ? 'ON (client)' : 'OFF');
   // Network resilience is always info
@@ -1364,7 +1386,7 @@ async function loadSettings() {
     document.getElementById('set-vmess-sni').value = s.vmess_sni || 'www.aparat.com';
     document.getElementById('set-vmess-ws-path').value = s.vmess_ws_path || '/api/v1/stream';
     // Security
-    document.getElementById('set-ks').checked = s.kill_switch_enabled;
+    setKillSwitchCheckboxes(asBool(s.kill_switch_enabled));
     // VLESS / Reality
     document.getElementById('set-reality-sni').value = s.reality_sni || 'www.google.com';
     document.getElementById('set-vless-port').value = s.vless_port || 2053;
@@ -1460,7 +1482,7 @@ async function saveSettings() {
     vmess_sni: document.getElementById('set-vmess-sni').value.trim() || 'www.aparat.com',
     vmess_ws_path: document.getElementById('set-vmess-ws-path').value.trim() || '/api/v1/stream',
     // Security
-    kill_switch_enabled: document.getElementById('set-ks').checked,
+    kill_switch_enabled: getKillSwitchValue(),
     // VLESS / Reality
     reality_sni: document.getElementById('set-reality-sni').value.trim() || 'www.google.com',
     reality_dest: (document.getElementById('set-reality-sni').value.trim() || 'www.google.com') + ':443',
@@ -1579,7 +1601,11 @@ function showSettingsValidation(data) {
   setTimeout(() => { el.style.display = 'none'; }, 15000);
 }
 
-function toggleKillSwitch() {}
+function toggleKillSwitch() {
+  const source = (typeof event !== 'undefined' && event && event.target) ? event.target : null;
+  if (!source) return;
+  setKillSwitchCheckboxes(source.checked);
+}
 function toggleCDN() {}
 
 async function regenerateReality() {
