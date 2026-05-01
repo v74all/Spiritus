@@ -254,8 +254,17 @@ async def download_app_windows():
 
 
 def _public_server_ip(request: Request) -> str:
-    if settings.host and settings.host != "0.0.0.0":
+    configured_host = (settings.host or "").strip()
+    if configured_host and configured_host not in {"0.0.0.0", "127.0.0.1", "localhost", "::1"}:
         return settings.host
+    forwarded_host = (request.headers.get("x-forwarded-host") or "").split(",", 1)[0].strip()
+    request_host = forwarded_host or (request.headers.get("host") or "")
+    if request_host.startswith("[") and "]" in request_host:
+        return request_host[1:request_host.index("]")]
+    if ":" in request_host:
+        host, port = request_host.rsplit(":", 1)
+        if port.isdigit():
+            return host
     return request.url.hostname or ""
 
 
@@ -286,9 +295,10 @@ async def _subscription_links(user: VpnUser, request: Request, db: AsyncSession)
     await _load_legacy_settings(db)
     if not _settings_state.get("server_ip"):
         _settings_state["server_ip"] = _public_server_ip(request)
+    server_ip = _public_server_ip(request)
     return {
         key: value
-        for key, value in _user_to_legacy(user).items()
+        for key, value in _user_to_legacy(user, server_ip=server_ip).items()
         if key in {
             "vmess",
             "vless",

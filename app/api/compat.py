@@ -17,6 +17,7 @@ import csv
 import json
 import logging
 import os
+import subprocess
 import time
 import urllib.parse
 import uuid as uuid_lib
@@ -151,6 +152,33 @@ def _normalize_settings_types(data: Dict[str, Any]) -> Dict[str, Any]:
     return normalized
 
 
+def _strip_host_port(host: str) -> str:
+    host = (host or "").strip()
+    if host.startswith("[") and "]" in host:
+        return host[1:host.index("]")]
+    if ":" in host:
+        maybe_host, maybe_port = host.rsplit(":", 1)
+        if maybe_port.isdigit():
+            return maybe_host
+    return host
+
+
+def _is_placeholder_host(host: str) -> bool:
+    host = _strip_host_port(host).lower()
+    return host in {"", "0.0.0.0", "127.0.0.1", "localhost", "::1", "your-server-ip"}
+
+
+def _request_config_host(request: Request) -> str:
+    for header in ("x-forwarded-host", "host"):
+        raw = (request.headers.get(header) or "").split(",", 1)[0].strip()
+        host = _strip_host_port(raw)
+        if not _is_placeholder_host(host):
+            return host
+    if not _is_placeholder_host(settings.host):
+        return settings.host
+    return ""
+
+
 def _read_password_file() -> Optional[str]:
     pw_file = os.path.join(os.getcwd(), "vpn-panel-password")
     if not os.path.exists(pw_file):
@@ -181,15 +209,15 @@ def _days_left(expire_at: Optional[datetime]) -> int:
     return max(0, delta.days)
 
 
-def _build_share_links(u: VpnUser) -> Dict[str, str]:
+def _build_share_links(u: VpnUser, server_ip: Optional[str] = None) -> Dict[str, str]:
     """Generate protocol share URLs for a user. Best-effort — empty if disabled."""
     try:
         from ..protocol_engine import ClientConfigGenerator
     except Exception:
         return {}
 
-    server_ip = _settings_state.get("server_ip") or settings.host
-    if server_ip == "0.0.0.0":
+    server_ip = server_ip or _settings_state.get("server_ip") or settings.host
+    if _is_placeholder_host(server_ip):
         server_ip = ""
     sni_host = _settings_state.get("vmess_sni") or "www.aparat.com"
     ws_path = _settings_state.get("vmess_ws_path") or "/api/v1/stream"
@@ -202,6 +230,7 @@ def _build_share_links(u: VpnUser) -> Dict[str, str]:
             port=int(_settings_state.get("vmess_port") or 443),
             sni=sni_host,
             path=ws_path,
+            allow_insecure=True,
         )
     except Exception:
         links["vmess"] = ""
@@ -232,6 +261,7 @@ def _build_share_links(u: VpnUser) -> Dict[str, str]:
                 security="tls",
                 sni=_settings_state.get("cdn_domain"),
                 path=_settings_state.get("cdn_ws_path") or "/cdn-ws",
+                allow_insecure=True,
             )
         except Exception:
             links["cdn_vmess"] = ""
@@ -246,6 +276,7 @@ def _build_share_links(u: VpnUser) -> Dict[str, str]:
                 security="tls",
                 sni=sni_host,
                 path=_settings_state.get("vless_ws_path") or settings.vless_ws_path,
+                allow_insecure=True,
             )
         except Exception:
             links["vless_ws"] = ""
@@ -257,6 +288,8 @@ def _build_share_links(u: VpnUser) -> Dict[str, str]:
                 address=server_ip,
                 port=int(_settings_state.get("trojan_port") or 2083),
                 sni=sni_host,
+                network="tcp",
+                allow_insecure=True,
             )
         except Exception:
             links["trojan"] = ""
@@ -271,6 +304,7 @@ def _build_share_links(u: VpnUser) -> Dict[str, str]:
                 security="tls",
                 sni=sni_host,
                 path=_settings_state.get("grpc_service_name") or "GunService",
+                allow_insecure=True,
             )
         except Exception:
             links["grpc_vmess"] = ""
@@ -285,6 +319,7 @@ def _build_share_links(u: VpnUser) -> Dict[str, str]:
                 security="tls",
                 sni=sni_host,
                 path=_settings_state.get("httpupgrade_path") or "/httpupgrade",
+                allow_insecure=True,
             )
         except Exception:
             links["httpupgrade_vmess"] = ""
@@ -305,7 +340,7 @@ def _build_share_links(u: VpnUser) -> Dict[str, str]:
     return links
 
 
-def _user_to_legacy(u: VpnUser) -> Dict[str, Any]:
+def _user_to_legacy(u: VpnUser, server_ip: Optional[str] = None) -> Dict[str, Any]:
     traffic_limit_bytes = int(u.traffic_limit or 0)
     traffic_used_bytes = int(u.traffic_used or 0)
     traffic_limit_gb = traffic_limit_bytes / (1024**3) if traffic_limit_bytes else 0
@@ -313,7 +348,7 @@ def _user_to_legacy(u: VpnUser) -> Dict[str, Any]:
     traffic_percent = 0
     if traffic_limit_bytes > 0:
         traffic_percent = round(min((traffic_used_bytes / traffic_limit_bytes) * 100, 100), 1)
-    links = _build_share_links(u)
+    links = _build_share_links(u, server_ip=server_ip)
     return {
         "id": u.id,
         "name": u.name,
@@ -365,7 +400,7 @@ async def _load_legacy_settings(db: AsyncSession) -> Dict[str, Any]:
     result = await db.execute(select(Setting).where(Setting.key == _LEGACY_SETTINGS_KEY))
     row = result.scalar_one_or_none()
     if not row or not row.value:
-        _settings_state.update(file_settings)
+        _settings_state.update(_normalize_settings_types(file_settings))
         return dict(_settings_state)
 
     db_settings: Dict[str, Any] = {}
@@ -542,12 +577,14 @@ async def legacy_change_password(
 
 @router.get("/users")
 async def legacy_list_users(
+    request: Request,
     admin: User = Depends(get_current_admin_cookie),
     db: AsyncSession = Depends(get_async_db),
 ):
     await _load_legacy_settings(db)
     result = await db.execute(select(VpnUser).order_by(VpnUser.id.desc()))
-    return [_user_to_legacy(u) for u in result.scalars().all()]
+    server_ip = _request_config_host(request)
+    return [_user_to_legacy(u, server_ip=server_ip) for u in result.scalars().all()]
 
 
 class LegacyUserCreate(BaseModel):
@@ -562,6 +599,7 @@ class LegacyUserCreate(BaseModel):
 @router.post("/users")
 async def legacy_create_user(
     body: LegacyUserCreate,
+    request: Request,
     admin: User = Depends(get_current_admin_cookie),
     db: AsyncSession = Depends(get_async_db),
 ):
@@ -585,7 +623,10 @@ async def legacy_create_user(
         await db.rollback()
         return {"ok": False, "error": str(exc)}
     await _load_legacy_settings(db)
-    return {"ok": True, "user": _user_to_legacy(db_user)}
+    return {
+        "ok": True,
+        "user": _user_to_legacy(db_user, server_ip=_request_config_host(request)),
+    }
 
 
 @router.delete("/users/{name}")
@@ -767,6 +808,7 @@ class BulkCreateRequest(BaseModel):
 @router.post("/bulk-users")
 async def legacy_bulk_users(
     body: BulkCreateRequest,
+    request: Request,
     admin: User = Depends(get_current_admin_cookie),
     db: AsyncSession = Depends(get_async_db),
 ):
@@ -799,10 +841,11 @@ async def legacy_bulk_users(
         await db.rollback()
         return {"ok": False, "error": str(exc)}
     await _load_legacy_settings(db)
+    server_ip = _request_config_host(request)
     return {
         "ok": True,
         "created": len(created_users),
-        "users": [_user_to_legacy(u) for u in created_users],
+        "users": [_user_to_legacy(u, server_ip=server_ip) for u in created_users],
         "numbered": body.numbered,
         "start": body.start,
         "pad": body.pad,
@@ -919,6 +962,7 @@ async def legacy_groups(
 @router.get("/groups/{group_id}/users")
 async def legacy_group_users(
     group_id: str,
+    request: Request,
     admin: User = Depends(get_current_admin_cookie),
     db: AsyncSession = Depends(get_async_db),
 ):
@@ -926,7 +970,8 @@ async def legacy_group_users(
     result = await db.execute(
         select(VpnUser).where(VpnUser.name.like(f"{group_id}%"))
     )
-    users = [_user_to_legacy(u) for u in result.scalars().all()]
+    server_ip = _request_config_host(request)
+    users = [_user_to_legacy(u, server_ip=server_ip) for u in result.scalars().all()]
     return {"ok": True, "users": users}
 
 
@@ -1159,11 +1204,49 @@ async def legacy_regenerate_reality(
 ):
     import secrets
 
-    public_key = secrets.token_urlsafe(32)[:43]
+    private_key = ""
+    public_key = ""
+    try:
+        result = subprocess.run(
+            [settings.xray_bin_path, "x25519"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        for line in result.stdout.strip().splitlines():
+            if line.startswith("PrivateKey:"):
+                private_key = line.split(":", 1)[1].strip()
+            elif line.startswith("PublicKey:"):
+                public_key = line.split(":", 1)[1].strip()
+    except Exception:
+        private_key = ""
+        public_key = ""
+
+    if not private_key or not public_key:
+        from cryptography.hazmat.primitives import serialization
+        from cryptography.hazmat.primitives.asymmetric import x25519
+
+        key = x25519.X25519PrivateKey.generate()
+        private_raw = key.private_bytes(
+            encoding=serialization.Encoding.Raw,
+            format=serialization.PrivateFormat.Raw,
+            encryption_algorithm=serialization.NoEncryption(),
+        )
+        public_raw = key.public_key().public_bytes(
+            encoding=serialization.Encoding.Raw,
+            format=serialization.PublicFormat.Raw,
+        )
+        private_key = base64.urlsafe_b64encode(private_raw).decode().rstrip("=")
+        public_key = base64.urlsafe_b64encode(public_raw).decode().rstrip("=")
+
     short_id = secrets.token_hex(4)
     await _save_legacy_settings(
         db,
-        {"reality_public_key": public_key, "reality_short_id": short_id},
+        {
+            "reality_private_key": private_key,
+            "reality_public_key": public_key,
+            "reality_short_id": short_id,
+        },
     )
     return {"ok": True, "public_key": public_key, "short_id": short_id}
 
@@ -1741,6 +1824,7 @@ async def _check_agent_quota(agent: Agent, requested_gb: float, db: AsyncSession
 
 @router.get("/agent/users")
 async def legacy_agent_users(
+    request: Request,
     agent: Agent = Depends(_get_current_agent_cookie),
     db: AsyncSession = Depends(get_async_db),
 ):
@@ -1750,12 +1834,14 @@ async def legacy_agent_users(
         .where(VpnUser.agent_id == agent.id)
         .order_by(VpnUser.active.desc(), VpnUser.name)
     )
-    return [_user_to_legacy(u) for u in result.scalars().all()]
+    server_ip = _request_config_host(request)
+    return [_user_to_legacy(u, server_ip=server_ip) for u in result.scalars().all()]
 
 
 @router.post("/agent/users")
 async def legacy_agent_create_user(
     body: LegacyUserCreate,
+    request: Request,
     agent: Agent = Depends(_get_current_agent_cookie),
     db: AsyncSession = Depends(get_async_db),
 ):
@@ -1785,13 +1871,14 @@ async def legacy_agent_create_user(
         await db.rollback()
         return {"ok": False, "error": str(exc)}
     await _load_legacy_settings(db)
-    links = _user_to_legacy(db_user)
+    links = _user_to_legacy(db_user, server_ip=_request_config_host(request))
     return {"ok": True, "user": links, "vmess": links.get("vmess", "")}
 
 
 @router.post("/agent/bulk-users")
 async def legacy_agent_bulk_users(
     body: BulkCreateRequest,
+    request: Request,
     agent: Agent = Depends(_get_current_agent_cookie),
     db: AsyncSession = Depends(get_async_db),
 ):
@@ -1830,10 +1917,11 @@ async def legacy_agent_bulk_users(
         await db.rollback()
         return {"ok": False, "error": str(exc)}
     await _load_legacy_settings(db)
+    server_ip = _request_config_host(request)
     return {
         "ok": True,
         "created": len(created_users),
-        "users": [_user_to_legacy(u) for u in created_users],
+        "users": [_user_to_legacy(u, server_ip=server_ip) for u in created_users],
         "numbered": body.numbered,
         "start": body.start,
         "pad": body.pad,
@@ -2017,6 +2105,7 @@ async def legacy_agent_groups(
 @router.get("/agent/groups/{group_id}/users")
 async def legacy_agent_group_users(
     group_id: str,
+    request: Request,
     agent: Agent = Depends(_get_current_agent_cookie),
     db: AsyncSession = Depends(get_async_db),
 ):
@@ -2027,4 +2116,8 @@ async def legacy_agent_group_users(
             VpnUser.name.like(f"{group_id}%"),
         )
     )
-    return {"ok": True, "users": [_user_to_legacy(u) for u in result.scalars().all()]}
+    server_ip = _request_config_host(request)
+    return {
+        "ok": True,
+        "users": [_user_to_legacy(u, server_ip=server_ip) for u in result.scalars().all()],
+    }

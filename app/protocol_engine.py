@@ -781,6 +781,7 @@ class ClientConfigGenerator:
         path: str = "",
         host: str = "",
         xhttp_mode: str = "",
+        allow_insecure: bool = False,
         ech: Optional[Dict] = None,
     ) -> str:
         """Generate VLESS share URL (vless://...)."""
@@ -800,6 +801,8 @@ class ClientConfigGenerator:
             params["host"] = host
         if xhttp_mode:
             params["mode"] = xhttp_mode
+        if allow_insecure and security == "tls":
+            params["allowInsecure"] = "1"
         if ech and ech.get("enabled"):
             params["ech"] = "1"
             params["ech_config"] = base64.b64encode(
@@ -819,6 +822,7 @@ class ClientConfigGenerator:
         security: str = "tls",
         sni: str = "",
         path: str = "",
+        allow_insecure: bool = False,
     ) -> str:
         """Generate VMess share URL (vmess://base64...)."""
         vmess_obj = {
@@ -834,6 +838,8 @@ class ClientConfigGenerator:
             "path": path,
             "tls": security,
         }
+        if allow_insecure and security == "tls":
+            vmess_obj["allowInsecure"] = "1"
         encoded = base64.b64encode(
             json.dumps(vmess_obj).encode()
         ).decode()
@@ -845,8 +851,9 @@ class ClientConfigGenerator:
         address: str,
         port: int,
         sni: str = "",
-        network: str = "ws",
+        network: str = "tcp",
         path: str = "",
+        allow_insecure: bool = False,
     ) -> str:
         """Generate Trojan share URL (trojan://...)."""
         params = {
@@ -856,6 +863,8 @@ class ClientConfigGenerator:
         }
         if path:
             params["path"] = path
+        if allow_insecure:
+            params["allowInsecure"] = "1"
         query = urlencode({k: v for k, v in params.items() if v})
         return f"trojan://{password}@{address}:{port}?{query}#V7LTHRONYX"
 

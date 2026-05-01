@@ -5,7 +5,7 @@ import zipfile
 import logging
 import functools
 
-from flask import Flask, render_template, jsonify, request, send_file, session, make_response
+from flask import Flask, render_template, jsonify, request, send_file, session, make_response, has_request_context
 import sqlite3
 import json
 import re
@@ -28,12 +28,14 @@ import random
 import string
 import scripts.speed_manager as speed_manager
 
+_DPI_EVASION_IMPORT_ERROR = ""
 try:
     import scripts.dpi_evasion as dpi_evasion
     DPI_EVASION_AVAILABLE = True
-except ImportError:
+except Exception as exc:
     dpi_evasion = None
     DPI_EVASION_AVAILABLE = False
+    _DPI_EVASION_IMPORT_ERROR = str(exc)
 
 # Configure logging
 logging.basicConfig(
@@ -45,6 +47,8 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger('VPNPanel')
+if _DPI_EVASION_IMPORT_ERROR:
+    logger.warning(f"DPI evasion module unavailable: {_DPI_EVASION_IMPORT_ERROR}")
 
 # ── Core Constants ─────────────────────────────────────
 DB = "vpn_users.db"
@@ -82,6 +86,7 @@ DEFAULT_SETTINGS = {
     "cdn_domain": "",
     "cdn_port": 2082,
     "cdn_ws_path": "/cdn-ws",
+    "outbound_mode": "direct",
     "kill_switch_enabled": False,
     "backup_retention_days": 7,
     # Config customization
@@ -344,6 +349,46 @@ def save_settings(s):
 
 
 settings = load_settings()
+
+
+def _is_placeholder_host(host):
+    host = (host or "").strip().lower()
+    if not host:
+        return True
+    if host.startswith("[") and "]" in host:
+        host = host[1:host.index("]")]
+    elif ":" in host:
+        host = host.rsplit(":", 1)[0]
+    return host in {"0.0.0.0", "127.0.0.1", "localhost", "::1", "your-server-ip"}
+
+
+def _strip_host_port(host):
+    host = (host or "").strip()
+    if host.startswith("[") and "]" in host:
+        return host[1:host.index("]")]
+    if ":" in host:
+        maybe_host, maybe_port = host.rsplit(":", 1)
+        if maybe_port.isdigit():
+            return maybe_host
+    return host
+
+
+def _request_config_host():
+    if not has_request_context():
+        return SERVER_IP
+    for header in ("X-Forwarded-Host", "Host"):
+        raw = (request.headers.get(header) or "").split(",", 1)[0].strip()
+        host = _strip_host_port(raw)
+        if not _is_placeholder_host(host):
+            return host
+    return SERVER_IP
+
+
+def _config_host(server_ip=None):
+    candidate = server_ip or SERVER_IP
+    if _is_placeholder_host(candidate):
+        return _request_config_host()
+    return candidate
 
 # ── Enhanced Features ──────────────────────────────────
 
@@ -2116,6 +2161,7 @@ def build_xray_config(active_users):
         "inbounds": inbounds,
         "outbounds": [
             {"tag": "api", "protocol": "freedom", "settings": {"domainStrategy": "UseIPv4"}},
+            {"tag": "direct", "protocol": "freedom", "settings": {"domainStrategy": "UseIPv4"}},
             {"tag": "socks1", "protocol": "socks",
              "settings": {"servers": [{"address": "127.0.0.1", "port": 10080}]}},
             {"tag": "socks2", "protocol": "socks",
@@ -2176,7 +2222,11 @@ def build_xray_config(active_users):
                         "213.8.0.0/16", "213.57.0.0/16", "217.132.0.0/16",
                     ],
                 },
-                {"type": "field", "network": "tcp,udp", "balancerTag": "lb"},
+                (
+                    {"type": "field", "network": "tcp,udp", "balancerTag": "lb"}
+                    if s.get("outbound_mode") == "socks_pool"
+                    else {"type": "field", "network": "tcp,udp", "outboundTag": "direct"}
+                ),
             ]
         },
     }
@@ -2314,28 +2364,30 @@ def _bulk_generate_users(prefix, count, traffic, days, numbered=True, start=1, p
 
 # ── Link Generators ────────────────────────────────────
 
-def vmess_link(name, user_uuid):
+def vmess_link(name, user_uuid, server_ip=None):
     s = settings
     prefix = s.get("config_prefix") or "Proxy"
     sni = s.get("vmess_sni") or SNI_HOST
     ws_path = s.get("vmess_ws_path") or WS_PATH
     port = str(s.get("vmess_port", 443))
+    address = _config_host(server_ip)
     cfg = json.dumps({
         "v": "2", "ps": f"{prefix}-{name}",
-        "add": SERVER_IP, "port": port,
+        "add": address, "port": port,
         "id": user_uuid, "aid": "0", "scy": "auto",
         "net": "ws", "type": "none",
-        "host": sni, "path": ws_path,
+        "host": sni, "path": ws_path, "allowInsecure": "1",
         "tls": "tls", "sni": sni, "alpn": "",
     })
     return "vmess://" + base64.b64encode(cfg.encode()).decode()
 
 
-def vless_link(name, user_uuid):
+def vless_link(name, user_uuid, server_ip=None):
     s = settings
     if not s.get("reality_public_key"):
         return ""
     prefix = s.get("config_prefix") or "Proxy"
+    address = _config_host(server_ip)
     params = urllib.parse.urlencode({
         "security": "reality",
         "encryption": "none",
@@ -2348,10 +2400,10 @@ def vless_link(name, user_uuid):
         "sid": s.get("reality_short_id", ""),
     })
     port = s.get("vless_port", 2053)
-    return f"vless://{user_uuid}@{SERVER_IP}:{port}?{params}#{prefix}-{name}"
+    return f"vless://{user_uuid}@{address}:{port}?{params}#{prefix}-{name}"
 
 
-def cdn_vmess_link(name, user_uuid):
+def cdn_vmess_link(name, user_uuid, server_ip=None):
     s = settings
     if not s.get("cdn_enabled") or not s.get("cdn_domain"):
         return ""
@@ -2362,18 +2414,19 @@ def cdn_vmess_link(name, user_uuid):
         "id": user_uuid, "aid": "0", "scy": "auto",
         "net": "ws", "type": "none",
         "host": s["cdn_domain"], "path": s.get("cdn_ws_path", "/cdn-ws"),
-        "tls": "tls", "sni": s["cdn_domain"], "alpn": "",
+        "tls": "tls", "sni": s["cdn_domain"], "alpn": "", "allowInsecure": "1",
     })
     return "vmess://" + base64.b64encode(cfg.encode()).decode()
 
 
-def trojan_link(name, user_uuid):
+def trojan_link(name, user_uuid, server_ip=None):
     s = settings
     if not s.get("trojan_enabled"):
         return ""
     prefix = s.get("config_prefix") or "Proxy"
     sni = s.get("vmess_sni") or SNI_HOST
     port = s.get("trojan_port", 2083)
+    address = _config_host(server_ip)
     params = urllib.parse.urlencode({
         "security": "tls",
         "type": "tcp",
@@ -2381,10 +2434,10 @@ def trojan_link(name, user_uuid):
         "sni": sni,
         "allowInsecure": "1",
     })
-    return f"trojan://{user_uuid}@{SERVER_IP}:{port}?{params}#{prefix}-Trojan-{name}"
+    return f"trojan://{user_uuid}@{address}:{port}?{params}#{prefix}-Trojan-{name}"
 
 
-def grpc_vmess_link(name, user_uuid):
+def grpc_vmess_link(name, user_uuid, server_ip=None):
     s = settings
     if not s.get("grpc_enabled"):
         return ""
@@ -2392,18 +2445,19 @@ def grpc_vmess_link(name, user_uuid):
     sni = s.get("vmess_sni") or SNI_HOST
     port = str(s.get("grpc_port", 2054))
     svc = s.get("grpc_service_name") or "GunService"
+    address = _config_host(server_ip)
     cfg = json.dumps({
         "v": "2", "ps": f"{prefix}-gRPC-{name}",
-        "add": SERVER_IP, "port": port,
+        "add": address, "port": port,
         "id": user_uuid, "aid": "0", "scy": "auto",
         "net": "grpc", "type": "gun",
-        "host": sni, "path": svc,
+        "host": sni, "path": svc, "allowInsecure": "1",
         "tls": "tls", "sni": sni, "alpn": "h2",
     })
     return "vmess://" + base64.b64encode(cfg.encode()).decode()
 
 
-def httpupgrade_vmess_link(name, user_uuid):
+def httpupgrade_vmess_link(name, user_uuid, server_ip=None):
     s = settings
     if not s.get("httpupgrade_enabled"):
         return ""
@@ -2411,18 +2465,19 @@ def httpupgrade_vmess_link(name, user_uuid):
     sni = s.get("vmess_sni") or SNI_HOST
     port = str(s.get("httpupgrade_port", 2055))
     hu_path = s.get("httpupgrade_path") or "/httpupgrade"
+    address = _config_host(server_ip)
     cfg = json.dumps({
         "v": "2", "ps": f"{prefix}-HU-{name}",
-        "add": SERVER_IP, "port": port,
+        "add": address, "port": port,
         "id": user_uuid, "aid": "0", "scy": "auto",
         "net": "httpupgrade", "type": "none",
-        "host": sni, "path": hu_path,
+        "host": sni, "path": hu_path, "allowInsecure": "1",
         "tls": "tls", "sni": sni, "alpn": "",
     })
     return "vmess://" + base64.b64encode(cfg.encode()).decode()
 
 
-def ss2022_link(name, user_uuid):
+def ss2022_link(name, user_uuid, server_ip=None):
     s = settings
     if not s.get("ss2022_enabled") or not s.get("ss2022_server_key"):
         return ""
@@ -2431,12 +2486,13 @@ def ss2022_link(name, user_uuid):
     server_key = s["ss2022_server_key"]
     user_key = _ss2022_user_key(user_uuid, method)
     port = s.get("ss2022_port", 2056)
+    address = _config_host(server_ip)
     # SS2022 URI: ss://base64(method:server_key:user_key)@host:port#name
     userinfo = base64.urlsafe_b64encode(f"{method}:{server_key}:{user_key}".encode()).decode().rstrip("=")
-    return f"ss://{userinfo}@{SERVER_IP}:{port}#{urllib.parse.quote(f'{prefix}-SS-{name}')}"
+    return f"ss://{userinfo}@{address}:{port}#{urllib.parse.quote(f'{prefix}-SS-{name}')}"
 
 
-def vless_ws_link(name, user_uuid):
+def vless_ws_link(name, user_uuid, server_ip=None):
     s = settings
     if not s.get("vless_ws_enabled"):
         return ""
@@ -2445,6 +2501,7 @@ def vless_ws_link(name, user_uuid):
     port = s.get("vless_ws_port", 2057)
     ws_path = s.get("vless_ws_path") or "/vless-ws"
     fp = s.get("fingerprint", "chrome")
+    address = _config_host(server_ip)
     params = urllib.parse.urlencode({
         "security": "tls",
         "encryption": "none",
@@ -2455,19 +2512,19 @@ def vless_ws_link(name, user_uuid):
         "fp": fp,
         "allowInsecure": "1",
     })
-    return f"vless://{user_uuid}@{SERVER_IP}:{port}?{params}#{prefix}-VWS-{name}"
+    return f"vless://{user_uuid}@{address}:{port}?{params}#{prefix}-VWS-{name}"
 
 
-def _all_links(name, user_uuid):
+def _all_links(name, user_uuid, server_ip=None):
     """Return dict of all available config links for a user."""
-    links = {"vmess": vmess_link(name, user_uuid)}
+    links = {"vmess": vmess_link(name, user_uuid, server_ip)}
     for key, fn in [
         ("vless", vless_link), ("cdn_vmess", cdn_vmess_link),
         ("trojan", trojan_link), ("grpc_vmess", grpc_vmess_link),
         ("httpupgrade_vmess", httpupgrade_vmess_link),
         ("ss2022", ss2022_link), ("vless_ws", vless_ws_link),
     ]:
-        val = fn(name, user_uuid)
+        val = fn(name, user_uuid, server_ip)
         if val:
             links[key] = val
     return links
@@ -2526,7 +2583,8 @@ def subscription_page(user_uuid):
     user_live = live.get(row["name"], {"up": 0, "down": 0})
     online_ips = _count_online_ips(row["name"])
     # Build links
-    links = _all_links(row["name"], row["uuid"])
+    public_host = _request_config_host()
+    links = _all_links(row["name"], row["uuid"], public_host)
     return render_template(
         "sub.html",
         user=dict(row),
@@ -2534,7 +2592,7 @@ def subscription_page(user_uuid):
         live_up=user_live["up"],
         live_down=user_live["down"],
         online_ips=online_ips,
-        server_ip=SERVER_IP,
+        server_ip=public_host,
         server_port=SERVER_PORT,
         sni_host=SNI_HOST,
         ws_path=WS_PATH,
@@ -2553,7 +2611,7 @@ def subscription_api(user_uuid):
     conn.close()
     if not row or not row["active"]:
         return "Not found", 404
-    links = _all_links(row["name"], row["uuid"])
+    links = _all_links(row["name"], row["uuid"], _request_config_host())
     lines = list(links.values())
     content = "\n".join(lines)
     encoded = base64.b64encode(content.encode()).decode()
@@ -2690,6 +2748,7 @@ def api_users():
 
     users = []
     s = settings
+    public_host = _request_config_host()
     for r in rows:
         live_data = live.get(r["name"], {"up": 0, "down": 0})
         live_bytes = live_data["up"] + live_data["down"]
@@ -2724,7 +2783,7 @@ def api_users():
             "online_ips": sorted(user_ips),
             "note": (r["note"] or "").strip(),
         }
-        u.update(_all_links(r["name"], r["uuid"]))
+        u.update(_all_links(r["name"], r["uuid"], public_host))
         users.append(u)
     return jsonify(users)
 
@@ -2776,6 +2835,7 @@ def api_group_users(group_id):
 
     has_vless = bool(settings.get("reality_public_key"))
     has_cdn = settings.get("cdn_enabled") and bool(settings.get("cdn_domain"))
+    public_host = _request_config_host()
     out = []
     for r in rows:
         if _parse_group_id(r["name"]) != group_id:
@@ -2786,12 +2846,12 @@ def api_group_users(group_id):
             "traffic_limit": float(r["traffic_limit_gb"] or 0),
             "expire_at": (r["expire_at"] or "")[:10],
             "active": bool(r["active"]),
-            "vmess": vmess_link(r["name"], r["uuid"]),
+            "vmess": vmess_link(r["name"], r["uuid"], public_host),
         }
         if has_vless:
-            u["vless"] = vless_link(r["name"], r["uuid"])
+            u["vless"] = vless_link(r["name"], r["uuid"], public_host)
         if has_cdn:
-            u["cdn_vmess"] = cdn_vmess_link(r["name"], r["uuid"])
+            u["cdn_vmess"] = cdn_vmess_link(r["name"], r["uuid"], public_host)
         out.append(u)
     return jsonify({"ok": True, "group": group_id, "count": len(out), "users": out})
 
@@ -2826,7 +2886,7 @@ def api_add_user():
         conn.commit()
         conn.close()
         apply_changes()
-        return jsonify({"ok": True, "vmess": vmess_link(name, user_uuid)})
+        return jsonify({"ok": True, "vmess": vmess_link(name, user_uuid, _request_config_host())})
     except sqlite3.IntegrityError:
         return jsonify({"error": "User already exists"}), 409
 
@@ -2851,12 +2911,13 @@ def api_bulk_users():
         out = []
         has_vless = bool(settings.get("reality_public_key"))
         has_cdn = settings.get("cdn_enabled") and bool(settings.get("cdn_domain"))
+        public_host = _request_config_host()
         for name, user_uuid in rows:
-            u = {"name": name, "uuid": user_uuid, "vmess": vmess_link(name, user_uuid)}
+            u = {"name": name, "uuid": user_uuid, "vmess": vmess_link(name, user_uuid, public_host)}
             if has_vless:
-                u["vless"] = vless_link(name, user_uuid)
+                u["vless"] = vless_link(name, user_uuid, public_host)
             if has_cdn:
-                u["cdn_vmess"] = cdn_vmess_link(name, user_uuid)
+                u["cdn_vmess"] = cdn_vmess_link(name, user_uuid, public_host)
             out.append(u)
 
         if apply_now:
@@ -4305,6 +4366,7 @@ def api_agent_users():
 
     users_out = []
     s = settings
+    public_host = _request_config_host()
     for r in rows:
         live_data = live.get(r["name"], {"up": 0, "down": 0})
         live_bytes = live_data["up"] + live_data["down"]
@@ -4334,7 +4396,7 @@ def api_agent_users():
             "live_down": live_data["down"],
             "online_ip_count": len(ip_map.get(r["name"], set())),
         }
-        u.update(_all_links(r["name"], r["uuid"]))
+        u.update(_all_links(r["name"], r["uuid"], public_host))
         users_out.append(u)
     return jsonify(users_out)
 
@@ -4366,7 +4428,7 @@ def api_agent_add_user():
         conn.commit()
         conn.close()
         apply_changes()
-        return jsonify({"ok": True, "vmess": vmess_link(name, user_uuid)})
+        return jsonify({"ok": True, "vmess": vmess_link(name, user_uuid, _request_config_host())})
     except sqlite3.IntegrityError:
         return jsonify({"error": "User already exists"}), 409
 
@@ -4397,12 +4459,13 @@ def api_agent_bulk_users():
         out = []
         has_vless = bool(settings.get("reality_public_key"))
         has_cdn = settings.get("cdn_enabled") and bool(settings.get("cdn_domain"))
+        public_host = _request_config_host()
         for name, user_uuid in rows:
-            u = {"name": name, "uuid": user_uuid, "vmess": vmess_link(name, user_uuid)}
+            u = {"name": name, "uuid": user_uuid, "vmess": vmess_link(name, user_uuid, public_host)}
             if has_vless:
-                u["vless"] = vless_link(name, user_uuid)
+                u["vless"] = vless_link(name, user_uuid, public_host)
             if has_cdn:
-                u["cdn_vmess"] = cdn_vmess_link(name, user_uuid)
+                u["cdn_vmess"] = cdn_vmess_link(name, user_uuid, public_host)
             out.append(u)
 
         if apply_now:
@@ -4629,6 +4692,7 @@ def api_agent_group_users(group_id):
 
     has_vless = bool(settings.get("reality_public_key"))
     has_cdn = settings.get("cdn_enabled") and bool(settings.get("cdn_domain"))
+    public_host = _request_config_host()
     out = []
     for r in rows:
         if _parse_group_id(r["name"]) != group_id:
@@ -4638,12 +4702,12 @@ def api_agent_group_users(group_id):
             "traffic_limit": float(r["traffic_limit_gb"] or 0),
             "expire_at": (r["expire_at"] or "")[:10],
             "active": bool(r["active"]),
-            "vmess": vmess_link(r["name"], r["uuid"]),
+            "vmess": vmess_link(r["name"], r["uuid"], public_host),
         }
         if has_vless:
-            u["vless"] = vless_link(r["name"], r["uuid"])
+            u["vless"] = vless_link(r["name"], r["uuid"], public_host)
         if has_cdn:
-            u["cdn_vmess"] = cdn_vmess_link(r["name"], r["uuid"])
+            u["cdn_vmess"] = cdn_vmess_link(r["name"], r["uuid"], public_host)
         out.append(u)
     return jsonify({"ok": True, "group": group_id, "count": len(out), "users": out})
 
