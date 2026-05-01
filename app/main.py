@@ -130,10 +130,12 @@ async def add_security_headers(request: Request, call_next):
 # Exception handlers
 @app.exception_handler(Exception)
 async def generic_exception_handler(request: Request, exc: Exception):
-    logger.error(f"Unhandled error: {exc}", exc_info=True)
+    import traceback
+    tb = traceback.format_exc()
+    logger.error(f"Unhandled error: {exc}\n{tb}", exc_info=True)
     return JSONResponse(
         status_code=500,
-        content={"message": "Internal server error", "detail": str(exc)},
+        content={"message": "Internal server error", "detail": str(exc), "traceback": tb},
     )
 
 # Mount static files
