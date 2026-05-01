@@ -79,6 +79,18 @@
     <span class="proto-badge" id="pb-httpupgrade" style="display:none;background:#3498db22;color:#3498db">HU</span>
     <span class="proto-badge" id="pb-ss2022" style="display:none;background:#e67e2222;color:#e67e22">SS2022</span>
     <span class="proto-badge" id="pb-vless-ws" style="display:none;background:#1abc9c22;color:#1abc9c">VLESS-WS</span>
+    <span class="proto-badge" id="pb-vless-xhttp" style="display:none;background:#e056fd22;color:#e056fd">XHTTP</span>
+    <span class="proto-badge" id="pb-vless-vision" style="display:none;background:#6c5ce722;color:#6c5ce7">Vision</span>
+    <span class="proto-badge" id="pb-vless-reverse" style="display:none;background:#fd79a822;color:#fd79a8">Reverse</span>
+    <span class="proto-badge" id="pb-trojan-cdn" style="display:none;background:#e74c3c22;color:#e74c3c">Trojan-CDN</span>
+    <span class="proto-badge" id="pb-hysteria2" style="display:none;background:#00cec922;color:#00cec9">Hy2</span>
+    <span class="proto-badge" id="pb-tuic" style="display:none;background:#0984e322;color:#0984e3">TUIC</span>
+    <span class="proto-badge" id="pb-amneziawg" style="display:none;background:#00b89422;color:#00b894">AWG</span>
+    <span class="proto-badge" id="pb-shadowtls" style="display:none;background:#636e7222;color:#b2bec3">STLS</span>
+    <span class="proto-badge" id="pb-mieru" style="display:none;background:#a29bfe22;color:#a29bfe">Mieru</span>
+    <span class="proto-badge" id="pb-naiveproxy" style="display:none;background:#ffeaa722;color:#fdcb6e">Naive</span>
+    <span class="proto-badge" id="pb-wireguard" style="display:none;background:#55efc422;color:#00b894">WG</span>
+    <span class="proto-badge" id="pb-openvpn" style="display:none;background:#fab1a022;color:#e17055">OVPN</span>
     <span class="proto-badge" id="pb-fragment" style="display:none;background:#f39c1222;color:#f39c12">Fragment</span>
     <span class="proto-badge" id="pb-mux" style="display:none;background:#9b59b622;color:#9b59b6">MUX</span>
     <span class="proto-badge proto-ks" id="pb-ks">Kill Switch: ON</span>
@@ -236,6 +248,18 @@
       <button class="config-tab tab-httpupgrade" onclick="switchConfigTab('httpupgrade')" id="ct-httpupgrade" style="display:none">HU</button>
       <button class="config-tab tab-ss2022" onclick="switchConfigTab('ss2022')" id="ct-ss2022" style="display:none">SS2022</button>
       <button class="config-tab tab-vless_ws" onclick="switchConfigTab('vless_ws')" id="ct-vless_ws" style="display:none">VLESS-WS</button>
+      <button class="config-tab tab-vless_xhttp" onclick="switchConfigTab('vless_xhttp')" id="ct-vless_xhttp" style="display:none">XHTTP</button>
+      <button class="config-tab tab-vless_vision" onclick="switchConfigTab('vless_vision')" id="ct-vless_vision" style="display:none">Vision</button>
+      <button class="config-tab tab-vless_reverse" onclick="switchConfigTab('vless_reverse')" id="ct-vless_reverse" style="display:none">Reverse</button>
+      <button class="config-tab tab-trojan_cdn" onclick="switchConfigTab('trojan_cdn')" id="ct-trojan_cdn" style="display:none">Trojan-CDN</button>
+      <button class="config-tab tab-hysteria2" onclick="switchConfigTab('hysteria2')" id="ct-hysteria2" style="display:none">Hy2</button>
+      <button class="config-tab tab-tuic" onclick="switchConfigTab('tuic')" id="ct-tuic" style="display:none">TUIC</button>
+      <button class="config-tab tab-amneziawg" onclick="switchConfigTab('amneziawg')" id="ct-amneziawg" style="display:none">AWG</button>
+      <button class="config-tab tab-shadowtls" onclick="switchConfigTab('shadowtls')" id="ct-shadowtls" style="display:none">STLS</button>
+      <button class="config-tab tab-mieru" onclick="switchConfigTab('mieru')" id="ct-mieru" style="display:none">Mieru</button>
+      <button class="config-tab tab-naiveproxy" onclick="switchConfigTab('naiveproxy')" id="ct-naiveproxy" style="display:none">Naive</button>
+      <button class="config-tab tab-wireguard" onclick="switchConfigTab('wireguard')" id="ct-wireguard" style="display:none">WG</button>
+      <button class="config-tab tab-openvpn" onclick="switchConfigTab('openvpn')" id="ct-openvpn" style="display:none">OVPN</button>
     </div>
     <div class="config-center">
       <div class="qr-box" id="config-qr"></div>
@@ -531,6 +555,387 @@
       <div class="form-group"><label>WebSocket Path / مسیر وب‌سوکت</label>
         <input type="text" id="set-vless-ws-path" value="/vless-ws" placeholder="/vless-ws">
         <div class="settings-desc">URL path for VLESS WebSocket / مسیر URL برای وب‌سوکت VLESS</div></div>
+    </div>
+
+    <!-- ═══ VLESS+XHTTP+REALITY ═══ -->
+    <div class="settings-section">
+      <div class="sec-header">
+        <div class="settings-title">🚀 VLESS+XHTTP+REALITY</div>
+        <span class="s-indicator off" id="si-vless-xhttp"><span class="dot"></span> <span class="si-text">OFF</span></span>
+      </div>
+      <div class="help-box">
+        <div class="help-en">🚀 <b>VLESS+XHTTP+REALITY</b> uses XHTTP transport (HTTP/2 & HTTP/3 streaming) with REALITY TLS. Relay-domain fronting for maximum stealth.</div>
+        <div class="help-fa">🚀 <b>VLESS+XHTTP+REALITY</b> از ترنسپورت XHTTP با REALITY TLS استفاده می‌کنه. رله-فرانتینگ برای حداکثر مخفی‌سازی.</div>
+      </div>
+      <div class="settings-row">
+        <div><div class="settings-label">VLESS+XHTTP+REALITY</div>
+          <div class="settings-desc">Enable VLESS XHTTP Reality / فعال‌سازی</div></div>
+        <label class="toggle"><input type="checkbox" id="set-vless-xhttp"><span class="toggle-slider"></span></label>
+      </div>
+      <div class="form-group" style="margin-top:12px"><label>Port</label>
+        <input type="number" id="set-vless-xhttp-port" value="2053" min="1" max="65535"></div>
+      <div class="form-group"><label>REALITY SNI</label>
+        <input type="text" id="set-vless-xhttp-reality-sni" placeholder="www.microsoft.com"></div>
+      <div class="form-group"><label>REALITY Dest</label>
+        <input type="text" id="set-vless-xhttp-reality-dest" placeholder="www.microsoft.com:443"></div>
+      <div class="form-group"><label>XHTTP Path</label>
+        <input type="text" id="set-vless-xhttp-path" value="/xhttp-stream" placeholder="/xhttp-stream"></div>
+      <div class="form-group"><label>XHTTP Mode</label>
+        <select id="set-vless-xhttp-mode" style="width:100%;padding:10px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--t1)">
+          <option value="auto">auto</option>
+          <option value="packet-up">packet-up</option>
+          <option value="stream-up">stream-up</option>
+        </select></div>
+      <div class="form-group"><label>Short ID</label>
+        <input type="text" id="set-vless-xhttp-reality-short-id" placeholder="Auto-generated" style="font-family:monospace;font-size:11px"></div>
+      <div class="form-group"><label>Public Key</label>
+        <input type="text" id="set-vless-xhttp-reality-public-key" readonly placeholder="Generated with keys" style="font-family:monospace;font-size:11px"></div>
+    </div>
+
+    <!-- ═══ VLESS+REALITY+Vision ═══ -->
+    <div class="settings-section">
+      <div class="sec-header">
+        <div class="settings-title">👁️ VLESS+REALITY+Vision</div>
+        <span class="s-indicator off" id="si-vless-vision"><span class="dot"></span> <span class="si-text">OFF</span></span>
+      </div>
+      <div class="help-box">
+        <div class="help-en">👁️ <b>VLESS+REALITY+Vision</b> direct connection to fresh IP with XTLS Vision flow. No CDN needed. Most efficient for unblocked IPs.</div>
+        <div class="help-fa">👁️ <b>VLESS+REALITY+Vision</b> اتصال مستقیم به IP تازه با XTLS Vision. بدون نیاز به CDN. کارآمدترین برای IP‌های فیلترنشده.</div>
+      </div>
+      <div class="settings-row">
+        <div><div class="settings-label">VLESS+Vision+Reality</div>
+          <div class="settings-desc">Enable / فعال‌سازی</div></div>
+        <label class="toggle"><input type="checkbox" id="set-vless-vision"><span class="toggle-slider"></span></label>
+      </div>
+      <div class="form-group" style="margin-top:12px"><label>Port</label>
+        <input type="number" id="set-vless-vision-port" value="2058" min="1" max="65535"></div>
+      <div class="form-group"><label>REALITY SNI</label>
+        <input type="text" id="set-vless-vision-reality-sni" placeholder="www.yahoo.com"></div>
+      <div class="form-group"><label>REALITY Dest</label>
+        <input type="text" id="set-vless-vision-reality-dest" placeholder="www.yahoo.com:443"></div>
+      <div class="form-group"><label>Vision Flow</label>
+        <input type="text" id="set-vless-vision-flow" value="xtls-rprx-vision" placeholder="xtls-rprx-vision"></div>
+      <div class="form-group"><label>Short ID</label>
+        <input type="text" id="set-vless-vision-reality-short-id" placeholder="Auto-generated" style="font-family:monospace;font-size:11px"></div>
+      <div class="form-group"><label>Public Key</label>
+        <input type="text" id="set-vless-vision-reality-public-key" readonly placeholder="Generated with keys" style="font-family:monospace;font-size:11px"></div>
+    </div>
+
+    <!-- ═══ VLESS-Reverse-Reality ═══ -->
+    <div class="settings-section">
+      <div class="sec-header">
+        <div class="settings-title">🔄 VLESS-Reverse-Reality</div>
+        <span class="s-indicator off" id="si-vless-reverse"><span class="dot"></span> <span class="si-text">OFF</span></span>
+      </div>
+      <div class="help-box">
+        <div class="help-en">🔄 <b>VLESS-Reverse-Reality</b> reverse-tunneled via backhaul/rathole relay. Server connects outbound to bypass inbound port blocks.</div>
+        <div class="help-fa">🔄 <b>VLESS-Reverse-Reality</b> تونل معکوس از طریق backhaul/rathole. سرور به‌صورت خروجی وصل میشه و بلاک پورت ورودی رو دور میزنه.</div>
+      </div>
+      <div class="settings-row">
+        <div><div class="settings-label">VLESS-Reverse-Reality</div>
+          <div class="settings-desc">Enable / فعال‌سازی</div></div>
+        <label class="toggle"><input type="checkbox" id="set-vless-reverse"><span class="toggle-slider"></span></label>
+      </div>
+      <div class="form-group" style="margin-top:12px"><label>Port</label>
+        <input type="number" id="set-vless-reverse-port" value="2059" min="1" max="65535"></div>
+      <div class="form-group"><label>REALITY SNI</label>
+        <input type="text" id="set-vless-reverse-reality-sni" placeholder="www.amazon.com"></div>
+      <div class="form-group"><label>REALITY Dest</label>
+        <input type="text" id="set-vless-reverse-reality-dest" placeholder="www.amazon.com:443"></div>
+      <div class="form-group"><label>Tunnel Port</label>
+        <input type="number" id="set-vless-reverse-tunnel-port" value="0" min="0" max="65535"></div>
+      <div class="form-group"><label>Backhaul Mode</label>
+        <select id="set-vless-reverse-backhaul-mode" style="width:100%;padding:10px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--t1)">
+          <option value="rathole">Rathole</option>
+          <option value="frp">FRP</option>
+        </select></div>
+      <div class="form-group"><label>Short ID</label>
+        <input type="text" id="set-vless-reverse-reality-short-id" placeholder="Auto-generated" style="font-family:monospace;font-size:11px"></div>
+      <div class="form-group"><label>Public Key</label>
+        <input type="text" id="set-vless-reverse-reality-public-key" readonly placeholder="Generated with keys" style="font-family:monospace;font-size:11px"></div>
+    </div>
+
+    <!-- ═══ Trojan+CDN ═══ -->
+    <div class="settings-section">
+      <div class="sec-header">
+        <div class="settings-title">🛡️ Trojan+WS/gRPC+CDN</div>
+        <span class="s-indicator off" id="si-trojan-cdn"><span class="dot"></span> <span class="si-text">OFF</span></span>
+      </div>
+      <div class="help-box">
+        <div class="help-en">🛡️ <b>Trojan+CDN</b> with WebSocket and/or gRPC transport over TLS through Cloudflare CDN. Supports dual transport.</div>
+        <div class="help-fa">🛡️ <b>Trojan+CDN</b> با ترنسپورت وب‌سوکت و/یا gRPC از طریق CDN کلادفلر. پشتیبانی از ترنسپورت دوگانه.</div>
+      </div>
+      <div class="settings-row">
+        <div><div class="settings-label">Trojan+CDN</div>
+          <div class="settings-desc">Enable Trojan over CDN / فعال‌سازی</div></div>
+        <label class="toggle"><input type="checkbox" id="set-trojan-cdn"><span class="toggle-slider"></span></label>
+      </div>
+      <div class="form-group" style="margin-top:12px"><label>Port</label>
+        <input type="number" id="set-trojan-cdn-port" value="2083" min="1" max="65535"></div>
+      <div class="form-group"><label>WS Path</label>
+        <input type="text" id="set-trojan-cdn-ws-path" value="/trojan-ws" placeholder="/trojan-ws"></div>
+      <div class="form-group"><label>CDN Domain</label>
+        <input type="text" id="set-trojan-cdn-domain" placeholder="cdn.yourdomain.com"></div>
+      <div class="form-group"><label>SNI</label>
+        <input type="text" id="set-trojan-cdn-sni" placeholder="yourdomain.com"></div>
+      <div class="settings-row" style="margin-top:12px">
+        <div><div class="settings-label">gRPC Transport</div>
+          <div class="settings-desc">Enable additional gRPC transport / فعال‌سازی ترنسپورت gRPC</div></div>
+        <label class="toggle"><input type="checkbox" id="set-trojan-cdn-grpc"><span class="toggle-slider"></span></label>
+      </div>
+      <div class="form-group" style="margin-top:12px"><label>gRPC Port</label>
+        <input type="number" id="set-trojan-cdn-grpc-port" value="2060" min="1" max="65535"></div>
+      <div class="form-group"><label>gRPC Service Name</label>
+        <input type="text" id="set-trojan-cdn-grpc-service" value="TrojanService" placeholder="TrojanService"></div>
+    </div>
+
+    <!-- ═══ Hysteria2+Salamander ═══ -->
+    <div class="settings-section">
+      <div class="sec-header">
+        <div class="settings-title">⚡ Hysteria2+Salamander+Port-Hop</div>
+        <span class="s-indicator off" id="si-hysteria2"><span class="dot"></span> <span class="si-text">OFF</span></span>
+      </div>
+      <div class="help-box">
+        <div class="help-en">⚡ <b>Hysteria2</b> QUIC-based proxy with Salamander obfuscation and port-hopping. Extremely fast over UDP.</div>
+        <div class="help-fa">⚡ <b>Hysteria2</b> پروکسی مبتنی بر QUIC با مخفی‌سازی Salamander و پرش پورت. فوق‌العاده سریع روی UDP.</div>
+      </div>
+      <div class="settings-row">
+        <div><div class="settings-label">Hysteria2</div>
+          <div class="settings-desc">Enable / فعال‌سازی</div></div>
+        <label class="toggle"><input type="checkbox" id="set-hysteria2"><span class="toggle-slider"></span></label>
+      </div>
+      <div class="form-group" style="margin-top:12px"><label>Port</label>
+        <input type="number" id="set-hysteria2-port" value="8443" min="1" max="65535"></div>
+      <div class="form-group"><label>Password</label>
+        <input type="text" id="set-hysteria2-password" placeholder="Auto-generated" style="font-family:monospace;font-size:11px"></div>
+      <div class="form-group" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div><label>Bandwidth Up</label>
+          <input type="text" id="set-hysteria2-bandwidth-up" value="100 mbps" placeholder="100 mbps"></div>
+        <div><label>Bandwidth Down</label>
+          <input type="text" id="set-hysteria2-bandwidth-down" value="200 mbps" placeholder="200 mbps"></div>
+      </div>
+      <div class="settings-row" style="margin-top:12px">
+        <div><div class="settings-label">Salamander Obfuscation</div>
+          <div class="settings-desc">Traffic obfuscation / مخفی‌سازی ترافیک</div></div>
+        <label class="toggle"><input type="checkbox" id="set-hysteria2-salamander"><span class="toggle-slider"></span></label>
+      </div>
+      <div class="form-group" style="margin-top:8px"><label>Salamander Password</label>
+        <input type="text" id="set-hysteria2-salamander-password" placeholder="Obfuscation password" style="font-family:monospace;font-size:11px"></div>
+      <div class="settings-row" style="margin-top:12px">
+        <div><div class="settings-label">Port Hopping</div>
+          <div class="settings-desc">Evade port-based blocking / دور زدن بلاک پورت</div></div>
+        <label class="toggle"><input type="checkbox" id="set-hysteria2-port-hop"><span class="toggle-slider"></span></label>
+      </div>
+      <div class="form-group" style="margin-top:8px"><label>Port Hop Range</label>
+        <input type="text" id="set-hysteria2-port-hop-ports" value="20000-50000" placeholder="20000-50000"></div>
+    </div>
+
+    <!-- ═══ TUIC v5 ═══ -->
+    <div class="settings-section">
+      <div class="sec-header">
+        <div class="settings-title">🌊 TUIC v5</div>
+        <span class="s-indicator off" id="si-tuic"><span class="dot"></span> <span class="si-text">OFF</span></span>
+      </div>
+      <div class="help-box">
+        <div class="help-en">🌊 <b>TUIC v5</b> QUIC-based proxy with UDP relay and multiplexing. Zero-RTT for fast reconnection.</div>
+        <div class="help-fa">🌊 <b>TUIC v5</b> پروکسی مبتنی بر QUIC با رله UDP و مالتی‌پلکسینگ. Zero-RTT برای اتصال سریع مجدد.</div>
+      </div>
+      <div class="settings-row">
+        <div><div class="settings-label">TUIC v5</div>
+          <div class="settings-desc">Enable / فعال‌سازی</div></div>
+        <label class="toggle"><input type="checkbox" id="set-tuic"><span class="toggle-slider"></span></label>
+      </div>
+      <div class="form-group" style="margin-top:12px"><label>Port</label>
+        <input type="number" id="set-tuic-port" value="8444" min="1" max="65535"></div>
+      <div class="form-group"><label>Password</label>
+        <input type="text" id="set-tuic-password" placeholder="Auto-generated" style="font-family:monospace;font-size:11px"></div>
+      <div class="form-group"><label>Congestion Control</label>
+        <select id="set-tuic-congestion" style="width:100%;padding:10px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--t1)">
+          <option value="cubic">cubic</option>
+          <option value="bbr">bbr</option>
+          <option value="new_reno">new_reno</option>
+        </select></div>
+      <div class="settings-row" style="margin-top:12px">
+        <div><div class="settings-label">Zero-RTT</div>
+          <div class="settings-desc">Fast reconnection / اتصال مجدد سریع</div></div>
+        <label class="toggle"><input type="checkbox" id="set-tuic-zero-rtt"><span class="toggle-slider"></span></label>
+      </div>
+    </div>
+
+    <!-- ═══ AmneziaWG 2.0 ═══ -->
+    <div class="settings-section">
+      <div class="sec-header">
+        <div class="settings-title">🛡️ AmneziaWG 2.0</div>
+        <span class="s-indicator off" id="si-amneziawg"><span class="dot"></span> <span class="si-text">OFF</span></span>
+      </div>
+      <div class="help-box">
+        <div class="help-en">🛡️ <b>AmneziaWG</b> WireGuard fork with advanced obfuscation. Junk packets and magic headers defeat DPI.</div>
+        <div class="help-fa">🛡️ <b>AmneziaWG</b> فورک WireGuard با مخفی‌سازی پیشرفته. پکت‌های جعلی و هدرهای جادویی DPI رو شکست میدن.</div>
+      </div>
+      <div class="settings-row">
+        <div><div class="settings-label">AmneziaWG 2.0</div>
+          <div class="settings-desc">Enable / فعال‌سازی</div></div>
+        <label class="toggle"><input type="checkbox" id="set-amneziawg"><span class="toggle-slider"></span></label>
+      </div>
+      <div class="form-group" style="margin-top:12px"><label>Port</label>
+        <input type="number" id="set-amneziawg-port" value="51820" min="1" max="65535"></div>
+      <div class="form-group"><label>Address</label>
+        <input type="text" id="set-amneziawg-address" value="10.8.0.1/24" placeholder="10.8.0.1/24"></div>
+      <div class="form-group"><label>DNS</label>
+        <input type="text" id="set-amneziawg-dns" value="1.1.1.1" placeholder="1.1.1.1"></div>
+      <div class="form-group"><label>MTU</label>
+        <input type="number" id="set-amneziawg-mtu" value="1280" min="1200" max="1500"></div>
+      <div class="form-group" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+        <div><label>JC</label><input type="number" id="set-amneziawg-jc" value="4" min="0"></div>
+        <div><label>Jmin</label><input type="number" id="set-amneziawg-jmin" value="50" min="0"></div>
+        <div><label>Jmax</label><input type="number" id="set-amneziawg-jmax" value="1000" min="0"></div>
+      </div>
+      <div class="form-group" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div><label>S1</label><input type="number" id="set-amneziawg-s1" value="0"></div>
+        <div><label>S2</label><input type="number" id="set-amneziawg-s2" value="0"></div>
+      </div>
+      <div class="form-group" style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px">
+        <div><label>H1</label><input type="number" id="set-amneziawg-h1" value="1"></div>
+        <div><label>H2</label><input type="number" id="set-amneziawg-h2" value="2"></div>
+        <div><label>H3</label><input type="number" id="set-amneziawg-h3" value="3"></div>
+        <div><label>H4</label><input type="number" id="set-amneziawg-h4" value="4"></div>
+      </div>
+    </div>
+
+    <!-- ═══ ShadowTLS v3 ═══ -->
+    <div class="settings-section">
+      <div class="sec-header">
+        <div class="settings-title">🔒 ShadowTLS v3</div>
+        <span class="s-indicator off" id="si-shadowtls"><span class="dot"></span> <span class="si-text">OFF</span></span>
+      </div>
+      <div class="help-box">
+        <div class="help-en">🔒 <b>ShadowTLS v3</b> wraps traffic inside legitimate TLS handshake. Custom SNI and password authentication.</div>
+        <div class="help-fa">🔒 <b>ShadowTLS v3</b> ترافیک رو داخل هندشیک TLS واقعی قرار میده. SNI سفارشی و احراز هویت رمز.</div>
+      </div>
+      <div class="settings-row">
+        <div><div class="settings-label">ShadowTLS v3</div>
+          <div class="settings-desc">Enable / فعال‌سازی</div></div>
+        <label class="toggle"><input type="checkbox" id="set-shadowtls"><span class="toggle-slider"></span></label>
+      </div>
+      <div class="form-group" style="margin-top:12px"><label>Port</label>
+        <input type="number" id="set-shadowtls-port" value="8445" min="1" max="65535"></div>
+      <div class="form-group"><label>Password</label>
+        <input type="text" id="set-shadowtls-password" placeholder="Auth password" style="font-family:monospace;font-size:11px"></div>
+      <div class="form-group"><label>SNI</label>
+        <input type="text" id="set-shadowtls-sni" value="www.google.com" placeholder="www.google.com"></div>
+    </div>
+
+    <!-- ═══ Mieru ═══ -->
+    <div class="settings-section">
+      <div class="sec-header">
+        <div class="settings-title">🔮 Mieru</div>
+        <span class="s-indicator off" id="si-mieru"><span class="dot"></span> <span class="si-text">OFF</span></span>
+      </div>
+      <div class="help-box">
+        <div class="help-en">🔮 <b>Mieru</b> TCP/UDP multiplexing proxy with encryption and traffic shaping. AES-256-GCM or ChaCha20.</div>
+        <div class="help-fa">🔮 <b>Mieru</b> پروکسی مالتی‌پلکس TCP/UDP با رمزنگاری و شکل‌دهی ترافیک.</div>
+      </div>
+      <div class="settings-row">
+        <div><div class="settings-label">Mieru</div>
+          <div class="settings-desc">Enable / فعال‌سازی</div></div>
+        <label class="toggle"><input type="checkbox" id="set-mieru"><span class="toggle-slider"></span></label>
+      </div>
+      <div class="form-group" style="margin-top:12px"><label>Port</label>
+        <input type="number" id="set-mieru-port" value="8446" min="1" max="65535"></div>
+      <div class="form-group"><label>Password</label>
+        <input type="text" id="set-mieru-password" placeholder="Password" style="font-family:monospace;font-size:11px"></div>
+      <div class="form-group"><label>Encryption</label>
+        <select id="set-mieru-encryption" style="width:100%;padding:10px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--t1)">
+          <option value="aes-256-gcm">AES-256-GCM</option>
+          <option value="chacha20-poly1305">ChaCha20-Poly1305</option>
+        </select></div>
+      <div class="form-group"><label>Transport</label>
+        <select id="set-mieru-transport" style="width:100%;padding:10px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--t1)">
+          <option value="tcp">TCP</option>
+          <option value="udp">UDP</option>
+        </select></div>
+      <div class="form-group"><label>MUX Concurrency</label>
+        <input type="number" id="set-mieru-mux-concurrency" value="8" min="1" max="64"></div>
+    </div>
+
+    <!-- ═══ NaiveProxy ═══ -->
+    <div class="settings-section">
+      <div class="sec-header">
+        <div class="settings-title">🌐 NaiveProxy</div>
+        <span class="s-indicator off" id="si-naiveproxy"><span class="dot"></span> <span class="si-text">OFF</span></span>
+      </div>
+      <div class="help-box">
+        <div class="help-en">🌐 <b>NaiveProxy</b> uses Chrome's actual networking code for perfect TLS fingerprint. CDN-compatible.</div>
+        <div class="help-fa">🌐 <b>NaiveProxy</b> از کد شبکه واقعی کروم برای فینگرپرینت TLS کامل استفاده می‌کنه. سازگار با CDN.</div>
+      </div>
+      <div class="settings-row">
+        <div><div class="settings-label">NaiveProxy</div>
+          <div class="settings-desc">Enable / فعال‌سازی</div></div>
+        <label class="toggle"><input type="checkbox" id="set-naiveproxy"><span class="toggle-slider"></span></label>
+      </div>
+      <div class="form-group" style="margin-top:12px"><label>Port</label>
+        <input type="number" id="set-naiveproxy-port" value="8447" min="1" max="65535"></div>
+      <div class="form-group"><label>Username</label>
+        <input type="text" id="set-naiveproxy-user" placeholder="Username"></div>
+      <div class="form-group"><label>Password</label>
+        <input type="text" id="set-naiveproxy-password" placeholder="Password" style="font-family:monospace;font-size:11px"></div>
+      <div class="form-group"><label>SNI</label>
+        <input type="text" id="set-naiveproxy-sni" placeholder="yourdomain.com"></div>
+      <div class="form-group"><label>Concurrency</label>
+        <input type="number" id="set-naiveproxy-concurrency" value="4" min="1" max="32"></div>
+    </div>
+
+    <!-- ═══ WireGuard ═══ -->
+    <div class="settings-section">
+      <div class="sec-header">
+        <div class="settings-title">🔧 WireGuard</div>
+        <span class="s-indicator off" id="si-wireguard"><span class="dot"></span> <span class="si-text">OFF</span></span>
+      </div>
+      <div class="help-box">
+        <div class="help-en">🔧 <b>WireGuard</b> fast modern VPN tunnel. No obfuscation — best for unrestricted networks.</div>
+        <div class="help-fa">🔧 <b>WireGuard</b> تونل VPN مدرن و سریع. بدون مخفی‌سازی — بهترین برای شبکه‌های بدون محدودیت.</div>
+      </div>
+      <div class="settings-row">
+        <div><div class="settings-label">WireGuard</div>
+          <div class="settings-desc">Enable / فعال‌سازی</div></div>
+        <label class="toggle"><input type="checkbox" id="set-wireguard"><span class="toggle-slider"></span></label>
+      </div>
+      <div class="form-group" style="margin-top:12px"><label>Port</label>
+        <input type="number" id="set-wireguard-port" value="51821" min="1" max="65535"></div>
+      <div class="form-group"><label>Address</label>
+        <input type="text" id="set-wireguard-address" value="10.9.0.1/24" placeholder="10.9.0.1/24"></div>
+      <div class="form-group"><label>DNS</label>
+        <input type="text" id="set-wireguard-dns" value="1.1.1.1" placeholder="1.1.1.1"></div>
+      <div class="form-group"><label>MTU</label>
+        <input type="number" id="set-wireguard-mtu" value="1280" min="1200" max="1500"></div>
+    </div>
+
+    <!-- ═══ OpenVPN ═══ -->
+    <div class="settings-section">
+      <div class="sec-header">
+        <div class="settings-title">🔑 OpenVPN</div>
+        <span class="s-indicator off" id="si-openvpn"><span class="dot"></span> <span class="si-text">OFF</span></span>
+      </div>
+      <div class="help-box">
+        <div class="help-en">🔑 <b>OpenVPN</b> mature standard VPN tunnel (UDP/TCP). Widely supported. No obfuscation.</div>
+        <div class="help-fa">🔑 <b>OpenVPN</b> تونل VPN استاندارد (UDP/TCP). پشتیبانی گسترده. بدون مخفی‌سازی.</div>
+      </div>
+      <div class="settings-row">
+        <div><div class="settings-label">OpenVPN</div>
+          <div class="settings-desc">Enable / فعال‌سازی</div></div>
+        <label class="toggle"><input type="checkbox" id="set-openvpn"><span class="toggle-slider"></span></label>
+      </div>
+      <div class="form-group" style="margin-top:12px"><label>Port</label>
+        <input type="number" id="set-openvpn-port" value="1194" min="1" max="65535"></div>
+      <div class="form-group"><label>Protocol</label>
+        <select id="set-openvpn-proto" style="width:100%;padding:10px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--t1)">
+          <option value="udp">UDP</option>
+          <option value="tcp">TCP</option>
+        </select></div>
+      <div class="form-group"><label>Network</label>
+        <input type="text" id="set-openvpn-network" value="10.10.0.0/24" placeholder="10.10.0.0/24"></div>
+      <div class="form-group"><label>DNS</label>
+        <input type="text" id="set-openvpn-dns" value="1.1.1.1" placeholder="1.1.1.1"></div>
     </div>
 
     <!-- ═══ 11. Advanced Anti-Censorship ═══ -->
@@ -1384,8 +1789,13 @@
 <script src="{{ url_for('static', filename='js/panel.js') }}"></script>
 <script>
 // Template-injected configuration (must be before panel.js loads)
-const QR_LIB_URL = {{ url_for('static', filename='js/qrcode.js') | tojson }};
-const SERVER_INFO = {{ {'ip': server_ip, 'port': server_port, 'sni': sni_host, 'path': ws_path} | tojson }};
+const QR_LIB_URL = "{{ url_for('static', filename='js/qrcode.js') }}";
+const SERVER_INFO = {
+    ip: "{{ server_ip }}",
+    port: "{{ server_port }}",
+    sni: "{{ sni_host }}",
+    path: "{{ ws_path }}"
+};
 </script>
 
 <!-- Search Modal -->

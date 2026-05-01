@@ -234,6 +234,28 @@ function updateProtoBar() {
     vw.style.display = '';
     vw.textContent = 'VLESS-WS:' + (serverInfo.vless_ws_port || 2057);
   } else { vw.style.display = 'none'; }
+  const badgeMap = [
+    ['pb-vless-xhttp', 'vless_xhttp', 'XHTTP:', 'vless_xhttp_port', 2053],
+    ['pb-vless-vision', 'vless_vision', 'Vision:', 'vless_vision_port', 2058],
+    ['pb-vless-reverse', 'vless_reverse', 'Reverse:', 'vless_reverse_port', 2059],
+    ['pb-trojan-cdn', 'trojan_cdn', 'Trojan-CDN:', 'trojan_cdn_port', 2083],
+    ['pb-hysteria2', 'hysteria2', 'Hy2:', 'hysteria2_port', 8443],
+    ['pb-tuic', 'tuic', 'TUIC:', 'tuic_port', 8444],
+    ['pb-amneziawg', 'amneziawg', 'AWG:', 'amneziawg_port', 51820],
+    ['pb-shadowtls', 'shadowtls', 'STLS:', 'shadowtls_port', 8445],
+    ['pb-mieru', 'mieru', 'Mieru:', 'mieru_port', 8446],
+    ['pb-naiveproxy', 'naiveproxy', 'Naive:', 'naiveproxy_port', 8447],
+    ['pb-wireguard', 'wireguard', 'WG:', 'wireguard_port', 51821],
+    ['pb-openvpn', 'openvpn', 'OVPN:', 'openvpn_port', 1194],
+  ];
+  badgeMap.forEach(([id, key, label, portKey, defPort]) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (serverInfo[key]) {
+      el.style.display = '';
+      el.textContent = label + (serverInfo[portKey] || defPort);
+    } else { el.style.display = 'none'; }
+  });
   fr.style.display = serverInfo.fragment_enabled ? '' : 'none';
   mx.style.display = serverInfo.mux_enabled ? '' : 'none';
   const killSwitchOn = asBool(serverInfo.kill_switch);
@@ -899,6 +921,16 @@ function showConfig(name) {
   huTab.style.display = serverInfo.httpupgrade ? '' : 'none';
   ssTab.style.display = serverInfo.ss2022 ? '' : 'none';
   vwTab.style.display = serverInfo.vless_ws ? '' : 'none';
+  const tabProtos = [
+    ['ct-vless_xhttp','vless_xhttp'],['ct-vless_vision','vless_vision'],['ct-vless_reverse','vless_reverse'],
+    ['ct-trojan_cdn','trojan_cdn'],['ct-hysteria2','hysteria2'],['ct-tuic','tuic'],
+    ['ct-amneziawg','amneziawg'],['ct-shadowtls','shadowtls'],['ct-mieru','mieru'],
+    ['ct-naiveproxy','naiveproxy'],['ct-wireguard','wireguard'],['ct-openvpn','openvpn'],
+  ];
+  tabProtos.forEach(([id, key]) => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = serverInfo[key] ? '' : 'none';
+  });
 
   configTab = 'vmess';
   document.querySelectorAll('.config-tab').forEach(t => t.classList.remove('active'));
@@ -1017,6 +1049,110 @@ function renderConfigTab() {
       <span class="ck">Path</span><span class="cv">${serverInfo.vless_ws_path || '/vless-ws'}</span>
       <span class="ck">TLS</span><span class="cv">Enabled</span>
       <span class="ck">SNI</span><span class="cv">${SERVER_INFO.sni}</span>`;
+  } else if (configTab === 'vless_xhttp') {
+    link = u.vless_xhttp || '';
+    label = 'VLESS XHTTP Reality Link';
+    info = `
+      <span class="ck">Protocol</span><span class="cv" style="color:#e056fd">VLESS + XHTTP + Reality</span>
+      <span class="ck">Server</span><span class="cv">${SERVER_INFO.ip}</span>
+      <span class="ck">Port</span><span class="cv">${serverInfo.vless_xhttp_port || 2053}</span>
+      <span class="ck">Transport</span><span class="cv">XHTTP (${serverInfo.vless_xhttp_mode || 'auto'})</span>
+      <span class="ck">Path</span><span class="cv">${serverInfo.vless_xhttp_path || '/xhttp-stream'}</span>
+      <span class="ck">Security</span><span class="cv">Reality</span>`;
+  } else if (configTab === 'vless_vision') {
+    link = u.vless_vision || '';
+    label = 'VLESS Vision Reality Link';
+    info = `
+      <span class="ck">Protocol</span><span class="cv" style="color:#6c5ce7">VLESS + Reality + Vision</span>
+      <span class="ck">Server</span><span class="cv">${SERVER_INFO.ip}</span>
+      <span class="ck">Port</span><span class="cv">${serverInfo.vless_vision_port || 2058}</span>
+      <span class="ck">Flow</span><span class="cv">xtls-rprx-vision</span>
+      <span class="ck">Security</span><span class="cv">Reality</span>`;
+  } else if (configTab === 'vless_reverse') {
+    link = u.vless_reverse || '';
+    label = 'VLESS Reverse Reality Link';
+    info = `
+      <span class="ck">Protocol</span><span class="cv" style="color:#fd79a8">VLESS Reverse Reality</span>
+      <span class="ck">Server</span><span class="cv">${SERVER_INFO.ip}</span>
+      <span class="ck">Port</span><span class="cv">${serverInfo.vless_reverse_port || 2059}</span>
+      <span class="ck">Mode</span><span class="cv">Reverse Tunnel (${serverInfo.vless_reverse_backhaul_mode || 'rathole'})</span>
+      <span class="ck">Security</span><span class="cv">Reality</span>`;
+  } else if (configTab === 'trojan_cdn') {
+    link = u.trojan_cdn || '';
+    label = 'Trojan CDN Link';
+    info = `
+      <span class="ck">Protocol</span><span class="cv" style="color:#e74c3c">Trojan + WS + CDN</span>
+      <span class="ck">Server</span><span class="cv">${serverInfo.trojan_cdn_domain || SERVER_INFO.ip}</span>
+      <span class="ck">Port</span><span class="cv">${serverInfo.trojan_cdn_port || 2083}</span>
+      <span class="ck">Transport</span><span class="cv">WebSocket</span>
+      <span class="ck">Path</span><span class="cv">${serverInfo.trojan_cdn_ws_path || '/trojan-ws'}</span>`;
+  } else if (configTab === 'hysteria2') {
+    link = u.hysteria2 || '';
+    label = 'Hysteria2 Link';
+    info = `
+      <span class="ck">Protocol</span><span class="cv" style="color:#00cec9">Hysteria2 (QUIC)</span>
+      <span class="ck">Server</span><span class="cv">${SERVER_INFO.ip}</span>
+      <span class="ck">Port</span><span class="cv">${serverInfo.hysteria2_port || 8443}</span>
+      <span class="ck">Transport</span><span class="cv">QUIC/UDP</span>
+      <span class="ck">Obfuscation</span><span class="cv">${serverInfo.hysteria2_salamander ? 'Salamander' : 'None'}</span>`;
+  } else if (configTab === 'tuic') {
+    link = u.tuic || '';
+    label = 'TUIC v5 Link';
+    info = `
+      <span class="ck">Protocol</span><span class="cv" style="color:#0984e3">TUIC v5 (QUIC)</span>
+      <span class="ck">Server</span><span class="cv">${SERVER_INFO.ip}</span>
+      <span class="ck">Port</span><span class="cv">${serverInfo.tuic_port || 8444}</span>
+      <span class="ck">Transport</span><span class="cv">QUIC/UDP</span>
+      <span class="ck">Congestion</span><span class="cv">${serverInfo.tuic_congestion || 'cubic'}</span>`;
+  } else if (configTab === 'amneziawg') {
+    link = u.amneziawg || '';
+    label = 'AmneziaWG Config';
+    info = `
+      <span class="ck">Protocol</span><span class="cv" style="color:#00b894">AmneziaWG 2.0</span>
+      <span class="ck">Server</span><span class="cv">${SERVER_INFO.ip}</span>
+      <span class="ck">Port</span><span class="cv">${serverInfo.amneziawg_port || 51820}</span>
+      <span class="ck">MTU</span><span class="cv">${serverInfo.amneziawg_mtu || 1280}</span>`;
+  } else if (configTab === 'shadowtls') {
+    link = u.shadowtls || '';
+    label = 'ShadowTLS v3 Link';
+    info = `
+      <span class="ck">Protocol</span><span class="cv" style="color:#b2bec3">ShadowTLS v3</span>
+      <span class="ck">Server</span><span class="cv">${SERVER_INFO.ip}</span>
+      <span class="ck">Port</span><span class="cv">${serverInfo.shadowtls_port || 8445}</span>
+      <span class="ck">SNI</span><span class="cv">${serverInfo.shadowtls_sni || 'www.google.com'}</span>`;
+  } else if (configTab === 'mieru') {
+    link = u.mieru || '';
+    label = 'Mieru Link';
+    info = `
+      <span class="ck">Protocol</span><span class="cv" style="color:#a29bfe">Mieru</span>
+      <span class="ck">Server</span><span class="cv">${SERVER_INFO.ip}</span>
+      <span class="ck">Port</span><span class="cv">${serverInfo.mieru_port || 8446}</span>
+      <span class="ck">Encryption</span><span class="cv">${serverInfo.mieru_encryption || 'AES-256-GCM'}</span>
+      <span class="ck">Transport</span><span class="cv">${serverInfo.mieru_transport || 'TCP'}</span>`;
+  } else if (configTab === 'naiveproxy') {
+    link = u.naiveproxy || '';
+    label = 'NaiveProxy Link';
+    info = `
+      <span class="ck">Protocol</span><span class="cv" style="color:#fdcb6e">NaiveProxy</span>
+      <span class="ck">Server</span><span class="cv">${SERVER_INFO.ip}</span>
+      <span class="ck">Port</span><span class="cv">${serverInfo.naiveproxy_port || 8447}</span>
+      <span class="ck">TLS</span><span class="cv">Chrome TLS Fingerprint</span>`;
+  } else if (configTab === 'wireguard') {
+    link = u.wireguard || '';
+    label = 'WireGuard Config';
+    info = `
+      <span class="ck">Protocol</span><span class="cv" style="color:#00b894">WireGuard</span>
+      <span class="ck">Server</span><span class="cv">${SERVER_INFO.ip}</span>
+      <span class="ck">Port</span><span class="cv">${serverInfo.wireguard_port || 51821}</span>
+      <span class="ck">MTU</span><span class="cv">${serverInfo.wireguard_mtu || 1280}</span>`;
+  } else if (configTab === 'openvpn') {
+    link = u.openvpn || '';
+    label = 'OpenVPN Config';
+    info = `
+      <span class="ck">Protocol</span><span class="cv" style="color:#e17055">OpenVPN</span>
+      <span class="ck">Server</span><span class="cv">${SERVER_INFO.ip}</span>
+      <span class="ck">Port</span><span class="cv">${serverInfo.openvpn_port || 1194}</span>
+      <span class="ck">Proto</span><span class="cv">${serverInfo.openvpn_proto || 'UDP'}</span>`;
   }
 
   document.getElementById('config-link-label').textContent = label;
@@ -1358,6 +1494,18 @@ function updateSettingsStatus() {
   set('si-hu', si.httpupgrade, si.httpupgrade ? 'Active :' + (si.httpupgrade_port || 2055) : 'OFF');
   set('si-ss2022', si.ss2022, si.ss2022 ? 'Active :' + (si.ss2022_port || 2056) : 'OFF');
   set('si-vless-ws', si.vless_ws, si.vless_ws ? 'Active :' + (si.vless_ws_port || 2057) : 'OFF');
+  set('si-vless-xhttp', si.vless_xhttp, si.vless_xhttp ? 'Active :' + (si.vless_xhttp_port || 2053) : 'OFF');
+  set('si-vless-vision', si.vless_vision, si.vless_vision ? 'Active :' + (si.vless_vision_port || 2058) : 'OFF');
+  set('si-vless-reverse', si.vless_reverse, si.vless_reverse ? 'Active :' + (si.vless_reverse_port || 2059) : 'OFF');
+  set('si-trojan-cdn', si.trojan_cdn, si.trojan_cdn ? 'Active :' + (si.trojan_cdn_port || 2083) : 'OFF');
+  set('si-hysteria2', si.hysteria2, si.hysteria2 ? 'Active :' + (si.hysteria2_port || 8443) : 'OFF');
+  set('si-tuic', si.tuic, si.tuic ? 'Active :' + (si.tuic_port || 8444) : 'OFF');
+  set('si-amneziawg', si.amneziawg, si.amneziawg ? 'Active :' + (si.amneziawg_port || 51820) : 'OFF');
+  set('si-shadowtls', si.shadowtls, si.shadowtls ? 'Active :' + (si.shadowtls_port || 8445) : 'OFF');
+  set('si-mieru', si.mieru, si.mieru ? 'Active :' + (si.mieru_port || 8446) : 'OFF');
+  set('si-naiveproxy', si.naiveproxy, si.naiveproxy ? 'Active :' + (si.naiveproxy_port || 8447) : 'OFF');
+  set('si-wireguard', si.wireguard, si.wireguard ? 'Active :' + (si.wireguard_port || 51821) : 'OFF');
+  set('si-openvpn', si.openvpn, si.openvpn ? 'Active :' + (si.openvpn_port || 1194) : 'OFF');
   set('si-cdn', si.cdn, si.cdn ? 'Active — ' + (si.cdn_domain || '?') : 'OFF');
   const killSwitchOn = asBool(si.kill_switch);
   set('si-ks', killSwitchOn, killSwitchOn ? 'ON' : 'OFF');
@@ -1422,6 +1570,103 @@ async function loadSettings() {
     document.getElementById('set-vless-ws').checked = s.vless_ws_enabled || false;
     document.getElementById('set-vless-ws-port').value = s.vless_ws_port || 2057;
     document.getElementById('set-vless-ws-path').value = s.vless_ws_path || '/vless-ws';
+    // VLESS XHTTP Reality
+    document.getElementById('set-vless-xhttp').checked = s.vless_xhttp_enabled || false;
+    document.getElementById('set-vless-xhttp-port').value = s.vless_xhttp_port || 2053;
+    document.getElementById('set-vless-xhttp-reality-sni').value = s.vless_xhttp_reality_sni || 'www.microsoft.com';
+    document.getElementById('set-vless-xhttp-reality-dest').value = s.vless_xhttp_reality_dest || 'www.microsoft.com:443';
+    document.getElementById('set-vless-xhttp-path').value = s.vless_xhttp_path || '/xhttp-stream';
+    document.getElementById('set-vless-xhttp-mode').value = s.vless_xhttp_mode || 'auto';
+    document.getElementById('set-vless-xhttp-reality-short-id').value = s.vless_xhttp_reality_short_id || '';
+    document.getElementById('set-vless-xhttp-reality-public-key').value = s.vless_xhttp_reality_public_key || '';
+    // VLESS Vision Reality
+    document.getElementById('set-vless-vision').checked = s.vless_vision_enabled || false;
+    document.getElementById('set-vless-vision-port').value = s.vless_vision_port || 2058;
+    document.getElementById('set-vless-vision-reality-sni').value = s.vless_vision_reality_sni || 'www.yahoo.com';
+    document.getElementById('set-vless-vision-reality-dest').value = s.vless_vision_reality_dest || 'www.yahoo.com:443';
+    document.getElementById('set-vless-vision-flow').value = s.vless_vision_flow || 'xtls-rprx-vision';
+    document.getElementById('set-vless-vision-reality-short-id').value = s.vless_vision_reality_short_id || '';
+    document.getElementById('set-vless-vision-reality-public-key').value = s.vless_vision_reality_public_key || '';
+    // VLESS Reverse Reality
+    document.getElementById('set-vless-reverse').checked = s.vless_reverse_enabled || false;
+    document.getElementById('set-vless-reverse-port').value = s.vless_reverse_port || 2059;
+    document.getElementById('set-vless-reverse-reality-sni').value = s.vless_reverse_reality_sni || 'www.amazon.com';
+    document.getElementById('set-vless-reverse-reality-dest').value = s.vless_reverse_reality_dest || 'www.amazon.com:443';
+    document.getElementById('set-vless-reverse-tunnel-port').value = s.vless_reverse_tunnel_port || 0;
+    document.getElementById('set-vless-reverse-backhaul-mode').value = s.vless_reverse_backhaul_mode || 'rathole';
+    document.getElementById('set-vless-reverse-reality-short-id').value = s.vless_reverse_reality_short_id || '';
+    document.getElementById('set-vless-reverse-reality-public-key').value = s.vless_reverse_reality_public_key || '';
+    // Trojan CDN
+    document.getElementById('set-trojan-cdn').checked = s.trojan_cdn_enabled || false;
+    document.getElementById('set-trojan-cdn-port').value = s.trojan_cdn_port || 2083;
+    document.getElementById('set-trojan-cdn-ws-path').value = s.trojan_cdn_ws_path || '/trojan-ws';
+    document.getElementById('set-trojan-cdn-domain').value = s.trojan_cdn_domain || '';
+    document.getElementById('set-trojan-cdn-sni').value = s.trojan_cdn_sni || '';
+    document.getElementById('set-trojan-cdn-grpc').checked = s.trojan_cdn_grpc_enabled || false;
+    document.getElementById('set-trojan-cdn-grpc-port').value = s.trojan_cdn_grpc_port || 2060;
+    document.getElementById('set-trojan-cdn-grpc-service').value = s.trojan_cdn_grpc_service || 'TrojanService';
+    // Hysteria2
+    document.getElementById('set-hysteria2').checked = s.hysteria2_enabled || false;
+    document.getElementById('set-hysteria2-port').value = s.hysteria2_port || 8443;
+    document.getElementById('set-hysteria2-password').value = s.hysteria2_password || '';
+    document.getElementById('set-hysteria2-bandwidth-up').value = s.hysteria2_bandwidth_up || '100 mbps';
+    document.getElementById('set-hysteria2-bandwidth-down').value = s.hysteria2_bandwidth_down || '200 mbps';
+    document.getElementById('set-hysteria2-salamander').checked = s.hysteria2_salamander_enabled || false;
+    document.getElementById('set-hysteria2-salamander-password').value = s.hysteria2_salamander_password || '';
+    document.getElementById('set-hysteria2-port-hop').checked = s.hysteria2_port_hop_enabled || false;
+    document.getElementById('set-hysteria2-port-hop-ports').value = s.hysteria2_port_hop_ports || '20000-50000';
+    // TUIC
+    document.getElementById('set-tuic').checked = s.tuic_enabled || false;
+    document.getElementById('set-tuic-port').value = s.tuic_port || 8444;
+    document.getElementById('set-tuic-password').value = s.tuic_password || '';
+    document.getElementById('set-tuic-congestion').value = s.tuic_congestion_control || 'cubic';
+    document.getElementById('set-tuic-zero-rtt').checked = s.tuic_zero_rtt || false;
+    // AmneziaWG
+    document.getElementById('set-amneziawg').checked = s.amneziawg_enabled || false;
+    document.getElementById('set-amneziawg-port').value = s.amneziawg_port || 51820;
+    document.getElementById('set-amneziawg-address').value = s.amneziawg_address || '10.8.0.1/24';
+    document.getElementById('set-amneziawg-dns').value = s.amneziawg_dns || '1.1.1.1';
+    document.getElementById('set-amneziawg-mtu').value = s.amneziawg_mtu || 1280;
+    document.getElementById('set-amneziawg-jc').value = s.amneziawg_jc ?? 4;
+    document.getElementById('set-amneziawg-jmin').value = s.amneziawg_jmin ?? 50;
+    document.getElementById('set-amneziawg-jmax').value = s.amneziawg_jmax ?? 1000;
+    document.getElementById('set-amneziawg-s1').value = s.amneziawg_s1 ?? 0;
+    document.getElementById('set-amneziawg-s2').value = s.amneziawg_s2 ?? 0;
+    document.getElementById('set-amneziawg-h1').value = s.amneziawg_h1 ?? 1;
+    document.getElementById('set-amneziawg-h2').value = s.amneziawg_h2 ?? 2;
+    document.getElementById('set-amneziawg-h3').value = s.amneziawg_h3 ?? 3;
+    document.getElementById('set-amneziawg-h4').value = s.amneziawg_h4 ?? 4;
+    // ShadowTLS
+    document.getElementById('set-shadowtls').checked = s.shadowtls_enabled || false;
+    document.getElementById('set-shadowtls-port').value = s.shadowtls_port || 8445;
+    document.getElementById('set-shadowtls-password').value = s.shadowtls_password || '';
+    document.getElementById('set-shadowtls-sni').value = s.shadowtls_sni || 'www.google.com';
+    // Mieru
+    document.getElementById('set-mieru').checked = s.mieru_enabled || false;
+    document.getElementById('set-mieru-port').value = s.mieru_port || 8446;
+    document.getElementById('set-mieru-password').value = s.mieru_password || '';
+    document.getElementById('set-mieru-encryption').value = s.mieru_encryption || 'aes-256-gcm';
+    document.getElementById('set-mieru-transport').value = s.mieru_transport || 'tcp';
+    document.getElementById('set-mieru-mux-concurrency').value = s.mieru_mux_concurrency || 8;
+    // NaiveProxy
+    document.getElementById('set-naiveproxy').checked = s.naiveproxy_enabled || false;
+    document.getElementById('set-naiveproxy-port').value = s.naiveproxy_port || 8447;
+    document.getElementById('set-naiveproxy-user').value = s.naiveproxy_user || '';
+    document.getElementById('set-naiveproxy-password').value = s.naiveproxy_password || '';
+    document.getElementById('set-naiveproxy-sni').value = s.naiveproxy_sni || '';
+    document.getElementById('set-naiveproxy-concurrency').value = s.naiveproxy_concurrency || 4;
+    // WireGuard
+    document.getElementById('set-wireguard').checked = s.wireguard_enabled || false;
+    document.getElementById('set-wireguard-port').value = s.wireguard_port || 51821;
+    document.getElementById('set-wireguard-address').value = s.wireguard_address || '10.9.0.1/24';
+    document.getElementById('set-wireguard-dns').value = s.wireguard_dns || '1.1.1.1';
+    document.getElementById('set-wireguard-mtu').value = s.wireguard_mtu || 1280;
+    // OpenVPN
+    document.getElementById('set-openvpn').checked = s.openvpn_enabled || false;
+    document.getElementById('set-openvpn-port').value = s.openvpn_port || 1194;
+    document.getElementById('set-openvpn-proto').value = s.openvpn_proto || 'udp';
+    document.getElementById('set-openvpn-network').value = s.openvpn_network || '10.10.0.0/24';
+    document.getElementById('set-openvpn-dns').value = s.openvpn_dns || '1.1.1.1';
     // Advanced Anti-Censorship
     document.getElementById('set-fingerprint').value = s.fingerprint || 'chrome';
     document.getElementById('set-noise').checked = s.noise_enabled || false;
@@ -1514,6 +1759,100 @@ async function saveSettings() {
     vless_ws_enabled: document.getElementById('set-vless-ws').checked,
     vless_ws_port: parseInt(document.getElementById('set-vless-ws-port').value) || 2057,
     vless_ws_path: document.getElementById('set-vless-ws-path').value.trim() || '/vless-ws',
+    // VLESS XHTTP Reality
+    vless_xhttp_enabled: document.getElementById('set-vless-xhttp').checked,
+    vless_xhttp_port: parseInt(document.getElementById('set-vless-xhttp-port').value) || 2053,
+    vless_xhttp_reality_sni: document.getElementById('set-vless-xhttp-reality-sni').value.trim() || 'www.microsoft.com',
+    vless_xhttp_reality_dest: document.getElementById('set-vless-xhttp-reality-dest').value.trim() || 'www.microsoft.com:443',
+    vless_xhttp_path: document.getElementById('set-vless-xhttp-path').value.trim() || '/xhttp-stream',
+    vless_xhttp_mode: document.getElementById('set-vless-xhttp-mode').value,
+    vless_xhttp_reality_short_id: document.getElementById('set-vless-xhttp-reality-short-id').value.trim(),
+    // VLESS Vision Reality
+    vless_vision_enabled: document.getElementById('set-vless-vision').checked,
+    vless_vision_port: parseInt(document.getElementById('set-vless-vision-port').value) || 2058,
+    vless_vision_reality_sni: document.getElementById('set-vless-vision-reality-sni').value.trim() || 'www.yahoo.com',
+    vless_vision_reality_dest: document.getElementById('set-vless-vision-reality-dest').value.trim() || 'www.yahoo.com:443',
+    vless_vision_flow: document.getElementById('set-vless-vision-flow').value.trim() || 'xtls-rprx-vision',
+    vless_vision_reality_short_id: document.getElementById('set-vless-vision-reality-short-id').value.trim(),
+    // VLESS Reverse Reality
+    vless_reverse_enabled: document.getElementById('set-vless-reverse').checked,
+    vless_reverse_port: parseInt(document.getElementById('set-vless-reverse-port').value) || 2059,
+    vless_reverse_reality_sni: document.getElementById('set-vless-reverse-reality-sni').value.trim() || 'www.amazon.com',
+    vless_reverse_reality_dest: document.getElementById('set-vless-reverse-reality-dest').value.trim() || 'www.amazon.com:443',
+    vless_reverse_tunnel_port: parseInt(document.getElementById('set-vless-reverse-tunnel-port').value) || 0,
+    vless_reverse_backhaul_mode: document.getElementById('set-vless-reverse-backhaul-mode').value,
+    vless_reverse_reality_short_id: document.getElementById('set-vless-reverse-reality-short-id').value.trim(),
+    // Trojan CDN
+    trojan_cdn_enabled: document.getElementById('set-trojan-cdn').checked,
+    trojan_cdn_port: parseInt(document.getElementById('set-trojan-cdn-port').value) || 2083,
+    trojan_cdn_ws_path: document.getElementById('set-trojan-cdn-ws-path').value.trim() || '/trojan-ws',
+    trojan_cdn_domain: document.getElementById('set-trojan-cdn-domain').value.trim(),
+    trojan_cdn_sni: document.getElementById('set-trojan-cdn-sni').value.trim(),
+    trojan_cdn_grpc_enabled: document.getElementById('set-trojan-cdn-grpc').checked,
+    trojan_cdn_grpc_port: parseInt(document.getElementById('set-trojan-cdn-grpc-port').value) || 2060,
+    trojan_cdn_grpc_service: document.getElementById('set-trojan-cdn-grpc-service').value.trim() || 'TrojanService',
+    // Hysteria2
+    hysteria2_enabled: document.getElementById('set-hysteria2').checked,
+    hysteria2_port: parseInt(document.getElementById('set-hysteria2-port').value) || 8443,
+    hysteria2_password: document.getElementById('set-hysteria2-password').value.trim(),
+    hysteria2_bandwidth_up: document.getElementById('set-hysteria2-bandwidth-up').value.trim() || '100 mbps',
+    hysteria2_bandwidth_down: document.getElementById('set-hysteria2-bandwidth-down').value.trim() || '200 mbps',
+    hysteria2_salamander_enabled: document.getElementById('set-hysteria2-salamander').checked,
+    hysteria2_salamander_password: document.getElementById('set-hysteria2-salamander-password').value.trim(),
+    hysteria2_port_hop_enabled: document.getElementById('set-hysteria2-port-hop').checked,
+    hysteria2_port_hop_ports: document.getElementById('set-hysteria2-port-hop-ports').value.trim() || '20000-50000',
+    // TUIC
+    tuic_enabled: document.getElementById('set-tuic').checked,
+    tuic_port: parseInt(document.getElementById('set-tuic-port').value) || 8444,
+    tuic_password: document.getElementById('set-tuic-password').value.trim(),
+    tuic_congestion_control: document.getElementById('set-tuic-congestion').value,
+    tuic_zero_rtt: document.getElementById('set-tuic-zero-rtt').checked,
+    // AmneziaWG
+    amneziawg_enabled: document.getElementById('set-amneziawg').checked,
+    amneziawg_port: parseInt(document.getElementById('set-amneziawg-port').value) || 51820,
+    amneziawg_address: document.getElementById('set-amneziawg-address').value.trim() || '10.8.0.1/24',
+    amneziawg_dns: document.getElementById('set-amneziawg-dns').value.trim() || '1.1.1.1',
+    amneziawg_mtu: parseInt(document.getElementById('set-amneziawg-mtu').value) || 1280,
+    amneziawg_jc: parseInt(document.getElementById('set-amneziawg-jc').value) || 0,
+    amneziawg_jmin: parseInt(document.getElementById('set-amneziawg-jmin').value) || 0,
+    amneziawg_jmax: parseInt(document.getElementById('set-amneziawg-jmax').value) || 0,
+    amneziawg_s1: parseInt(document.getElementById('set-amneziawg-s1').value) || 0,
+    amneziawg_s2: parseInt(document.getElementById('set-amneziawg-s2').value) || 0,
+    amneziawg_h1: parseInt(document.getElementById('set-amneziawg-h1').value) || 0,
+    amneziawg_h2: parseInt(document.getElementById('set-amneziawg-h2').value) || 0,
+    amneziawg_h3: parseInt(document.getElementById('set-amneziawg-h3').value) || 0,
+    amneziawg_h4: parseInt(document.getElementById('set-amneziawg-h4').value) || 0,
+    // ShadowTLS
+    shadowtls_enabled: document.getElementById('set-shadowtls').checked,
+    shadowtls_port: parseInt(document.getElementById('set-shadowtls-port').value) || 8445,
+    shadowtls_password: document.getElementById('set-shadowtls-password').value.trim(),
+    shadowtls_sni: document.getElementById('set-shadowtls-sni').value.trim() || 'www.google.com',
+    // Mieru
+    mieru_enabled: document.getElementById('set-mieru').checked,
+    mieru_port: parseInt(document.getElementById('set-mieru-port').value) || 8446,
+    mieru_password: document.getElementById('set-mieru-password').value.trim(),
+    mieru_encryption: document.getElementById('set-mieru-encryption').value,
+    mieru_transport: document.getElementById('set-mieru-transport').value,
+    mieru_mux_concurrency: parseInt(document.getElementById('set-mieru-mux-concurrency').value) || 8,
+    // NaiveProxy
+    naiveproxy_enabled: document.getElementById('set-naiveproxy').checked,
+    naiveproxy_port: parseInt(document.getElementById('set-naiveproxy-port').value) || 8447,
+    naiveproxy_user: document.getElementById('set-naiveproxy-user').value.trim(),
+    naiveproxy_password: document.getElementById('set-naiveproxy-password').value.trim(),
+    naiveproxy_sni: document.getElementById('set-naiveproxy-sni').value.trim(),
+    naiveproxy_concurrency: parseInt(document.getElementById('set-naiveproxy-concurrency').value) || 4,
+    // WireGuard
+    wireguard_enabled: document.getElementById('set-wireguard').checked,
+    wireguard_port: parseInt(document.getElementById('set-wireguard-port').value) || 51821,
+    wireguard_address: document.getElementById('set-wireguard-address').value.trim() || '10.9.0.1/24',
+    wireguard_dns: document.getElementById('set-wireguard-dns').value.trim() || '1.1.1.1',
+    wireguard_mtu: parseInt(document.getElementById('set-wireguard-mtu').value) || 1280,
+    // OpenVPN
+    openvpn_enabled: document.getElementById('set-openvpn').checked,
+    openvpn_port: parseInt(document.getElementById('set-openvpn-port').value) || 1194,
+    openvpn_proto: document.getElementById('set-openvpn-proto').value,
+    openvpn_network: document.getElementById('set-openvpn-network').value.trim() || '10.10.0.0/24',
+    openvpn_dns: document.getElementById('set-openvpn-dns').value.trim() || '1.1.1.1',
     // Advanced
     fingerprint: document.getElementById('set-fingerprint').value,
     noise_enabled: document.getElementById('set-noise').checked,
@@ -1582,6 +1921,30 @@ function showSettingsValidation(data) {
   // VLESS-WS
   if (data.vless_ws_enabled) ok('VLESS-WS — Active on port ' + data.vless_ws_port);
   else warn('VLESS-WS — OFF');
+  if (data.vless_xhttp_enabled) ok('VLESS-XHTTP-Reality — Active on port ' + data.vless_xhttp_port);
+  else warn('VLESS-XHTTP-Reality — OFF');
+  if (data.vless_vision_enabled) ok('VLESS-Vision-Reality — Active on port ' + data.vless_vision_port);
+  else warn('VLESS-Vision-Reality — OFF');
+  if (data.vless_reverse_enabled) ok('VLESS-Reverse-Reality — Active on port ' + data.vless_reverse_port);
+  else warn('VLESS-Reverse-Reality — OFF');
+  if (data.trojan_cdn_enabled) ok('Trojan-CDN — Active on port ' + data.trojan_cdn_port);
+  else warn('Trojan-CDN — OFF');
+  if (data.hysteria2_enabled) ok('Hysteria2 — Active on port ' + data.hysteria2_port);
+  else warn('Hysteria2 — OFF');
+  if (data.tuic_enabled) ok('TUIC v5 — Active on port ' + data.tuic_port);
+  else warn('TUIC v5 — OFF');
+  if (data.amneziawg_enabled) ok('AmneziaWG — Active on port ' + data.amneziawg_port);
+  else warn('AmneziaWG — OFF');
+  if (data.shadowtls_enabled) ok('ShadowTLS v3 — Active on port ' + data.shadowtls_port);
+  else warn('ShadowTLS v3 — OFF');
+  if (data.mieru_enabled) ok('Mieru — Active on port ' + data.mieru_port);
+  else warn('Mieru — OFF');
+  if (data.naiveproxy_enabled) ok('NaiveProxy — Active on port ' + data.naiveproxy_port);
+  else warn('NaiveProxy — OFF');
+  if (data.wireguard_enabled) ok('WireGuard — Active on port ' + data.wireguard_port);
+  else warn('WireGuard — OFF');
+  if (data.openvpn_enabled) ok('OpenVPN — Active on port ' + data.openvpn_port);
+  else warn('OpenVPN — OFF');
   // CDN
   if (data.cdn_enabled && data.cdn_domain) ok('CDN — Active via ' + data.cdn_domain);
   else if (data.cdn_enabled) warn('CDN — Enabled but no domain set! / فعال ولی دامنه نداره!');

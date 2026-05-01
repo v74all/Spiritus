@@ -27,6 +27,7 @@ import threading
 import random
 import string
 import scripts.speed_manager as speed_manager
+from protocols import get_protocol_engine
 
 _DPI_EVASION_IMPORT_ERROR = ""
 try:
@@ -2145,6 +2146,85 @@ def build_xray_config(active_users):
             },
         })
 
+    # ── VLESS + XHTTP + Reality ──
+    if s.get("vless_xhttp_enabled"):
+        inbounds.append({
+            "tag": "vless-xhttp-reality", "port": s.get("vless_xhttp_port", 2053), "listen": "0.0.0.0",
+            "protocol": "vless",
+            "settings": {"clients": vless_clients_noflow, "decryption": "none"},
+            "streamSettings": {
+                "network": "xhttp", "security": "reality",
+                "realitySettings": {
+                    "privateKey": s.get("vless_xhttp_reality_private_key", ""),
+                    "shortIds": [s.get("vless_xhttp_reality_short_id", "")],
+                    "dest": s.get("vless_xhttp_reality_dest", "www.microsoft.com:443"),
+                    "serverNames": [s.get("vless_xhttp_reality_sni", "www.microsoft.com")],
+                },
+                "xhttpSettings": {
+                    "path": s.get("vless_xhttp_path", "/xhttp-stream"),
+                    "mode": s.get("vless_xhttp_mode", "auto"),
+                },
+            },
+        })
+
+    # ── VLESS + Reality + Vision ──
+    if s.get("vless_vision_enabled"):
+        inbounds.append({
+            "tag": "vless-vision-reality", "port": s.get("vless_vision_port", 2058), "listen": "0.0.0.0",
+            "protocol": "vless",
+            "settings": {"clients": vless_clients, "decryption": "none"},
+            "streamSettings": {
+                "network": "tcp", "security": "reality",
+                "realitySettings": {
+                    "privateKey": s.get("vless_vision_reality_private_key", ""),
+                    "shortIds": [s.get("vless_vision_reality_short_id", "")],
+                    "dest": s.get("vless_vision_reality_dest", "www.yahoo.com:443"),
+                    "serverNames": [s.get("vless_vision_reality_sni", "www.yahoo.com")],
+                },
+            },
+        })
+
+    # ── VLESS + Reverse Tunnel + Reality ──
+    if s.get("vless_reverse_enabled"):
+        inbounds.append({
+            "tag": "vless-reverse-reality", "port": s.get("vless_reverse_port", 2059), "listen": "0.0.0.0",
+            "protocol": "vless",
+            "settings": {"clients": vless_clients_noflow, "decryption": "none"},
+            "streamSettings": {
+                "network": "tcp", "security": "reality",
+                "realitySettings": {
+                    "privateKey": s.get("vless_reverse_reality_private_key", ""),
+                    "shortIds": [s.get("vless_reverse_reality_short_id", "")],
+                    "dest": s.get("vless_reverse_reality_dest", "www.amazon.com:443"),
+                    "serverNames": [s.get("vless_reverse_reality_sni", "www.amazon.com")],
+                },
+            },
+        })
+
+    # ── Trojan + WS/gRPC (CDN) ──
+    if s.get("trojan_cdn_enabled"):
+        inbounds.append({
+            "tag": "trojan-cdn-ws", "port": s.get("trojan_cdn_port", 2083), "listen": "0.0.0.0",
+            "protocol": "trojan",
+            "settings": {"clients": trojan_clients},
+            "streamSettings": {
+                "network": "ws", "security": "tls" if s.get("trojan_cdn_tls_enabled", True) else "none",
+                "wsSettings": {"path": s.get("trojan_cdn_ws_path", "/trojan-ws"), "headers": {"Host": s.get("trojan_cdn_domain", "")}},
+                "tlsSettings": {"serverName": s.get("trojan_cdn_sni", ""), "allowInsecure": True} if s.get("trojan_cdn_tls_enabled", True) else None,
+            },
+        })
+        if s.get("trojan_cdn_grpc_enabled"):
+            inbounds.append({
+                "tag": "trojan-cdn-grpc", "port": s.get("trojan_cdn_grpc_port", 2060), "listen": "0.0.0.0",
+                "protocol": "trojan",
+                "settings": {"clients": trojan_clients},
+                "streamSettings": {
+                    "network": "grpc", "security": "tls" if s.get("trojan_cdn_tls_enabled", True) else "none",
+                    "grpcSettings": {"serviceName": s.get("trojan_cdn_grpc_service", "TrojanService")},
+                    "tlsSettings": {"serverName": s.get("trojan_cdn_sni", ""), "allowInsecure": True} if s.get("trojan_cdn_tls_enabled", True) else None,
+                },
+            })
+
     return {
         "log": {
             "access": ACCESS_LOG,
@@ -2232,12 +2312,49 @@ def build_xray_config(active_users):
     }
 
 
+def write_standalone_configs(active_users):
+    s = settings
+    engine = get_protocol_engine(s)
+    
+    # Generate standalone configs for all users
+    # Hysteria2
+    if s.get("hysteria2_enabled"):
+        try:
+            os.makedirs("/etc/hysteria", exist_ok=True)
+            cfg = engine.generate_hysteria2_config("dummy", s)
+            cfg["users"] = {u[1]: s.get("hysteria2_password", "") for u in active_users}
+            with open("/etc/hysteria/config.yaml", "w") as f:
+                import yaml
+                yaml.dump(cfg, f)
+            os.system("systemctl restart hysteria-server")
+        except Exception as e:
+            logger.error(f"Failed to write Hysteria2 config: {e}")
+            
+    # TUIC
+    if s.get("tuic_enabled"):
+        try:
+            os.makedirs("/etc/tuic", exist_ok=True)
+            cfg = engine.generate_tuic_config("dummy", s)
+            cfg["users"] = {u[1]: s.get("tuic_password", "") for u in active_users}
+            with open("/etc/tuic/config.json", "w") as f:
+                json.dump(cfg, f, indent=2)
+            os.system("systemctl restart tuic-server")
+        except Exception as e:
+            logger.error(f"Failed to write TUIC config: {e}")
+            
+    # Add other standalone configs as needed...
+
+
 def write_xray_config():
     os.makedirs("/usr/local/etc/xray", exist_ok=True)
-    config = build_xray_config(get_active_users_list())
+    active_users = get_active_users_list()
+    config = build_xray_config(active_users)
     with open(XRAY_CONFIG, "w") as f:
         json.dump(config, f, indent=2)
     os.system("systemctl restart v2ray")
+    
+    # Also write standalone configs
+    threading.Thread(target=write_standalone_configs, args=(active_users,), daemon=True).start()
 
 
 # legacy aliases
@@ -2515,6 +2632,108 @@ def vless_ws_link(name, user_uuid, server_ip=None):
     return f"vless://{user_uuid}@{address}:{port}?{params}#{prefix}-VWS-{name}"
 
 
+def vless_xhttp_link(name, user_uuid, server_ip=None):
+    s = settings
+    if not s.get("vless_xhttp_enabled"):
+        return ""
+    prefix = s.get("config_prefix") or "Proxy"
+    sni = s.get("vless_xhttp_reality_sni", "www.microsoft.com")
+    port = s.get("vless_xhttp_port", 2053)
+    pbk = s.get("vless_xhttp_reality_public_key", "")
+    sid = s.get("vless_xhttp_reality_short_id", "")
+    path = s.get("vless_xhttp_path", "/xhttp-stream")
+    mode = s.get("vless_xhttp_mode", "auto")
+    fp = s.get("fingerprint", "chrome")
+    address = _config_host(server_ip)
+    params = urllib.parse.urlencode({
+        "security": "reality",
+        "encryption": "none",
+        "pbk": pbk,
+        "headerType": "none",
+        "fp": fp,
+        "type": "xhttp",
+        "sni": sni,
+        "sid": sid,
+        "path": path,
+        "host": sni,
+        "mode": mode,
+    })
+    return f"vless://{user_uuid}@{address}:{port}?{params}#{prefix}-XHTTP-{name}"
+
+
+def vless_vision_link(name, user_uuid, server_ip=None):
+    s = settings
+    if not s.get("vless_vision_enabled"):
+        return ""
+    prefix = s.get("config_prefix") or "Proxy"
+    sni = s.get("vless_vision_reality_sni", "www.yahoo.com")
+    port = s.get("vless_vision_port", 2058)
+    pbk = s.get("vless_vision_reality_public_key", "")
+    sid = s.get("vless_vision_reality_short_id", "")
+    flow = s.get("vless_vision_flow", "xtls-rprx-vision")
+    fp = s.get("fingerprint", "chrome")
+    address = _config_host(server_ip)
+    params = urllib.parse.urlencode({
+        "security": "reality",
+        "encryption": "none",
+        "pbk": pbk,
+        "headerType": "none",
+        "fp": fp,
+        "type": "tcp",
+        "sni": sni,
+        "sid": sid,
+        "flow": flow,
+    })
+    return f"vless://{user_uuid}@{address}:{port}?{params}#{prefix}-Vision-{name}"
+
+
+def vless_reverse_link(name, user_uuid, server_ip=None):
+    s = settings
+    if not s.get("vless_reverse_enabled"):
+        return ""
+    prefix = s.get("config_prefix") or "Proxy"
+    sni = s.get("vless_reverse_reality_sni", "www.amazon.com")
+    port = s.get("vless_reverse_port", 2059)
+    pbk = s.get("vless_reverse_reality_public_key", "")
+    sid = s.get("vless_reverse_reality_short_id", "")
+    fp = s.get("fingerprint", "chrome")
+    address = _config_host(server_ip)
+    params = urllib.parse.urlencode({
+        "security": "reality",
+        "encryption": "none",
+        "pbk": pbk,
+        "headerType": "none",
+        "fp": fp,
+        "type": "tcp",
+        "sni": sni,
+        "sid": sid,
+    })
+    return f"vless://{user_uuid}@{address}:{port}?{params}#{prefix}-Reverse-{name}"
+
+
+def trojan_cdn_link(name, user_uuid, server_ip=None):
+    s = settings
+    if not s.get("trojan_cdn_enabled"):
+        return ""
+    prefix = s.get("config_prefix") or "Proxy"
+    sni = s.get("trojan_cdn_sni", "")
+    port = s.get("trojan_cdn_port", 2083)
+    path = s.get("trojan_cdn_ws_path", "/trojan-ws")
+    host = s.get("trojan_cdn_domain", "")
+    tls = "tls" if s.get("trojan_cdn_tls_enabled", True) else "none"
+    fp = s.get("fingerprint", "chrome")
+    address = host if host else _config_host(server_ip)
+    params = urllib.parse.urlencode({
+        "security": tls,
+        "type": "ws",
+        "headerType": "none",
+        "sni": sni,
+        "host": host,
+        "path": path,
+        "fp": fp,
+        "allowInsecure": "1",
+    })
+    return f"trojan://{user_uuid}@{address}:{port}?{params}#{prefix}-Trojan-CDN-{name}"
 def _all_links(name, user_uuid, server_ip=None):
     """Return dict of all available config links for a user."""
     links = {"vmess": vmess_link(name, user_uuid, server_ip)}
@@ -2523,10 +2742,31 @@ def _all_links(name, user_uuid, server_ip=None):
         ("trojan", trojan_link), ("grpc_vmess", grpc_vmess_link),
         ("httpupgrade_vmess", httpupgrade_vmess_link),
         ("ss2022", ss2022_link), ("vless_ws", vless_ws_link),
+        ("vless_xhttp", vless_xhttp_link), ("vless_vision", vless_vision_link),
+        ("vless_reverse", vless_reverse_link), ("trojan_cdn", trojan_cdn_link),
     ]:
         val = fn(name, user_uuid, server_ip)
         if val:
             links[key] = val
+            
+    engine = get_protocol_engine(settings)
+    standalone_keys = [
+        ("hysteria2", "hysteria2"),
+        ("tuic", "tuic_v5"),
+        ("amneziawg", "amneziawg"),
+        ("shadowtls", "shadowtls_v3"),
+        ("mieru", "mieru"),
+        ("naiveproxy", "naiveproxy"),
+        ("wireguard", "wireguard"),
+        ("openvpn", "openvpn"),
+    ]
+    for setting_prefix, proto_key in standalone_keys:
+        if settings.get(f"{setting_prefix}_enabled"):
+            try:
+                links[setting_prefix] = engine.generate_subscription_link(proto_key, user_uuid, settings)
+            except Exception as e:
+                logger.error(f"Failed to generate link for {proto_key}: {e}")
+                
     return links
 
 
@@ -3949,6 +4189,79 @@ def subscription_json(user_uuid):
             },
         }
         outbounds.append(vws_out)
+
+    # ── VLESS + XHTTP + Reality ──
+    if s.get("vless_xhttp_enabled"):
+        xhttp_out = {
+            "tag": f"{prefix}-XHTTP-{name}",
+            "protocol": "vless",
+            "settings": {"vnext": [{"address": SERVER_IP, "port": int(s.get("vless_xhttp_port", 2053)), "users": [{"id": uid, "encryption": "none"}]}]},
+            "streamSettings": {
+                "network": "xhttp", "security": "reality",
+                "realitySettings": {
+                    "serverName": s.get("vless_xhttp_reality_sni", "www.microsoft.com"),
+                    "fingerprint": fp,
+                    "publicKey": s.get("vless_xhttp_reality_public_key", ""),
+                    "shortId": s.get("vless_xhttp_reality_short_id", ""),
+                },
+                "xhttpSettings": {
+                    "path": s.get("vless_xhttp_path", "/xhttp-stream"),
+                    "mode": s.get("vless_xhttp_mode", "auto"),
+                },
+            },
+        }
+        outbounds.append(xhttp_out)
+
+    # ── VLESS + Reality + Vision ──
+    if s.get("vless_vision_enabled"):
+        vision_out = {
+            "tag": f"{prefix}-Vision-{name}",
+            "protocol": "vless",
+            "settings": {"vnext": [{"address": SERVER_IP, "port": int(s.get("vless_vision_port", 2058)), "users": [{"id": uid, "encryption": "none", "flow": s.get("vless_vision_flow", "xtls-rprx-vision")}]}]},
+            "streamSettings": {
+                "network": "tcp", "security": "reality",
+                "realitySettings": {
+                    "serverName": s.get("vless_vision_reality_sni", "www.yahoo.com"),
+                    "fingerprint": fp,
+                    "publicKey": s.get("vless_vision_reality_public_key", ""),
+                    "shortId": s.get("vless_vision_reality_short_id", ""),
+                },
+            },
+        }
+        outbounds.append(vision_out)
+
+    # ── VLESS + Reverse Tunnel + Reality ──
+    if s.get("vless_reverse_enabled"):
+        reverse_out = {
+            "tag": f"{prefix}-Reverse-{name}",
+            "protocol": "vless",
+            "settings": {"vnext": [{"address": SERVER_IP, "port": int(s.get("vless_reverse_port", 2059)), "users": [{"id": uid, "encryption": "none"}]}]},
+            "streamSettings": {
+                "network": "tcp", "security": "reality",
+                "realitySettings": {
+                    "serverName": s.get("vless_reverse_reality_sni", "www.amazon.com"),
+                    "fingerprint": fp,
+                    "publicKey": s.get("vless_reverse_reality_public_key", ""),
+                    "shortId": s.get("vless_reverse_reality_short_id", ""),
+                },
+            },
+        }
+        outbounds.append(reverse_out)
+
+    # ── Trojan + WS/gRPC (CDN) ──
+    if s.get("trojan_cdn_enabled"):
+        host = s.get("trojan_cdn_domain", "")
+        trojan_cdn_out = {
+            "tag": f"{prefix}-Trojan-CDN-{name}",
+            "protocol": "trojan",
+            "settings": {"servers": [{"address": host if host else SERVER_IP, "port": int(s.get("trojan_cdn_port", 2083)), "password": uid}]},
+            "streamSettings": {
+                "network": "ws", "security": "tls" if s.get("trojan_cdn_tls_enabled", True) else "none",
+                "wsSettings": {"path": s.get("trojan_cdn_ws_path", "/trojan-ws"), "headers": {"Host": host}},
+                "tlsSettings": {"serverName": s.get("trojan_cdn_sni", ""), "fingerprint": fp, "allowInsecure": True} if s.get("trojan_cdn_tls_enabled", True) else None,
+            },
+        }
+        outbounds.append(trojan_cdn_out)
 
     # ── Apply Fragment & MUX to all outbounds ──
     for ob in outbounds:

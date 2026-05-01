@@ -473,39 +473,39 @@ class ProtocolEngine:
         inbounds = config["inbounds"]
 
         # VLESS+XHTTP+REALITY
-        if getattr(settings, "VLESS_XHTTP_ENABLED", False):
+        if settings.get("vless_xhttp_enabled", False):
             inbounds.append(self._make_vless_xhttp_reality(user_uuid, settings))
 
         # VLESS+REALITY+Vision
-        if getattr(settings, "VLESS_VISION_ENABLED", False):
+        if settings.get("vless_vision_enabled", False):
             inbounds.append(self._make_vless_vision_reality(user_uuid, settings))
 
         # VLESS-Reverse-Reality
-        if getattr(settings, "VLESS_REVERSE_ENABLED", False):
+        if settings.get("vless_reverse_enabled", False):
             inbounds.append(self._make_vless_reverse_reality(user_uuid, settings))
 
         # Trojan+WS/gRPC+CDN
-        if getattr(settings, "TROJAN_CDN_ENABLED", False):
+        if settings.get("trojan_cdn_enabled", False):
             inbounds.extend(self._make_trojan_cdn(user_uuid, settings))
 
         # VMess+WS+TLS
-        if getattr(settings, "VMESS_ENABLED", True):
+        if settings.get("vmess_enabled", True):
             inbounds.append(self._make_vmess_ws(user_uuid, settings))
 
         # VLESS+WS+TLS
-        if getattr(settings, "VLESS_WS_ENABLED", False):
+        if settings.get("vless_ws_enabled", False):
             inbounds.append(self._make_vless_ws(user_uuid, settings))
 
         # SS-2022
-        if getattr(settings, "SS2022_ENABLED", False):
+        if settings.get("ss2022_enabled", False):
             inbounds.append(self._make_ss2022(user_uuid, settings))
 
         # gRPC
-        if getattr(settings, "GRPC_ENABLED", False):
+        if settings.get("grpc_enabled", False):
             inbounds.append(self._make_grpc(user_uuid, settings))
 
         # HTTPUpgrade
-        if getattr(settings, "HTTPUPGRADE_ENABLED", False):
+        if settings.get("httpupgrade_enabled", False):
             inbounds.append(self._make_httpupgrade(user_uuid, settings))
 
         return config
@@ -515,7 +515,7 @@ class ProtocolEngine:
     def _make_vless_xhttp_reality(self, user_uuid: str, s: Any) -> Dict:
         return {
             "protocol": "vless",
-            "port": getattr(s, "VLESS_XHTTP_PORT", 2053),
+            "port": s.get("vless_xhttp_port", 2053),
             "tag": "vless-xhttp-reality",
             "settings": {
                 "clients": [{"id": user_uuid, "flow": ""}],
@@ -525,14 +525,14 @@ class ProtocolEngine:
                 "network": "xhttp",
                 "security": "reality",
                 "realitySettings": {
-                    "privateKey": getattr(s, "VLESS_XHTTP_REALITY_PRIVATE_KEY", ""),
-                    "shortIds": [getattr(s, "VLESS_XHTTP_REALITY_SHORT_ID", "")],
-                    "dest": getattr(s, "VLESS_XHTTP_REALITY_DEST", "www.microsoft.com:443"),
-                    "serverNames": [getattr(s, "VLESS_XHTTP_REALITY_SNI", "www.microsoft.com")],
+                    "privateKey": s.get("vless_xhttp_reality_private_key", ""),
+                    "shortIds": [s.get("vless_xhttp_reality_short_id", "")],
+                    "dest": s.get("vless_xhttp_reality_dest", "www.microsoft.com:443"),
+                    "serverNames": [s.get("vless_xhttp_reality_sni", "www.microsoft.com")],
                 },
                 "xhttpSettings": {
-                    "path": getattr(s, "VLESS_XHTTP_PATH", "/xhttp-stream"),
-                    "mode": getattr(s, "VLESS_XHTTP_MODE", "auto"),
+                    "path": s.get("vless_xhttp_path", "/xhttp-stream"),
+                    "mode": s.get("vless_xhttp_mode", "auto"),
                 },
             },
         }
@@ -540,29 +540,29 @@ class ProtocolEngine:
     def _make_vless_vision_reality(self, user_uuid: str, s: Any) -> Dict:
         return {
             "protocol": "vless",
-            "port": getattr(s, "VLESS_VISION_PORT", 2058),
+            "port": s.get("vless_vision_port", 2058),
             "tag": "vless-vision-reality",
             "settings": {
-                "clients": [{"id": user_uuid, "flow": getattr(s, "VLESS_VISION_FLOW", "xtls-rprx-vision")}],
+                "clients": [{"id": user_uuid, "flow": s.get("vless_vision_flow", "xtls-rprx-vision")}],
                 "decryption": "none",
             },
             "streamSettings": {
                 "network": "tcp",
                 "security": "reality",
                 "realitySettings": {
-                    "privateKey": getattr(s, "VLESS_VISION_REALITY_PRIVATE_KEY", ""),
-                    "shortIds": [getattr(s, "VLESS_VISION_REALITY_SHORT_ID", "")],
-                    "dest": getattr(s, "VLESS_VISION_REALITY_DEST", "www.yahoo.com:443"),
-                    "serverNames": [getattr(s, "VLESS_VISION_REALITY_SNI", "www.yahoo.com")],
+                    "privateKey": s.get("vless_vision_reality_private_key", ""),
+                    "shortIds": [s.get("vless_vision_reality_short_id", "")],
+                    "dest": s.get("vless_vision_reality_dest", "www.yahoo.com:443"),
+                    "serverNames": [s.get("vless_vision_reality_sni", "www.yahoo.com")],
                 },
             },
         }
 
     def _make_vless_reverse_reality(self, user_uuid: str, s: Any) -> Dict:
-        tunnel_port = getattr(s, "VLESS_REVERSE_TUNNEL_PORT", 0) or 0
+        tunnel_port = s.get("vless_reverse_tunnel_port", 0) or 0
         return {
             "protocol": "vless",
-            "port": getattr(s, "VLESS_REVERSE_PORT", 2059),
+            "port": s.get("vless_reverse_port", 2059),
             "tag": "vless-reverse-reality",
             "settings": {
                 "clients": [{"id": user_uuid, "flow": ""}],
@@ -572,10 +572,10 @@ class ProtocolEngine:
                 "network": "tcp",
                 "security": "reality",
                 "realitySettings": {
-                    "privateKey": getattr(s, "VLESS_REVERSE_REALITY_PRIVATE_KEY", ""),
-                    "shortIds": [getattr(s, "VLESS_REVERSE_REALITY_SHORT_ID", "")],
-                    "dest": getattr(s, "VLESS_REVERSE_REALITY_DEST", "www.amazon.com:443"),
-                    "serverNames": [getattr(s, "VLESS_REVERSE_REALITY_SNI", "www.amazon.com")],
+                    "privateKey": s.get("vless_reverse_reality_private_key", ""),
+                    "shortIds": [s.get("vless_reverse_reality_short_id", "")],
+                    "dest": s.get("vless_reverse_reality_dest", "www.amazon.com:443"),
+                    "serverNames": [s.get("vless_reverse_reality_sni", "www.amazon.com")],
                 },
             },
             # Reverse tunnel via Xray's reverse proxy feature
@@ -594,7 +594,7 @@ class ProtocolEngine:
         # Trojan+WS+TLS (CDN)
         inbounds.append({
             "protocol": "trojan",
-            "port": getattr(s, "TROJAN_CDN_PORT", 2083),
+            "port": s.get("trojan_cdn_port", 2083),
             "tag": "trojan-cdn-ws",
             "settings": {
                 "clients": [{"password": password}],
@@ -603,23 +603,23 @@ class ProtocolEngine:
                 "network": "ws",
                 "security": "tls",
                 "tlsSettings": {
-                    "serverName": getattr(s, "TROJAN_CDN_SNI", ""),
+                    "serverName": s.get("trojan_cdn_sni", ""),
                     "certificates": [],  # filled from cert files
                 },
                 "wsSettings": {
-                    "path": getattr(s, "TROJAN_CDN_WS_PATH", "/trojan-ws"),
+                    "path": s.get("trojan_cdn_ws_path", "/trojan-ws"),
                     "headers": {
-                        "Host": getattr(s, "TROJAN_CDN_DOMAIN", ""),
+                        "Host": s.get("trojan_cdn_domain", ""),
                     },
                 },
             },
         })
 
         # Trojan+gRPC+TLS (CDN) — optional second transport
-        if getattr(s, "TROJAN_CDN_GRPC_ENABLED", False):
+        if s.get("trojan_cdn_grpc_enabled", False):
             inbounds.append({
                 "protocol": "trojan",
-                "port": getattr(s, "TROJAN_CDN_GRPC_PORT", 2060),
+                "port": s.get("trojan_cdn_grpc_port", 2060),
                 "tag": "trojan-cdn-grpc",
                 "settings": {
                     "clients": [{"password": password}],
@@ -628,10 +628,10 @@ class ProtocolEngine:
                     "network": "grpc",
                     "security": "tls",
                     "tlsSettings": {
-                        "serverName": getattr(s, "TROJAN_CDN_SNI", ""),
+                        "serverName": s.get("trojan_cdn_sni", ""),
                     },
                     "grpcSettings": {
-                        "serviceName": getattr(s, "TROJAN_CDN_GRPC_SERVICE", "TrojanService"),
+                        "serviceName": s.get("trojan_cdn_grpc_service", "TrojanService"),
                     },
                 },
             })
@@ -641,7 +641,7 @@ class ProtocolEngine:
     def _make_vmess_ws(self, user_uuid: str, s: Any) -> Dict:
         return {
             "protocol": "vmess",
-            "port": getattr(s, "VMESS_PORT", 443),
+            "port": s.get("vmess_port", 443),
             "tag": "vmess-ws",
             "settings": {
                 "clients": [{"id": user_uuid, "alterId": 0}],
@@ -650,10 +650,10 @@ class ProtocolEngine:
                 "network": "ws",
                 "security": "tls",
                 "tlsSettings": {
-                    "serverName": getattr(s, "VMESS_SNI", "www.aparat.com"),
+                    "serverName": s.get("vmess_sni", "www.aparat.com"),
                 },
                 "wsSettings": {
-                    "path": getattr(s, "VMESS_WS_PATH", "/api/v1/stream"),
+                    "path": s.get("vmess_ws_path", "/api/v1/stream"),
                 },
             },
         }
@@ -661,7 +661,7 @@ class ProtocolEngine:
     def _make_vless_ws(self, user_uuid: str, s: Any) -> Dict:
         return {
             "protocol": "vless",
-            "port": getattr(s, "VLESS_WS_PORT", 2057),
+            "port": s.get("vless_ws_port", 2057),
             "tag": "vless-ws",
             "settings": {
                 "clients": [{"id": user_uuid, "flow": ""}],
@@ -671,10 +671,10 @@ class ProtocolEngine:
                 "network": "ws",
                 "security": "tls",
                 "tlsSettings": {
-                    "serverName": getattr(s, "VPN_SNI_HOST", ""),
+                    "serverName": s.get("vpn_sni_host", ""),
                 },
                 "wsSettings": {
-                    "path": getattr(s, "VLESS_WS_PATH", "/vless-ws"),
+                    "path": s.get("vless_ws_path", "/vless-ws"),
                 },
             },
         }
@@ -682,19 +682,19 @@ class ProtocolEngine:
     def _make_ss2022(self, user_uuid: str, s: Any) -> Dict:
         return {
             "protocol": "shadowsocks",
-            "port": getattr(s, "SS2022_PORT", 2056),
+            "port": s.get("ss2022_port", 2056),
             "tag": "ss2022",
             "settings": {
                 "clients": [{"password": user_uuid}],
-                "method": getattr(s, "SS2022_METHOD", "2022-blake3-aes-128-gcm"),
-                "password": getattr(s, "SS2022_SERVER_KEY", ""),
+                "method": s.get("ss2022_method", "2022-blake3-aes-128-gcm"),
+                "password": s.get("ss2022_server_key", ""),
             },
         }
 
     def _make_grpc(self, user_uuid: str, s: Any) -> Dict:
         return {
             "protocol": "vmess",
-            "port": getattr(s, "GRPC_PORT", 2054),
+            "port": s.get("grpc_port", 2054),
             "tag": "grpc",
             "settings": {
                 "clients": [{"id": user_uuid, "alterId": 0}],
@@ -703,7 +703,7 @@ class ProtocolEngine:
                 "network": "grpc",
                 "security": "tls",
                 "grpcSettings": {
-                    "serviceName": getattr(s, "GRPC_SERVICE_NAME", "GunService"),
+                    "serviceName": s.get("grpc_service_name", "GunService"),
                 },
             },
         }
@@ -711,7 +711,7 @@ class ProtocolEngine:
     def _make_httpupgrade(self, user_uuid: str, s: Any) -> Dict:
         return {
             "protocol": "vmess",
-            "port": getattr(s, "HTTPUPGRADE_PORT", 2055),
+            "port": s.get("httpupgrade_port", 2055),
             "tag": "httpupgrade",
             "settings": {
                 "clients": [{"id": user_uuid, "alterId": 0}],
@@ -720,7 +720,7 @@ class ProtocolEngine:
                 "network": "httpupgrade",
                 "security": "tls",
                 "httpupgradeSettings": {
-                    "path": getattr(s, "HTTPUPGRADE_PATH", "/httpupgrade"),
+                    "path": s.get("httpupgrade_path", "/httpupgrade"),
                 },
             },
         }
@@ -732,25 +732,25 @@ class ProtocolEngine:
         config = {
             "listen": f":{getattr(s, 'HYSTERIA2_PORT', 8443)}",
             "protocol": "hy2",
-            "users": {user_uuid: getattr(s, "HYSTERIA2_PASSWORD", "")},
+            "users": {user_uuid: s.get("hysteria2_password", "")},
             "tls": {
-                "cert": getattr(s, "TUIC_CERT_PATH", ""),
-                "key": getattr(s, "TUIC_KEY_PATH", ""),
+                "cert": s.get("tuic_cert_path", ""),
+                "key": s.get("tuic_key_path", ""),
             },
             "bandwidth": {
-                "up": getattr(s, "HYSTERIA2_BANDWIDTH_UP", "100 mbps"),
-                "down": getattr(s, "HYSTERIA2_BANDWIDTH_DOWN", "200 mbps"),
+                "up": s.get("hysteria2_bandwidth_up", "100 mbps"),
+                "down": s.get("hysteria2_bandwidth_down", "200 mbps"),
             },
         }
-        if getattr(s, "HYSTERIA2_SALAMANDER_ENABLED", False):
+        if s.get("hysteria2_salamander_enabled", False):
             config["obfs"] = {
                 "type": "salamander",
-                "password": getattr(s, "HYSTERIA2_SALAMANDER_PASSWORD", ""),
+                "password": s.get("hysteria2_salamander_password", ""),
             }
-        if getattr(s, "HYSTERIA2_PORT_HOP_ENABLED", False):
+        if s.get("hysteria2_port_hop_enabled", False):
             config["portHop"] = {
                 "enabled": True,
-                "ports": getattr(s, "HYSTERIA2_PORT_HOP_PORTS", "20000-50000"),
+                "ports": s.get("hysteria2_port_hop_ports", "20000-50000"),
             }
         return config
 
@@ -758,36 +758,36 @@ class ProtocolEngine:
         """Generate TUIC v5 server configuration."""
         return {
             "server": f"[::]:{getattr(s, 'TUIC_PORT', 8444)}",
-            "users": {user_uuid: getattr(s, "TUIC_PASSWORD", "")},
-            "certificate": getattr(s, "TUIC_CERT_PATH", ""),
-            "private_key": getattr(s, "TUIC_KEY_PATH", ""),
-            "congestion_control": getattr(s, "TUIC_CONGESTION_CONTROL", "cubic"),
-            "udp_relay": getattr(s, "TUIC_UDP_RELAY", "native"),
-            "zero_rtt": getattr(s, "TUIC_ZERO_RTT", False),
+            "users": {user_uuid: s.get("tuic_password", "")},
+            "certificate": s.get("tuic_cert_path", ""),
+            "private_key": s.get("tuic_key_path", ""),
+            "congestion_control": s.get("tuic_congestion_control", "cubic"),
+            "udp_relay": s.get("tuic_udp_relay", "native"),
+            "zero_rtt": s.get("tuic_zero_rtt", False),
         }
 
     def generate_amneziawg_config(self, user_uuid: str, s: Any) -> Dict:
         """Generate AmneziaWG 2.0 server configuration."""
         return {
             "interface": {
-                "private_key": getattr(s, "AMNEZIAWG_PRIVATE_KEY", ""),
-                "address": getattr(s, "AMNEZIAWG_ADDRESS", "10.8.0.1/24"),
-                "listen_port": getattr(s, "AMNEZIAWG_PORT", 51820),
-                "dns": getattr(s, "AMNEZIAWG_DNS", "1.1.1.1"),
-                "mtu": getattr(s, "AMNEZIAWG_MTU", 1280),
+                "private_key": s.get("amneziawg_private_key", ""),
+                "address": s.get("amneziawg_address", "10.8.0.1/24"),
+                "listen_port": s.get("amneziawg_port", 51820),
+                "dns": s.get("amneziawg_dns", "1.1.1.1"),
+                "mtu": s.get("amneziawg_mtu", 1280),
             },
             "junk_packets": {
-                "jc": getattr(s, "AMNEZIAWG_JC", 4),
-                "jmin": getattr(s, "AMNEZIAWG_JMIN", 50),
-                "jmax": getattr(s, "AMNEZIAWG_JMAX", 1000),
+                "jc": s.get("amneziawg_jc", 4),
+                "jmin": s.get("amneziawg_jmin", 50),
+                "jmax": s.get("amneziawg_jmax", 1000),
             },
             "magic_headers": {
-                "s1": getattr(s, "AMNEZIAWG_S1", 0),
-                "s2": getattr(s, "AMNEZIAWG_S2", 0),
-                "h1": getattr(s, "AMNEZIAWG_H1", 1),
-                "h2": getattr(s, "AMNEZIAWG_H2", 2),
-                "h3": getattr(s, "AMNEZIAWG_H3", 3),
-                "h4": getattr(s, "AMNEZIAWG_H4", 4),
+                "s1": s.get("amneziawg_s1", 0),
+                "s2": s.get("amneziawg_s2", 0),
+                "h1": s.get("amneziawg_h1", 1),
+                "h2": s.get("amneziawg_h2", 2),
+                "h3": s.get("amneziawg_h3", 3),
+                "h4": s.get("amneziawg_h4", 4),
             },
         }
 
@@ -795,24 +795,24 @@ class ProtocolEngine:
         """Generate ShadowTLS v3 server configuration."""
         return {
             "server": f"0.0.0.0:{getattr(s, 'SHADOWTLS_PORT', 8445)}",
-            "version": getattr(s, "SHADOWTLS_VERSION", 3),
-            "password": getattr(s, "SHADOWTLS_PASSWORD", ""),
-            "sni": getattr(s, "SHADOWTLS_SNI", "www.google.com"),
-            "backend": getattr(s, "SHADOWTLS_BACKEND", "127.0.0.1:1080"),
-            "tls_cert": getattr(s, "SHADOWTLS_TLS_CERT_PATH", ""),
-            "tls_key": getattr(s, "SHADOWTLS_TLS_KEY_PATH", ""),
+            "version": s.get("shadowtls_version", 3),
+            "password": s.get("shadowtls_password", ""),
+            "sni": s.get("shadowtls_sni", "www.google.com"),
+            "backend": s.get("shadowtls_backend", "127.0.0.1:1080"),
+            "tls_cert": s.get("shadowtls_tls_cert_path", ""),
+            "tls_key": s.get("shadowtls_tls_key_path", ""),
         }
 
     def generate_mieru_config(self, user_uuid: str, s: Any) -> Dict:
         """Generate Mieru server configuration."""
         return {
-            "port": getattr(s, "MIERU_PORT", 8446),
-            "password": getattr(s, "MIERU_PASSWORD", ""),
-            "encryption": getattr(s, "MIERU_ENCRYPTION", "aes-256-gcm"),
-            "transport": getattr(s, "MIERU_TRANSPORT", "tcp"),
+            "port": s.get("mieru_port", 8446),
+            "password": s.get("mieru_password", ""),
+            "encryption": s.get("mieru_encryption", "aes-256-gcm"),
+            "transport": s.get("mieru_transport", "tcp"),
             "multiplexing": {
-                "enabled": getattr(s, "MIERU_MUX_ENABLED", True),
-                "concurrency": getattr(s, "MIERU_MUX_CONCURRENCY", 8),
+                "enabled": s.get("mieru_mux_enabled", True),
+                "concurrency": s.get("mieru_mux_concurrency", 8),
             },
         }
 
@@ -820,39 +820,39 @@ class ProtocolEngine:
         """Generate NaiveProxy server configuration."""
         return {
             "listen": f"0.0.0.0:{getattr(s, 'NAIVEPROXY_PORT', 8447)}",
-            "user": getattr(s, "NAIVEPROXY_USER", ""),
-            "password": getattr(s, "NAIVEPROXY_PASSWORD", ""),
-            "sni": getattr(s, "NAIVEPROXY_SNI", ""),
-            "cert": getattr(s, "NAIVEPROXY_CERT_PATH", ""),
-            "key": getattr(s, "NAIVEPROXY_KEY_PATH", ""),
-            "concurrency": getattr(s, "NAIVEPROXY_CONCURRENCY", 4),
+            "user": s.get("naiveproxy_user", ""),
+            "password": s.get("naiveproxy_password", ""),
+            "sni": s.get("naiveproxy_sni", ""),
+            "cert": s.get("naiveproxy_cert_path", ""),
+            "key": s.get("naiveproxy_key_path", ""),
+            "concurrency": s.get("naiveproxy_concurrency", 4),
         }
 
     def generate_wireguard_config(self, user_uuid: str, s: Any) -> Dict:
         """Generate plain WireGuard server configuration."""
         return {
             "interface": {
-                "private_key": getattr(s, "WIREGUARD_PRIVATE_KEY", ""),
-                "address": getattr(s, "WIREGUARD_ADDRESS", "10.9.0.1/24"),
-                "listen_port": getattr(s, "WIREGUARD_PORT", 51821),
-                "dns": getattr(s, "WIREGUARD_DNS", "1.1.1.1"),
-                "mtu": getattr(s, "WIREGUARD_MTU", 1280),
-                "persistent_keepalive": getattr(s, "WIREGUARD_PERSISTENT_KEEPALIVE", 25),
+                "private_key": s.get("wireguard_private_key", ""),
+                "address": s.get("wireguard_address", "10.9.0.1/24"),
+                "listen_port": s.get("wireguard_port", 51821),
+                "dns": s.get("wireguard_dns", "1.1.1.1"),
+                "mtu": s.get("wireguard_mtu", 1280),
+                "persistent_keepalive": s.get("wireguard_persistent_keepalive", 25),
             },
         }
 
     def generate_openvpn_config(self, user_uuid: str, s: Any) -> Dict:
         """Generate plain OpenVPN server configuration."""
         return {
-            "port": getattr(s, "OPENVPN_PORT", 1194),
-            "proto": getattr(s, "OPENVPN_PROTO", "udp"),
+            "port": s.get("openvpn_port", 1194),
+            "proto": s.get("openvpn_proto", "udp"),
             "dev": "tun",
-            "server": getattr(s, "OPENVPN_NETWORK", "10.10.0.0/24"),
-            "dns": getattr(s, "OPENVPN_DNS", "1.1.1.1"),
-            "cert": getattr(s, "OPENVPN_CERT_PATH", ""),
-            "key": getattr(s, "OPENVPN_KEY_PATH", ""),
-            "dh": getattr(s, "OPENVPN_DH_PATH", ""),
-            "tls_auth": getattr(s, "OPENVPN_TA_PATH", ""),
+            "server": s.get("openvpn_network", "10.10.0.0/24"),
+            "dns": s.get("openvpn_dns", "1.1.1.1"),
+            "cert": s.get("openvpn_cert_path", ""),
+            "key": s.get("openvpn_key_path", ""),
+            "dh": s.get("openvpn_dh_path", ""),
+            "tls_auth": s.get("openvpn_ta_path", ""),
         }
 
     # ── Client Config Generation ────────────────────────────
@@ -893,8 +893,8 @@ class ProtocolEngine:
             "protocol": "vless",
             "settings": {
                 "vnext": [{
-                    "address": getattr(s, "VPN_SERVER_IP", ""),
-                    "port": getattr(s, "VLESS_XHTTP_PORT", 2053),
+                    "address": s.get("vpn_server_ip", ""),
+                    "port": s.get("vless_xhttp_port", 2053),
                     "users": [{
                         "id": uuid,
                         "encryption": "none",
@@ -906,14 +906,14 @@ class ProtocolEngine:
                 "network": "xhttp",
                 "security": "reality",
                 "realitySettings": {
-                    "publicKey": getattr(s, "VLESS_XHTTP_REALITY_PUBLIC_KEY", ""),
-                    "shortId": getattr(s, "VLESS_XHTTP_REALITY_SHORT_ID", ""),
-                    "serverName": getattr(s, "VLESS_XHTTP_REALITY_SNI", "www.microsoft.com"),
-                    "fingerprint": getattr(s, "UTLS_FINGERPRINT", "chrome"),
+                    "publicKey": s.get("vless_xhttp_reality_public_key", ""),
+                    "shortId": s.get("vless_xhttp_reality_short_id", ""),
+                    "serverName": s.get("vless_xhttp_reality_sni", "www.microsoft.com"),
+                    "fingerprint": s.get("utls_fingerprint", "chrome"),
                 },
                 "xhttpSettings": {
-                    "path": getattr(s, "VLESS_XHTTP_PATH", "/xhttp-stream"),
-                    "mode": getattr(s, "VLESS_XHTTP_MODE", "auto"),
+                    "path": s.get("vless_xhttp_path", "/xhttp-stream"),
+                    "mode": s.get("vless_xhttp_mode", "auto"),
                 },
             },
         }
@@ -923,12 +923,12 @@ class ProtocolEngine:
             "protocol": "vless",
             "settings": {
                 "vnext": [{
-                    "address": getattr(s, "VPN_SERVER_IP", ""),
-                    "port": getattr(s, "VLESS_VISION_PORT", 2058),
+                    "address": s.get("vpn_server_ip", ""),
+                    "port": s.get("vless_vision_port", 2058),
                     "users": [{
                         "id": uuid,
                         "encryption": "none",
-                        "flow": getattr(s, "VLESS_VISION_FLOW", "xtls-rprx-vision"),
+                        "flow": s.get("vless_vision_flow", "xtls-rprx-vision"),
                     }],
                 }],
             },
@@ -936,10 +936,10 @@ class ProtocolEngine:
                 "network": "tcp",
                 "security": "reality",
                 "realitySettings": {
-                    "publicKey": getattr(s, "VLESS_VISION_REALITY_PUBLIC_KEY", ""),
-                    "shortId": getattr(s, "VLESS_VISION_REALITY_SHORT_ID", ""),
-                    "serverName": getattr(s, "VLESS_VISION_REALITY_SNI", "www.yahoo.com"),
-                    "fingerprint": getattr(s, "UTLS_FINGERPRINT", "chrome"),
+                    "publicKey": s.get("vless_vision_reality_public_key", ""),
+                    "shortId": s.get("vless_vision_reality_short_id", ""),
+                    "serverName": s.get("vless_vision_reality_sni", "www.yahoo.com"),
+                    "fingerprint": s.get("utls_fingerprint", "chrome"),
                 },
             },
         }
@@ -949,8 +949,8 @@ class ProtocolEngine:
             "protocol": "vless",
             "settings": {
                 "vnext": [{
-                    "address": getattr(s, "VPN_SERVER_IP", ""),
-                    "port": getattr(s, "VLESS_REVERSE_PORT", 2059),
+                    "address": s.get("vpn_server_ip", ""),
+                    "port": s.get("vless_reverse_port", 2059),
                     "users": [{"id": uuid, "encryption": "none", "flow": ""}],
                 }],
             },
@@ -958,10 +958,10 @@ class ProtocolEngine:
                 "network": "tcp",
                 "security": "reality",
                 "realitySettings": {
-                    "publicKey": getattr(s, "VLESS_REVERSE_REALITY_PUBLIC_KEY", ""),
-                    "shortId": getattr(s, "VLESS_REVERSE_REALITY_SHORT_ID", ""),
-                    "serverName": getattr(s, "VLESS_REVERSE_REALITY_SNI", "www.amazon.com"),
-                    "fingerprint": getattr(s, "UTLS_FINGERPRINT", "chrome"),
+                    "publicKey": s.get("vless_reverse_reality_public_key", ""),
+                    "shortId": s.get("vless_reverse_reality_short_id", ""),
+                    "serverName": s.get("vless_reverse_reality_sni", "www.amazon.com"),
+                    "fingerprint": s.get("utls_fingerprint", "chrome"),
                 },
             },
             "reverse": {
@@ -977,8 +977,8 @@ class ProtocolEngine:
             "protocol": "trojan",
             "settings": {
                 "servers": [{
-                    "address": getattr(s, "TROJAN_CDN_DOMAIN", "") or getattr(s, "VPN_SERVER_IP", ""),
-                    "port": getattr(s, "TROJAN_CDN_PORT", 2083),
+                    "address": s.get("trojan_cdn_domain", "") or s.get("vpn_server_ip", ""),
+                    "port": s.get("trojan_cdn_port", 2083),
                     "password": uuid,
                 }],
             },
@@ -986,10 +986,10 @@ class ProtocolEngine:
                 "network": "ws",
                 "security": "tls",
                 "tlsSettings": {
-                    "serverName": getattr(s, "TROJAN_CDN_SNI", ""),
+                    "serverName": s.get("trojan_cdn_sni", ""),
                 },
                 "wsSettings": {
-                    "path": getattr(s, "TROJAN_CDN_WS_PATH", "/trojan-ws"),
+                    "path": s.get("trojan_cdn_ws_path", "/trojan-ws"),
                 },
             },
         }
@@ -999,8 +999,8 @@ class ProtocolEngine:
             "protocol": "vmess",
             "settings": {
                 "vnext": [{
-                    "address": getattr(s, "VPN_SERVER_IP", ""),
-                    "port": getattr(s, "VMESS_PORT", 443),
+                    "address": s.get("vpn_server_ip", ""),
+                    "port": s.get("vmess_port", 443),
                     "users": [{"id": uuid, "alterId": 0, "security": "auto"}],
                 }],
             },
@@ -1008,10 +1008,10 @@ class ProtocolEngine:
                 "network": "ws",
                 "security": "tls",
                 "tlsSettings": {
-                    "serverName": getattr(s, "VMESS_SNI", "www.aparat.com"),
+                    "serverName": s.get("vmess_sni", "www.aparat.com"),
                 },
                 "wsSettings": {
-                    "path": getattr(s, "VMESS_WS_PATH", "/api/v1/stream"),
+                    "path": s.get("vmess_ws_path", "/api/v1/stream"),
                 },
             },
         }
@@ -1021,15 +1021,15 @@ class ProtocolEngine:
             "protocol": "vless",
             "settings": {
                 "vnext": [{
-                    "address": getattr(s, "VPN_SERVER_IP", ""),
-                    "port": getattr(s, "VLESS_WS_PORT", 2057),
+                    "address": s.get("vpn_server_ip", ""),
+                    "port": s.get("vless_ws_port", 2057),
                     "users": [{"id": uuid, "encryption": "none"}],
                 }],
             },
             "streamSettings": {
                 "network": "ws",
                 "security": "tls",
-                "wsSettings": {"path": getattr(s, "VLESS_WS_PATH", "/vless-ws")},
+                "wsSettings": {"path": s.get("vless_ws_path", "/vless-ws")},
             },
         }
 
@@ -1038,9 +1038,9 @@ class ProtocolEngine:
             "protocol": "shadowsocks",
             "settings": {
                 "servers": [{
-                    "address": getattr(s, "VPN_SERVER_IP", ""),
-                    "port": getattr(s, "SS2022_PORT", 2056),
-                    "method": getattr(s, "SS2022_METHOD", "2022-blake3-aes-128-gcm"),
+                    "address": s.get("vpn_server_ip", ""),
+                    "port": s.get("ss2022_port", 2056),
+                    "method": s.get("ss2022_method", "2022-blake3-aes-128-gcm"),
                     "password": uuid,
                 }],
             },
@@ -1051,8 +1051,8 @@ class ProtocolEngine:
             "protocol": "vmess",
             "settings": {
                 "vnext": [{
-                    "address": getattr(s, "VPN_SERVER_IP", ""),
-                    "port": getattr(s, "GRPC_PORT", 2054),
+                    "address": s.get("vpn_server_ip", ""),
+                    "port": s.get("grpc_port", 2054),
                     "users": [{"id": uuid, "alterId": 0}],
                 }],
             },
@@ -1060,7 +1060,7 @@ class ProtocolEngine:
                 "network": "grpc",
                 "security": "tls",
                 "grpcSettings": {
-                    "serviceName": getattr(s, "GRPC_SERVICE_NAME", "GunService"),
+                    "serviceName": s.get("grpc_service_name", "GunService"),
                 },
             },
         }
@@ -1070,8 +1070,8 @@ class ProtocolEngine:
             "protocol": "vmess",
             "settings": {
                 "vnext": [{
-                    "address": getattr(s, "VPN_SERVER_IP", ""),
-                    "port": getattr(s, "HTTPUPGRADE_PORT", 2055),
+                    "address": s.get("vpn_server_ip", ""),
+                    "port": s.get("httpupgrade_port", 2055),
                     "users": [{"id": uuid, "alterId": 0}],
                 }],
             },
@@ -1079,7 +1079,7 @@ class ProtocolEngine:
                 "network": "httpupgrade",
                 "security": "tls",
                 "httpupgradeSettings": {
-                    "path": getattr(s, "HTTPUPGRADE_PATH", "/httpupgrade"),
+                    "path": s.get("httpupgrade_path", "/httpupgrade"),
                 },
             },
         }
@@ -1088,14 +1088,14 @@ class ProtocolEngine:
         return {
             "protocol": "hy2",
             "server": f"{getattr(s, 'VPN_SERVER_IP', '')}:{getattr(s, 'HYSTERIA2_PORT', 8443)}",
-            "password": getattr(s, "HYSTERIA2_PASSWORD", ""),
+            "password": s.get("hysteria2_password", ""),
             "obfs": {
-                "type": "salamander" if getattr(s, "HYSTERIA2_SALAMANDER_ENABLED", False) else "",
-                "password": getattr(s, "HYSTERIA2_SALAMANDER_PASSWORD", ""),
-            } if getattr(s, "HYSTERIA2_SALAMANDER_ENABLED", False) else {},
+                "type": "salamander" if s.get("hysteria2_salamander_enabled", False) else "",
+                "password": s.get("hysteria2_salamander_password", ""),
+            } if s.get("hysteria2_salamander_enabled", False) else {},
             "bandwidth": {
-                "up": getattr(s, "HYSTERIA2_BANDWIDTH_UP", "100 mbps"),
-                "down": getattr(s, "HYSTERIA2_BANDWIDTH_DOWN", "200 mbps"),
+                "up": s.get("hysteria2_bandwidth_up", "100 mbps"),
+                "down": s.get("hysteria2_bandwidth_down", "200 mbps"),
             },
         }
 
@@ -1103,36 +1103,36 @@ class ProtocolEngine:
         return {
             "protocol": "tuic",
             "server": f"{getattr(s, 'VPN_SERVER_IP', '')}:{getattr(s, 'TUIC_PORT', 8444)}",
-            "password": getattr(s, "TUIC_PASSWORD", ""),
-            "congestion_control": getattr(s, "TUIC_CONGESTION_CONTROL", "cubic"),
-            "udp_relay": getattr(s, "TUIC_UDP_RELAY", "native"),
-            "zero_rtt": getattr(s, "TUIC_ZERO_RTT", False),
+            "password": s.get("tuic_password", ""),
+            "congestion_control": s.get("tuic_congestion_control", "cubic"),
+            "udp_relay": s.get("tuic_udp_relay", "native"),
+            "zero_rtt": s.get("tuic_zero_rtt", False),
         }
 
     def _client_amneziawg(self, uuid: str, s: Any) -> Dict:
         return {
             "protocol": "amneziawg",
             "interface": {
-                "address": getattr(s, "AMNEZIAWG_ADDRESS", "10.8.0.1/24"),
-                "dns": getattr(s, "AMNEZIAWG_DNS", "1.1.1.1"),
-                "mtu": getattr(s, "AMNEZIAWG_MTU", 1280),
+                "address": s.get("amneziawg_address", "10.8.0.1/24"),
+                "dns": s.get("amneziawg_dns", "1.1.1.1"),
+                "mtu": s.get("amneziawg_mtu", 1280),
             },
             "peer": {
                 "endpoint": f"{getattr(s, 'VPN_SERVER_IP', '')}:{getattr(s, 'AMNEZIAWG_PORT', 51820)}",
                 "persistent_keepalive": 25,
             },
             "junk_packets": {
-                "jc": getattr(s, "AMNEZIAWG_JC", 4),
-                "jmin": getattr(s, "AMNEZIAWG_JMIN", 50),
-                "jmax": getattr(s, "AMNEZIAWG_JMAX", 1000),
+                "jc": s.get("amneziawg_jc", 4),
+                "jmin": s.get("amneziawg_jmin", 50),
+                "jmax": s.get("amneziawg_jmax", 1000),
             },
             "magic_headers": {
-                "s1": getattr(s, "AMNEZIAWG_S1", 0),
-                "s2": getattr(s, "AMNEZIAWG_S2", 0),
-                "h1": getattr(s, "AMNEZIAWG_H1", 1),
-                "h2": getattr(s, "AMNEZIAWG_H2", 2),
-                "h3": getattr(s, "AMNEZIAWG_H3", 3),
-                "h4": getattr(s, "AMNEZIAWG_H4", 4),
+                "s1": s.get("amneziawg_s1", 0),
+                "s2": s.get("amneziawg_s2", 0),
+                "h1": s.get("amneziawg_h1", 1),
+                "h2": s.get("amneziawg_h2", 2),
+                "h3": s.get("amneziawg_h3", 3),
+                "h4": s.get("amneziawg_h4", 4),
             },
         }
 
@@ -1140,40 +1140,40 @@ class ProtocolEngine:
         return {
             "protocol": "shadowtls",
             "server": f"{getattr(s, 'VPN_SERVER_IP', '')}:{getattr(s, 'SHADOWTLS_PORT', 8445)}",
-            "version": getattr(s, "SHADOWTLS_VERSION", 3),
-            "password": getattr(s, "SHADOWTLS_PASSWORD", ""),
-            "sni": getattr(s, "SHADOWTLS_SNI", "www.google.com"),
+            "version": s.get("shadowtls_version", 3),
+            "password": s.get("shadowtls_password", ""),
+            "sni": s.get("shadowtls_sni", "www.google.com"),
         }
 
     def _client_mieru(self, uuid: str, s: Any) -> Dict:
         return {
             "protocol": "mieru",
             "server": f"{getattr(s, 'VPN_SERVER_IP', '')}:{getattr(s, 'MIERU_PORT', 8446)}",
-            "password": getattr(s, "MIERU_PASSWORD", ""),
-            "encryption": getattr(s, "MIERU_ENCRYPTION", "aes-256-gcm"),
-            "transport": getattr(s, "MIERU_TRANSPORT", "tcp"),
+            "password": s.get("mieru_password", ""),
+            "encryption": s.get("mieru_encryption", "aes-256-gcm"),
+            "transport": s.get("mieru_transport", "tcp"),
         }
 
     def _client_naiveproxy(self, uuid: str, s: Any) -> Dict:
         return {
             "protocol": "naiveproxy",
             "server": f"{getattr(s, 'VPN_SERVER_IP', '')}:{getattr(s, 'NAIVEPROXY_PORT', 8447)}",
-            "user": getattr(s, "NAIVEPROXY_USER", ""),
-            "password": getattr(s, "NAIVEPROXY_PASSWORD", ""),
-            "sni": getattr(s, "NAIVEPROXY_SNI", ""),
+            "user": s.get("naiveproxy_user", ""),
+            "password": s.get("naiveproxy_password", ""),
+            "sni": s.get("naiveproxy_sni", ""),
         }
 
     def _client_wireguard(self, uuid: str, s: Any) -> Dict:
         return {
             "protocol": "wireguard",
             "interface": {
-                "address": getattr(s, "WIREGUARD_ADDRESS", "10.9.0.1/24"),
-                "dns": getattr(s, "WIREGUARD_DNS", "1.1.1.1"),
-                "mtu": getattr(s, "WIREGUARD_MTU", 1280),
+                "address": s.get("wireguard_address", "10.9.0.1/24"),
+                "dns": s.get("wireguard_dns", "1.1.1.1"),
+                "mtu": s.get("wireguard_mtu", 1280),
             },
             "peer": {
                 "endpoint": f"{getattr(s, 'VPN_SERVER_IP', '')}:{getattr(s, 'WIREGUARD_PORT', 51821)}",
-                "persistent_keepalive": getattr(s, "WIREGUARD_PERSISTENT_KEEPALIVE", 25),
+                "persistent_keepalive": s.get("wireguard_persistent_keepalive", 25),
             },
         }
 
@@ -1181,7 +1181,7 @@ class ProtocolEngine:
         return {
             "protocol": "openvpn",
             "server": f"{getattr(s, 'VPN_SERVER_IP', '')}:{getattr(s, 'OPENVPN_PORT', 1194)}",
-            "proto": getattr(s, "OPENVPN_PROTO", "udp"),
+            "proto": s.get("openvpn_proto", "udp"),
         }
 
     # ── Subscription Link Generation ───────────────────────
@@ -1197,7 +1197,7 @@ class ProtocolEngine:
             ).decode()
 
         # Xray share link format
-        server_ip = getattr(settings, "VPN_SERVER_IP", "")
+        server_ip = settings.get("vpn_server_ip", "")
         if protocol_key in ("vless_xhttp_reality", "vless_vision_reality", "vless_reverse_reality", "vless_ws"):
             return self._vless_share_link(protocol_key, user_uuid, server_ip, settings)
         elif protocol_key == "vmess_ws":
@@ -1211,47 +1211,47 @@ class ProtocolEngine:
 
     def _vless_share_link(self, protocol_key: str, uuid: str, server: str, s: Any) -> str:
         if protocol_key == "vless_xhttp_reality":
-            port = getattr(s, "VLESS_XHTTP_PORT", 2053)
-            sni = getattr(s, "VLESS_XHTTP_REALITY_SNI", "www.microsoft.com")
-            pbk = getattr(s, "VLESS_XHTTP_REALITY_PUBLIC_KEY", "")
-            sid = getattr(s, "VLESS_XHTTP_REALITY_SHORT_ID", "")
-            fp = getattr(s, "UTLS_FINGERPRINT", "chrome")
-            path = getattr(s, "VLESS_XHTTP_PATH", "/xhttp-stream")
-            mode = getattr(s, "VLESS_XHTTP_MODE", "auto")
+            port = s.get("vless_xhttp_port", 2053)
+            sni = s.get("vless_xhttp_reality_sni", "www.microsoft.com")
+            pbk = s.get("vless_xhttp_reality_public_key", "")
+            sid = s.get("vless_xhttp_reality_short_id", "")
+            fp = s.get("utls_fingerprint", "chrome")
+            path = s.get("vless_xhttp_path", "/xhttp-stream")
+            mode = s.get("vless_xhttp_mode", "auto")
             return (f"vless://{uuid}@{server}:{port}?type=xhttp&security=reality"
                     f"&sni={sni}&fp={fp}&pbk={pbk}&sid={sid}"
                     f"&path={path}&mode={mode}#Spiritus-VLESS-XHTTP-Reality")
         elif protocol_key == "vless_vision_reality":
-            port = getattr(s, "VLESS_VISION_PORT", 2058)
-            sni = getattr(s, "VLESS_VISION_REALITY_SNI", "www.yahoo.com")
-            pbk = getattr(s, "VLESS_VISION_REALITY_PUBLIC_KEY", "")
-            sid = getattr(s, "VLESS_VISION_REALITY_SHORT_ID", "")
-            fp = getattr(s, "UTLS_FINGERPRINT", "chrome")
-            flow = getattr(s, "VLESS_VISION_FLOW", "xtls-rprx-vision")
+            port = s.get("vless_vision_port", 2058)
+            sni = s.get("vless_vision_reality_sni", "www.yahoo.com")
+            pbk = s.get("vless_vision_reality_public_key", "")
+            sid = s.get("vless_vision_reality_short_id", "")
+            fp = s.get("utls_fingerprint", "chrome")
+            flow = s.get("vless_vision_flow", "xtls-rprx-vision")
             return (f"vless://{uuid}@{server}:{port}?type=tcp&security=reality"
                     f"&sni={sni}&fp={fp}&pbk={pbk}&sid={sid}"
                     f"&flow={flow}#Spiritus-VLESS-Vision-Reality")
         elif protocol_key == "vless_reverse_reality":
-            port = getattr(s, "VLESS_REVERSE_PORT", 2059)
-            sni = getattr(s, "VLESS_REVERSE_REALITY_SNI", "www.amazon.com")
-            pbk = getattr(s, "VLESS_REVERSE_REALITY_PUBLIC_KEY", "")
-            sid = getattr(s, "VLESS_REVERSE_REALITY_SHORT_ID", "")
-            fp = getattr(s, "UTLS_FINGERPRINT", "chrome")
+            port = s.get("vless_reverse_port", 2059)
+            sni = s.get("vless_reverse_reality_sni", "www.amazon.com")
+            pbk = s.get("vless_reverse_reality_public_key", "")
+            sid = s.get("vless_reverse_reality_short_id", "")
+            fp = s.get("utls_fingerprint", "chrome")
             return (f"vless://{uuid}@{server}:{port}?type=tcp&security=reality"
                     f"&sni={sni}&fp={fp}&pbk={pbk}&sid={sid}"
                     f"#Spiritus-VLESS-Reverse-Reality")
         else:  # vless_ws
-            port = getattr(s, "VLESS_WS_PORT", 2057)
-            path = getattr(s, "VLESS_WS_PATH", "/vless-ws")
-            sni = getattr(s, "VPN_SNI_HOST", "")
+            port = s.get("vless_ws_port", 2057)
+            path = s.get("vless_ws_path", "/vless-ws")
+            sni = s.get("vpn_sni_host", "")
             return (f"vless://{uuid}@{server}:{port}?type=ws&security=tls"
                     f"&sni={sni}&path={path}#Spiritus-VLESS-WS")
 
     def _vmess_share_link(self, uuid: str, server: str, s: Any) -> str:
         import json as _json
-        port = getattr(s, "VMESS_PORT", 443)
-        sni = getattr(s, "VMESS_SNI", "www.aparat.com")
-        path = getattr(s, "VMESS_WS_PATH", "/api/v1/stream")
+        port = s.get("vmess_port", 443)
+        sni = s.get("vmess_sni", "www.aparat.com")
+        path = s.get("vmess_ws_path", "/api/v1/stream")
         vmess_obj = {
             "v": "2", "ps": "Spiritus-VMess-WS",
             "add": server, "port": port,
@@ -1263,16 +1263,16 @@ class ProtocolEngine:
         return "vmess://" + base64.b64encode(_json.dumps(vmess_obj).encode()).decode()
 
     def _trojan_share_link(self, uuid: str, server: str, s: Any) -> str:
-        port = getattr(s, "TROJAN_CDN_PORT", 2083)
-        sni = getattr(s, "TROJAN_CDN_SNI", "")
-        path = getattr(s, "TROJAN_CDN_WS_PATH", "/trojan-ws")
-        host = getattr(s, "TROJAN_CDN_DOMAIN", "") or server
+        port = s.get("trojan_cdn_port", 2083)
+        sni = s.get("trojan_cdn_sni", "")
+        path = s.get("trojan_cdn_ws_path", "/trojan-ws")
+        host = s.get("trojan_cdn_domain", "") or server
         return (f"trojan://{uuid}@{host}:{port}?type=ws&security=tls"
                 f"&sni={sni}&path={path}#Spiritus-Trojan-CDN")
 
     def _ss_share_link(self, uuid: str, server: str, s: Any) -> str:
-        port = getattr(s, "SS2022_PORT", 2056)
-        method = getattr(s, "SS2022_METHOD", "2022-blake3-aes-128-gcm")
+        port = s.get("ss2022_port", 2056)
+        method = s.get("ss2022_method", "2022-blake3-aes-128-gcm")
         return f"ss://{method}:{uuid}@{server}:{port}#Spiritus-SS2022"
 
     # ── Utility ──────────────────────────────────────────────
