@@ -46,6 +46,39 @@ _login_attempts: dict[str, list[float]] = {}
 _settings_state: dict[str, Any] = {}
 _resilience_state: dict[str, Any] = {"active_attacks": 0, "stats": {}}
 _LEGACY_SETTINGS_KEY = "legacy_panel_settings"
+_LEGACY_SETTINGS_FILE = "vpn-settings.json"
+_DPI_SETTING_KEYS = {
+    "dpi_tcp_fragment",
+    "dpi_tls_fragment",
+    "dpi_ip_fragment",
+    "dpi_tcp_keepalive",
+    "dpi_dns_tunnel",
+    "dpi_icmp_tunnel",
+    "dpi_domain_front",
+    "dpi_cdn_front_enabled",
+    "dpi_cdn_front",
+}
+_PROTOCOL_ENABLE_KEYS = {
+    "cdn_enabled",
+    "trojan_enabled",
+    "grpc_enabled",
+    "httpupgrade_enabled",
+    "ss2022_enabled",
+    "vless_ws_enabled",
+    "vless_xhttp_enabled",
+    "vless_vision_enabled",
+    "vless_reverse_enabled",
+    "trojan_cdn_enabled",
+    "trojan_cdn_grpc_enabled",
+    "hysteria2_enabled",
+    "tuic_enabled",
+    "amneziawg_enabled",
+    "shadowtls_enabled",
+    "mieru_enabled",
+    "naiveproxy_enabled",
+    "wireguard_enabled",
+    "openvpn_enabled",
+}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -188,22 +221,53 @@ async def _load_legacy_settings(db: AsyncSession) -> Dict[str, Any]:
     if _settings_state:
         return dict(_settings_state)
 
+    file_settings: Dict[str, Any] = {}
+    settings_path = os.path.join(os.getcwd(), _LEGACY_SETTINGS_FILE)
+    if os.path.exists(settings_path):
+        try:
+            with open(settings_path) as f:
+                loaded_file = json.load(f)
+            if isinstance(loaded_file, dict):
+                file_settings = loaded_file
+        except Exception as exc:
+            logger.warning(f"Failed to load legacy settings file: {exc}")
+
     result = await db.execute(select(Setting).where(Setting.key == _LEGACY_SETTINGS_KEY))
     row = result.scalar_one_or_none()
     if not row or not row.value:
-        return {}
+        _settings_state.update(file_settings)
+        return dict(_settings_state)
 
+    db_settings: Dict[str, Any] = {}
     try:
-        loaded = json.loads(row.value)
+        loaded_db = json.loads(row.value)
     except json.JSONDecodeError:
         logger.warning("Ignoring invalid legacy panel settings JSON")
-        return {}
-    if isinstance(loaded, dict):
-        _settings_state.update(loaded)
+        loaded_db = {}
+    if isinstance(loaded_db, dict):
+        db_settings = loaded_db
+
+    _settings_state.update({**file_settings, **db_settings})
     return dict(_settings_state)
 
 
+def _preserve_protocols_on_dpi_update(
+    current: Dict[str, Any],
+    incoming: Dict[str, Any],
+) -> Dict[str, Any]:
+    if not any(key in incoming for key in _DPI_SETTING_KEYS):
+        return incoming
+
+    protected = dict(incoming)
+    for key in _PROTOCOL_ENABLE_KEYS:
+        if current.get(key) is True and protected.get(key) is False:
+            protected[key] = True
+    return protected
+
+
 async def _save_legacy_settings(db: AsyncSession, data: Dict[str, Any]) -> None:
+    current = await _load_legacy_settings(db)
+    data = _preserve_protocols_on_dpi_update(current, data)
     _settings_state.update(data)
     result = await db.execute(select(Setting).where(Setting.key == _LEGACY_SETTINGS_KEY))
     row = result.scalar_one_or_none()
@@ -220,6 +284,14 @@ async def _save_legacy_settings(db: AsyncSession, data: Dict[str, Any]) -> None:
         row.value = value
         row.value_type = "json"
     await db.commit()
+
+    settings_path = os.path.join(os.getcwd(), _LEGACY_SETTINGS_FILE)
+    try:
+        with open(settings_path, "w") as f:
+            json.dump(_settings_state, f, indent=2)
+        os.chmod(settings_path, 0o600)
+    except Exception as exc:
+        logger.warning(f"Failed to mirror legacy settings file: {exc}")
 
 
 # ─────────────────────────────────────────────────────────────────────────────

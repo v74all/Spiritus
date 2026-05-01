@@ -10,6 +10,9 @@ let configTab = 'vmess';
 let configTarget = null;
 let mainView = 'users';
 let groups = [];
+let _settingsLoaded = false;
+let _settingsLoading = null;
+let _settingsCache = {};
 // SERVER_INFO is injected by the template in panel.html
 
 /* ── Auth ── */
@@ -1349,10 +1352,12 @@ function updateSettingsStatus() {
 }
 
 async function loadSettings() {
-  try {
+  if (_settingsLoading) return _settingsLoading;
+  _settingsLoading = (async () => {
     const r = await fetch(API+'/settings');
-    if (!r.ok) return;
+    if (!r.ok) throw new Error('Failed to load settings');
     const s = await r.json();
+    _settingsCache = s || {};
     // Config customization
     document.getElementById('set-config-prefix').value = s.config_prefix || 'Proxy';
     document.getElementById('set-vmess-port').value = s.vmess_port || 443;
@@ -1427,10 +1432,27 @@ async function loadSettings() {
     document.getElementById('set-dpi-cdn-front').value = s.dpi_cdn_front || '';
     loadBackups();
     updateSettingsStatus();
-  } catch(e) {}
+    _settingsLoaded = true;
+    return _settingsCache;
+  })();
+  try {
+    return await _settingsLoading;
+  } catch(e) {
+    _settingsLoaded = false;
+    return null;
+  } finally {
+    _settingsLoading = null;
+  }
 }
 
 async function saveSettings() {
+  if (!_settingsLoaded) {
+    await loadSettings();
+    if (!_settingsLoaded) {
+      toast('Settings are still loading. Try again in a moment.','error');
+      return;
+    }
+  }
   const data = {
     // Config customization
     config_prefix: document.getElementById('set-config-prefix').value.trim() || 'Proxy',

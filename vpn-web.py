@@ -239,7 +239,42 @@ DEFAULT_SETTINGS = {
     "dpi_dns_tunnel": False,
     "dpi_icmp_tunnel": False,
     "dpi_domain_front": False,
+    "dpi_cdn_front_enabled": False,
     "dpi_cdn_front": "",
+}
+
+DPI_SETTING_KEYS = {
+    "dpi_tcp_fragment",
+    "dpi_tls_fragment",
+    "dpi_ip_fragment",
+    "dpi_tcp_keepalive",
+    "dpi_dns_tunnel",
+    "dpi_icmp_tunnel",
+    "dpi_domain_front",
+    "dpi_cdn_front_enabled",
+    "dpi_cdn_front",
+}
+
+PROTOCOL_ENABLE_KEYS = {
+    "cdn_enabled",
+    "trojan_enabled",
+    "grpc_enabled",
+    "httpupgrade_enabled",
+    "ss2022_enabled",
+    "vless_ws_enabled",
+    "vless_xhttp_enabled",
+    "vless_vision_enabled",
+    "vless_reverse_enabled",
+    "trojan_cdn_enabled",
+    "trojan_cdn_grpc_enabled",
+    "hysteria2_enabled",
+    "tuic_enabled",
+    "amneziawg_enabled",
+    "shadowtls_enabled",
+    "mieru_enabled",
+    "naiveproxy_enabled",
+    "wireguard_enabled",
+    "openvpn_enabled",
 }
 
 
@@ -3222,9 +3257,13 @@ def api_get_settings():
 @require_auth
 def api_update_settings():
     global settings
-    data = request.json
+    data = request.json or {}
     changed = False
     rebuild = False
+    if any(key in data for key in DPI_SETTING_KEYS):
+        for key in PROTOCOL_ENABLE_KEYS:
+            if settings.get(key) is True and data.get(key) is False:
+                data[key] = True
 
     for key in ["cdn_enabled", "cdn_domain", "cdn_ws_path", "cdn_port",
                 "kill_switch_enabled", "backup_retention_days",
@@ -3241,7 +3280,7 @@ def api_update_settings():
                 # DPI Evasion (Real)
                 "dpi_tcp_fragment", "dpi_tls_fragment", "dpi_ip_fragment",
                 "dpi_tcp_keepalive", "dpi_dns_tunnel", "dpi_icmp_tunnel",
-                "dpi_domain_front", "dpi_cdn_front"]:
+                "dpi_domain_front", "dpi_cdn_front_enabled", "dpi_cdn_front"]:
         if key in data:
             if settings.get(key) != data[key]:
                 settings[key] = data[key]
@@ -3257,7 +3296,7 @@ def api_update_settings():
                            "fingerprint", "noise_enabled", "noise_packet", "noise_delay",
                            "dpi_tcp_fragment", "dpi_tls_fragment", "dpi_ip_fragment",
                            "dpi_tcp_keepalive", "dpi_dns_tunnel", "dpi_icmp_tunnel",
-                           "dpi_domain_front", "dpi_cdn_front"):
+                           "dpi_domain_front", "dpi_cdn_front_enabled", "dpi_cdn_front"):
                     rebuild = True
 
     if changed:
