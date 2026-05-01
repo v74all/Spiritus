@@ -1,0 +1,167 @@
+{
+  "log": {
+    "loglevel": "warning",
+    "access": "/var/log/xray/access.log",
+    "error": "/var/log/xray/error.log",
+    "dnsLog": false
+  },
+  "api": {
+    "tag": "api",
+    "services": ["HandlerService", "StatsService", "LoggerService"]
+  },
+  "stats": {},
+  "policy": {
+    "levels": {
+      "0": {
+        "statsUplink": true,
+        "statsDownlink": true,
+        "statsUserUplink": true,
+        "statsUserDownlink": true
+      }
+    },
+    "system": {
+      "statsInboundUplink": true,
+      "statsInboundDownlink": true,
+      "statsOutboundUplink": true,
+      "statsOutboundDownlink": true
+    }
+  },
+  "inbounds": [
+    {
+      "tag": "vless-xhttp-reality",
+      "listen": "0.0.0.0",
+      "port": 443,
+      "protocol": "vless",
+      "settings": {
+        "clients": [
+          {
+            "id": "a2bb5f6a-9e7e-4c44-ab8c-521c66effe30",
+            "flow": ""
+          }
+        ],
+        "decryption": "none"
+      },
+      "streamSettings": {
+        "network": "xhttp",
+        "security": "reality",
+        "realitySettings": {
+          "dest": "objects.githubusercontent.com:443",
+          "serverNames": [
+            "objects.githubusercontent.com",
+            "raw.githubusercontent.com",
+            "chat.deepseek.com",
+            "huggingface.co",
+            "dotic.ir"
+          ],
+          "privateKey": "WBJ-h3AL76YSZQqEYz8dcnOpRFA3Tx-mD-iQ1JS8E0A",
+          "shortIds": [
+            "4396ab5d72d550d7",
+            "38ea611fb9049676",
+            "8d133089a83b46dd",
+            "1dec4943c6bce56a",
+            "e906adea432176c5"
+          ],
+          "spiderX": "/blog/2024/tech-innovations"
+        },
+        "xhttpSettings": {
+          "path": "/api/v2/stream",
+          "mode": "auto"
+        }
+      },
+      "sniffing": {
+        "enabled": true,
+        "destOverride": ["http", "tls", "quic"],
+        "routeOnly": true
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "tag": "direct",
+      "protocol": "freedom",
+      "settings": {
+        "domainStrategy": "UseIPv4"
+      },
+      "streamSettings": {
+        "sockopt": {
+          "tcpFastOpen": true,
+          "tcpKeepAliveInterval": 15
+        }
+      }
+    },
+    {
+      "tag": "blocked",
+      "protocol": "blackhole",
+      "settings": {
+        "response": {
+          "type": "http"
+        }
+      }
+    },
+    {
+      "tag": "block-iran",
+      "protocol": "blackhole",
+      "settings": {
+        "response": {
+          "type": "http"
+        }
+      }
+    }
+  ],
+  "routing": {
+    "domainStrategy": "IPIfNonMatch",
+    "domainMatcher": "hybrid",
+    "rules": [
+      {
+        "type": "field",
+        "port": "443",
+        "network": "udp",
+        "outboundTag": "blocked",
+        "comment": "Block UDP/443 — Iran throttles UDP"
+      },
+      {
+        "type": "field",
+        "protocol": ["bittorrent"],
+        "outboundTag": "blocked",
+        "comment": "Block BitTorrent traffic patterns"
+      },
+      {
+        "type": "field",
+        "domain": [
+          "geosite:category-ads-all"
+        ],
+        "outboundTag": "blocked",
+        "comment": "Block ads domains"
+      },
+      {
+        "type": "field",
+        "domain": [
+          "ext:iran.dat:ir",
+          "domain:ir"
+        ],
+        "outboundTag": "blocked",
+        "comment": "Block Iran domains — prevent abuse-as-SNI-proxy"
+      },
+      {
+        "type": "field",
+        "ip": [
+          "geoip:cn",
+          "geoip:private"
+        ],
+        "outboundTag": "blocked",
+        "comment": "Block China + private IPs"
+      },
+      {
+        "type": "field",
+        "ip": [
+          "1.1.1.1",
+          "8.8.8.8",
+          "8.8.4.4"
+        ],
+        "port": "53",
+        "outboundTag": "direct",
+        "comment": "Allow DNS resolvers"
+      }
+    ]
+  }
+}

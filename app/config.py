@@ -5,7 +5,7 @@ Uses Pydantic Settings for type-safe configuration with environment variables.
 """
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field, field_validator
+from pydantic import Field
 from typing import Optional
 import secrets
 
@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     
     # Database
     database_url: str = Field(
-        "postgresql://vpnadmin:securepassword@127.0.0.1:5432/vpnpanel",
+        "postgresql://vpnadmin:securepassword@localhost:5432/vpnpanel",
         env="DATABASE_URL"
     )
     database_pool_size: int = 20
@@ -94,17 +94,6 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore"
     )
-
-    @field_validator("debug", mode="before")
-    @classmethod
-    def parse_debug(cls, value):
-        if isinstance(value, str):
-            normalized = value.strip().lower()
-            if normalized in {"release", "prod", "production", "off"}:
-                return False
-            if normalized in {"debug", "dev", "development", "on"}:
-                return True
-        return value
 
 # Initialize settings
 settings = Settings()

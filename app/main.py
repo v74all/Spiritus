@@ -47,6 +47,11 @@ async def lifespan(app: FastAPI):
     # Setup OpenTelemetry (optional, won't fail if not installed)
     setup_opentelemetry(app)
 
+    # Initialize DPI Evasion SNI Manager
+    from .dpi_evasion import sni_manager
+    await sni_manager.initialize()
+    logger.info("DPI Evasion SNI Manager initialized")
+
     # Initialize Telegram bot
     from .telegram_bot import telegram_bot
     from .config import settings as s
@@ -170,6 +175,10 @@ app.include_router(agents_router, prefix="/api")
 app.include_router(payments_router, prefix="/api")
 app.include_router(resellers_router, prefix="/api")
 app.include_router(portal_router, prefix="/api")
+
+# DPI Evasion router
+from .api.dpi import router as dpi_router
+app.include_router(dpi_router, prefix="/api")
 
 # ── Health check ────────────────────────────────────────
 
@@ -302,12 +311,18 @@ async def _subscription_links(user: VpnUser, request: Request, db: AsyncSession)
         if key in {
             "vmess",
             "vless",
+            "vless_ws",
+            "vless_xhttp",
+            "vless_vision",
+            "vless_reverse",
             "cdn_vmess",
             "trojan",
+            "trojan_cdn",
             "grpc_vmess",
             "httpupgrade_vmess",
             "ss2022",
-            "vless_ws",
+            "hysteria2",
+            "tuic",
         } and value
     }
 

@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Global Solutions Inc. — Enterprise Cloud Services</title>
+    <meta name="description" content="Enterprise cloud solutions and digital transformation services.">
+    <meta name="robots" content="index, follow">
+    <link rel="icon" href="/favicon.ico" type="image/x-icon">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            color: #333; background: #fff; line-height: 1.6;
+        }
+        .container { max-width: 1200px; margin: 0 auto; padding: 0 20px; }
+        
+        /* Header */
+        header { background: #1a1a2e; color: #fff; padding: 20px 0; }
+        header .container { display: flex; justify-content: space-between; align-items: center; }
+        header h1 { font-size: 24px; font-weight: 600; }
+        nav { display: flex; gap: 24px; }
+        nav a { color: #e0e0e0; text-decoration: none; font-size: 14px; transition: color 0.2s; }
+        nav a:hover { color: #fff; }
+        
+        /* Hero */
+        .hero { padding: 80px 0; text-align: center; background: linear-gradient(135deg, #f8f9fa 0%, #e8eaf6 100%); }
+        .hero h2 { font-size: 42px; margin-bottom: 20px; color: #1a1a2e; }
+        .hero p { font-size: 18px; color: #555; max-width: 600px; margin: 0 auto 30px; }
+        .hero .cta { display: inline-block; background: #4361ee; color: #fff; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; transition: background 0.2s; }
+        .hero .cta:hover { background: #3a56d4; }
+        
+        /* Features */
+        .features { padding: 80px 0; }
+        .features h3 { text-align: center; font-size: 32px; margin-bottom: 50px; color: #1a1a2e; }
+        .features-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 30px; }
+        .feature { padding: 40px 30px; border: 1px solid #eee; border-radius: 12px; transition: box-shadow 0.3s; }
+        .feature:hover { box-shadow: 0 8px 30px rgba(0,0,0,0.08); }
+        .feature .icon { font-size: 40px; margin-bottom: 20px; }
+        .feature h4 { font-size: 20px; margin-bottom: 12px; color: #1a1a2e; }
+        .feature p { color: #666; font-size: 15px; }
+        
+        /* Stats */
+        .stats { background: #1a1a2e; color: #fff; padding: 60px 0; }
+        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 30px; text-align: center; }
+        .stat h4 { font-size: 48px; font-weight: 700; margin-bottom: 8px; }
+        .stat p { color: #a0a0b0; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; }
+        
+        /* Footer */
+        footer { background: #0f0f1a; color: #888; padding: 40px 0; text-align: center; }
+        footer p { font-size: 14px; }
+        footer a { color: #4361ee; text-decoration: none; }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .features-grid { grid-template-columns: 1fr; }
+            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+            .hero h2 { font-size: 28px; }
+            header .container { flex-direction: column; gap: 15px; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>🌐 Global Solutions Inc.</h1>
+            <nav>
+                <a href="/">Home</a>
+                <a href="/about">About</a>
+                <a href="/services">Services</a>
+                <a href="/blog">Blog</a>
+                <a href="/contact">Contact</a>
+            </nav>
+        </div>
+    </header>
+
+    <section class="hero">
+        <div class="container">
+            <h2>Enterprise Cloud Solutions</h2>
+            <p>Providing innovative infrastructure and digital transformation services for businesses worldwide since 2019.</p>
+            <a href="/services" class="cta">Explore Services →</a>
+        </div>
+    </section>
+
+    <section class="features">
+        <div class="container">
+            <h3>Why Choose Us</h3>
+            <div class="features-grid">
+                <div class="feature">
+                    <div class="icon">☁️</div>
+                    <h4>Cloud Infrastructure</h4>
+                    <p>Scalable and reliable cloud solutions built on enterprise-grade hardware with 99.99% uptime SLA.</p>
+                </div>
+                <div class="feature">
+                    <div class="icon">🔒</div>
+                    <h4>Security Solutions</h4>
+                    <p>Enterprise-grade security with end-to-end encryption, DDoS protection, and compliance certifications.</p>
+                </div>
+                <div class="feature">
+                    <div class="icon">📊</div>
+                    <h4>Data Analytics</h4>
+                    <p>Real-time analytics and business intelligence dashboards powered by machine learning algorithms.</p>
+                </div>
+                <div class="feature">
+                    <div class="icon">⚡</div>
+                    <h4>High Performance</h4>
+                    <p>Optimized infrastructure with global CDN and edge computing for sub-50ms response times.</p>
+                </div>
+                <div class="feature">
+                    <div class="icon">🤝</div>
+                    <h4>24/7 Support</h4>
+                    <p>Dedicated support team available around the clock with guaranteed 15-minute response time.</p>
+                </div>
+                <div class="feature">
+                    <div class="icon">🌍</div>
+                    <h4>Global Presence</h4>
+                    <p>Data centers in 12 regions across 4 continents, ensuring low latency for users everywhere.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="stats">
+        <div class="container">
+            <div class="stats-grid">
+                <div class="stat">
+                    <h4>2,500+</h4>
+                    <p>Enterprise Clients</p>
+                </div>
+                <div class="stat">
+                    <h4>99.99%</h4>
+                    <p>Uptime SLA</p>
+                </div>
+                <div class="stat">
+                    <h4>12</h4>
+                    <p>Global Regions</p>
+                </div>
+                <div class="stat">
+                    <h4>50M+</h4>
+                    <p>Requests/Day</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2024 Global Solutions Inc. All rights reserved. | <a href="/privacy">Privacy Policy</a> | <a href="/terms">Terms of Service</a></p>
+        </div>
+    </footer>
+</body>
+</html>

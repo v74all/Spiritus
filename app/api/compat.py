@@ -337,6 +337,108 @@ def _build_share_links(u: VpnUser, server_ip: Optional[str] = None) -> Dict[str,
         except Exception:
             links["ss2022"] = ""
 
+    # Hysteria2
+    if _settings_state.get("hysteria2_enabled"):
+        try:
+            links["hysteria2"] = ClientConfigGenerator.generate_hysteria2_share_url(
+                password=u.uuid,
+                address=server_ip,
+                port=int(_settings_state.get("hysteria2_port") or 8443),
+                sni=sni_host,
+                obfs=_settings_state.get("hysteria2_obfs_password") or "",
+                insecure=1,
+            )
+        except Exception:
+            links["hysteria2"] = ""
+
+    # TUIC v5
+    if _settings_state.get("tuic_enabled"):
+        try:
+            tuic_port = int(_settings_state.get("tuic_port") or 8444)
+            tuic_password = _settings_state.get("tuic_password") or u.uuid
+            label = urllib.parse.quote(f"V7LTHRONYX-TUIC-{u.name}")
+            params = urllib.parse.urlencode({
+                "sni": sni_host,
+                "alpn": "h3",
+                "congestion_control": "bbr",
+                "udp_relay_mode": "native",
+                "allow_insecure": "1",
+            })
+            links["tuic"] = (
+                f"tuic://{u.uuid}:{tuic_password}@{server_ip}:{tuic_port}?{params}#{label}"
+            )
+        except Exception:
+            links["tuic"] = ""
+
+    # VLESS xHTTP REALITY
+    if _settings_state.get("vless_xhttp_enabled") and _settings_state.get("reality_public_key"):
+        try:
+            links["vless_xhttp"] = ClientConfigGenerator.generate_vless_share_url(
+                uuid=u.uuid,
+                address=server_ip,
+                port=int(_settings_state.get("vless_xhttp_port") or 2053),
+                security="reality",
+                sni=_settings_state.get("reality_sni") or "www.google.com",
+                fp=_settings_state.get("fingerprint") or "chrome",
+                pbk=_settings_state.get("reality_public_key") or "",
+                sid=_settings_state.get("reality_short_id") or "",
+                network="xhttp",
+                xhttp_mode=_settings_state.get("vless_xhttp_mode") or "auto",
+                path=_settings_state.get("vless_xhttp_path") or "/xhttp",
+            )
+        except Exception:
+            links["vless_xhttp"] = ""
+
+    # VLESS Vision REALITY
+    if _settings_state.get("vless_vision_enabled") and _settings_state.get("reality_public_key"):
+        try:
+            links["vless_vision"] = ClientConfigGenerator.generate_vless_share_url(
+                uuid=u.uuid,
+                address=server_ip,
+                port=int(_settings_state.get("vless_vision_port") or 2058),
+                security="reality",
+                sni=_settings_state.get("reality_sni") or "www.google.com",
+                fp=_settings_state.get("fingerprint") or "chrome",
+                pbk=_settings_state.get("reality_public_key") or "",
+                sid=_settings_state.get("reality_short_id") or "",
+                flow="xtls-rprx-vision",
+                network="tcp",
+            )
+        except Exception:
+            links["vless_vision"] = ""
+
+    # VLESS Reverse REALITY
+    if _settings_state.get("vless_reverse_enabled") and _settings_state.get("reality_public_key"):
+        try:
+            links["vless_reverse"] = ClientConfigGenerator.generate_vless_share_url(
+                uuid=u.uuid,
+                address=server_ip,
+                port=int(_settings_state.get("vless_reverse_port") or 2059),
+                security="reality",
+                sni=_settings_state.get("reality_sni") or "www.google.com",
+                fp=_settings_state.get("fingerprint") or "chrome",
+                pbk=_settings_state.get("reality_public_key") or "",
+                sid=_settings_state.get("reality_short_id") or "",
+                network="tcp",
+            )
+        except Exception:
+            links["vless_reverse"] = ""
+
+    # Trojan CDN
+    if _settings_state.get("trojan_cdn_enabled") and _settings_state.get("cdn_domain"):
+        try:
+            links["trojan_cdn"] = ClientConfigGenerator.generate_trojan_share_url(
+                password=u.uuid,
+                address=_settings_state.get("cdn_domain"),
+                port=int(_settings_state.get("trojan_cdn_port") or 443),
+                sni=_settings_state.get("cdn_domain"),
+                network="ws",
+                path=_settings_state.get("cdn_ws_path") or "/cdn-ws",
+                allow_insecure=False,
+            )
+        except Exception:
+            links["trojan_cdn"] = ""
+
     return links
 
 
@@ -374,10 +476,82 @@ def _user_to_legacy(u: VpnUser, server_ip: Optional[str] = None) -> Dict[str, An
         "vless": links.get("vless", ""),
         "cdn_vmess": links.get("cdn_vmess", ""),
         "trojan": links.get("trojan", ""),
+        "trojan_cdn": links.get("trojan_cdn", ""),
         "grpc_vmess": links.get("grpc_vmess", ""),
         "httpupgrade_vmess": links.get("httpupgrade_vmess", ""),
         "ss2022": links.get("ss2022", ""),
         "vless_ws": links.get("vless_ws", ""),
+        "vless_xhttp": links.get("vless_xhttp", ""),
+        "vless_vision": links.get("vless_vision", ""),
+        "vless_reverse": links.get("vless_reverse", ""),
+        "hysteria2": links.get("hysteria2", ""),
+        "tuic": links.get("tuic", ""),
+    }
+
+
+def _default_legacy_settings() -> Dict[str, Any]:
+    """Default protocol toggles. All advertised protocols are ON by default
+    so freshly-installed panels show every protocol in the UI without manual
+    activation. Real protocol availability still depends on the agent
+    (xray/sing-box/wireguard) being running and configured."""
+    return {
+        "vmess_port": 443,
+        "vmess_sni": "www.aparat.com",
+        "vmess_ws_path": "/api/v1/stream",
+        "vless_port": 2053,
+        "reality_sni": "www.google.com",
+        "vless_xhttp_enabled": True,
+        "vless_xhttp_port": 2053,
+        "vless_xhttp_mode": "auto",
+        "vless_xhttp_path": "/xhttp",
+        "vless_vision_enabled": True,
+        "vless_vision_port": 2058,
+        "vless_reverse_enabled": True,
+        "vless_reverse_port": 2059,
+        "vless_ws_enabled": True,
+        "vless_ws_port": settings.vless_ws_port,
+        "vless_ws_path": settings.vless_ws_path,
+        "trojan_enabled": True,
+        "trojan_port": 2083,
+        "trojan_cdn_enabled": False,
+        "trojan_cdn_port": 443,
+        "grpc_enabled": True,
+        "grpc_port": 2054,
+        "grpc_service_name": "GunService",
+        "httpupgrade_enabled": True,
+        "httpupgrade_port": 2055,
+        "httpupgrade_path": "/httpupgrade",
+        "ss2022_enabled": True,
+        "ss2022_port": 2056,
+        "ss2022_method": "2022-blake3-aes-128-gcm",
+        "hysteria2_enabled": True,
+        "hysteria2_port": 8443,
+        "tuic_enabled": True,
+        "tuic_port": 8444,
+        "amneziawg_enabled": False,
+        "amneziawg_port": 51820,
+        "shadowtls_enabled": False,
+        "shadowtls_port": 8445,
+        "mieru_enabled": False,
+        "mieru_port": 8446,
+        "naiveproxy_enabled": False,
+        "naiveproxy_port": 8447,
+        "wireguard_enabled": False,
+        "wireguard_port": 51821,
+        "openvpn_enabled": False,
+        "openvpn_port": 1194,
+        "fragment_enabled": True,
+        "fragment_packets": "tlshello",
+        "fragment_length": "100-200",
+        "fragment_interval": "10-20",
+        "mux_enabled": True,
+        "mux_concurrency": 8,
+        "fingerprint": "chrome",
+        "kill_switch_enabled": False,
+        "cdn_enabled": False,
+        "cdn_domain": "",
+        "cdn_ws_path": "/cdn-ws",
+        "cdn_port": 2082,
     }
 
 
@@ -399,20 +573,17 @@ async def _load_legacy_settings(db: AsyncSession) -> Dict[str, Any]:
 
     result = await db.execute(select(Setting).where(Setting.key == _LEGACY_SETTINGS_KEY))
     row = result.scalar_one_or_none()
-    if not row or not row.value:
-        _settings_state.update(_normalize_settings_types(file_settings))
-        return dict(_settings_state)
-
     db_settings: Dict[str, Any] = {}
-    try:
-        loaded_db = json.loads(row.value)
-    except json.JSONDecodeError:
-        logger.warning("Ignoring invalid legacy panel settings JSON")
-        loaded_db = {}
-    if isinstance(loaded_db, dict):
-        db_settings = loaded_db
+    if row and row.value:
+        try:
+            loaded_db = json.loads(row.value)
+            if isinstance(loaded_db, dict):
+                db_settings = loaded_db
+        except json.JSONDecodeError:
+            logger.warning("Ignoring invalid legacy panel settings JSON")
 
-    _settings_state.update(_normalize_settings_types({**file_settings, **db_settings}))
+    merged = {**_default_legacy_settings(), **file_settings, **db_settings}
+    _settings_state.update(_normalize_settings_types(merged))
     return dict(_settings_state)
 
 
@@ -992,29 +1163,83 @@ async def legacy_server_info(
 ):
     s = await _load_legacy_settings(db)
     return {
+        # VMess (always-on)
         "vmess_port": s.get("vmess_port", 443),
+        "vmess_sni": s.get("vmess_sni", "www.aparat.com"),
+        "vmess_ws_path": s.get("vmess_ws_path", "/api/v1/stream"),
+        # VLESS Reality (Vision)
         "vless": bool(s.get("reality_public_key")),
+        "vless_enabled": bool(s.get("reality_public_key")),
         "vless_port": s.get("vless_port", 2053),
         "vless_sni": s.get("reality_sni", "www.google.com"),
         "vless_public_key": s.get("reality_public_key", ""),
         "vless_short_id": s.get("reality_short_id", ""),
+        # VLESS xHTTP REALITY
+        "vless_xhttp_enabled": _as_bool(s.get("vless_xhttp_enabled", False)),
+        "vless_xhttp_port": s.get("vless_xhttp_port", 2053),
+        # VLESS Vision REALITY
+        "vless_vision_enabled": _as_bool(s.get("vless_vision_enabled", False)),
+        "vless_vision_port": s.get("vless_vision_port", 2058),
+        # VLESS Reverse REALITY
+        "vless_reverse_enabled": _as_bool(s.get("vless_reverse_enabled", False)),
+        "vless_reverse_port": s.get("vless_reverse_port", 2059),
+        # Trojan
         "trojan": _as_bool(s.get("trojan_enabled", False)),
+        "trojan_enabled": _as_bool(s.get("trojan_enabled", False)),
         "trojan_port": s.get("trojan_port", 2083),
+        # Trojan CDN
+        "trojan_cdn_enabled": _as_bool(s.get("trojan_cdn_enabled", False)),
+        "trojan_cdn_port": s.get("trojan_cdn_port", 2083),
+        # gRPC
         "grpc": _as_bool(s.get("grpc_enabled", False)),
+        "grpc_enabled": _as_bool(s.get("grpc_enabled", False)),
         "grpc_port": s.get("grpc_port", 2054),
         "grpc_service": s.get("grpc_service_name", "GunService"),
+        # HTTPUpgrade
         "httpupgrade": _as_bool(s.get("httpupgrade_enabled", False)),
+        "httpupgrade_enabled": _as_bool(s.get("httpupgrade_enabled", False)),
         "httpupgrade_port": s.get("httpupgrade_port", 2055),
         "httpupgrade_path": s.get("httpupgrade_path", "/httpupgrade"),
+        # ShadowSocks 2022
         "ss2022": bool(s.get("ss2022_server_key")),
+        "ss2022_enabled": _as_bool(s.get("ss2022_enabled", False)) and bool(s.get("ss2022_server_key")),
         "ss2022_port": s.get("ss2022_port", 2056),
+        # VLESS WS
         "vless_ws": _as_bool(s.get("vless_ws_enabled", settings.vless_ws_enabled)),
+        "vless_ws_enabled": _as_bool(s.get("vless_ws_enabled", settings.vless_ws_enabled)),
         "vless_ws_port": s.get("vless_ws_port", settings.vless_ws_port),
         "vless_ws_path": s.get("vless_ws_path", settings.vless_ws_path),
+        # Hysteria2
+        "hysteria2_enabled": _as_bool(s.get("hysteria2_enabled", False)),
+        "hysteria2_port": s.get("hysteria2_port", 8443),
+        # TUIC v5
+        "tuic_enabled": _as_bool(s.get("tuic_enabled", False)),
+        "tuic_port": s.get("tuic_port", 8444),
+        # AmneziaWG
+        "amneziawg_enabled": _as_bool(s.get("amneziawg_enabled", False)),
+        "amneziawg_port": s.get("amneziawg_port", 51820),
+        # ShadowTLS v3
+        "shadowtls_enabled": _as_bool(s.get("shadowtls_enabled", False)),
+        "shadowtls_port": s.get("shadowtls_port", 8445),
+        # Mieru
+        "mieru_enabled": _as_bool(s.get("mieru_enabled", False)),
+        "mieru_port": s.get("mieru_port", 8446),
+        # NaiveProxy
+        "naiveproxy_enabled": _as_bool(s.get("naiveproxy_enabled", False)),
+        "naiveproxy_port": s.get("naiveproxy_port", 8447),
+        # WireGuard
+        "wireguard_enabled": _as_bool(s.get("wireguard_enabled", False)),
+        "wireguard_port": s.get("wireguard_port", 51821),
+        # OpenVPN
+        "openvpn_enabled": _as_bool(s.get("openvpn_enabled", False)),
+        "openvpn_port": s.get("openvpn_port", 1194),
+        # CDN
         "cdn": _as_bool(s.get("cdn_enabled", settings.cdn_enabled)),
+        "cdn_enabled": _as_bool(s.get("cdn_enabled", settings.cdn_enabled)),
         "cdn_domain": s.get("cdn_domain", settings.cdn_domain),
         "cdn_ws_path": s.get("cdn_ws_path", settings.cdn_ws_path),
         "cdn_port": s.get("cdn_port", settings.cdn_port),
+        # Misc
         "fragment_enabled": _as_bool(s.get("fragment_enabled", False)),
         "mux_enabled": _as_bool(s.get("mux_enabled", False)),
         "kill_switch": _as_bool(s.get("kill_switch_enabled", False)),
