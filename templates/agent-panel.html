@@ -564,7 +564,7 @@ input,button,textarea,select{font-family:inherit;font-size:inherit}
 <script src="{{ url_for('static', filename='js/qrcode.js') }}"></script>
 <script>
 const API = '/api/agent';
-const QR_LIB_URL = {{ url_for('static', filename='js/qrcode.js') | tojson }};
+const QR_LIB_URL = "{{ url_for('static', filename='js/qrcode.js') }}";
 let users = [];
 let prevLive = {}, prevTime = 0, speeds = {};
 let renewTarget = '';
@@ -576,7 +576,12 @@ let configTarget = null;
 let mainView = 'users';
 let groups = [];
 let agentInfo = { name: '', quota_gb: 0, used_gb: 0, remaining_gb: 0, brand_name: '' };
-const SERVER_INFO = {{ {'ip': server_ip, 'port': server_port, 'sni': sni_host, 'path': ws_path} | tojson }};
+const SERVER_INFO = {
+    ip: "{{ server_ip }}",
+    port: "{{ server_port }}",
+    sni: "{{ sni_host }}",
+    path: "{{ ws_path }}"
+};
 
 /* ── Auth ── */
 async function doLogin() {
