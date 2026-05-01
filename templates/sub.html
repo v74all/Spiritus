@@ -174,7 +174,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg0);color:var(--
         <span class="limit">{{ pct }}% of {{ "%.1f"|format(limit) }} GB</span>
       </div>
       <div class="bar-track">
-        <div class="bar-fill" style="width: {{ pct }}%; background: {{ bar_color }};"></div>
+        <div class="bar-fill" id="traffic-bar-fill" data-width="{{ pct }}%" data-bg="{{ bar_color }}"></div>
       </div>
     </div>
   </div>
@@ -527,6 +527,15 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg0);color:var(--
 const LINKS = JSON.parse(document.getElementById('data-links').textContent);
 const EXPIRE = "{{ user.expire_at or '' }}";
 let activeQr = 'vmess';
+
+/* Apply traffic bar styles */
+(function(){
+  const bf = document.getElementById('traffic-bar-fill');
+  if(bf) {
+    bf.style.width = bf.getAttribute('data-width');
+    bf.style.background = bf.getAttribute('data-bg');
+  }
+})();
 
 /* Days left */
 (function(){
