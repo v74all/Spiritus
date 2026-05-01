@@ -152,6 +152,9 @@ from .api.payments import router as payments_router
 from .api.resellers import router as resellers_router, portal_router
 from .api.compat import router as compat_router
 
+# Legacy panel routes must be registered first so cookie-auth compatibility
+# handlers win over the bearer-token resource routers on shared paths.
+app.include_router(compat_router, prefix="/api")
 app.include_router(auth_router, prefix="/api")
 app.include_router(users_router, prefix="/api")
 app.include_router(system_router, prefix="/api")
@@ -162,7 +165,6 @@ app.include_router(agents_router, prefix="/api")
 app.include_router(payments_router, prefix="/api")
 app.include_router(resellers_router, prefix="/api")
 app.include_router(portal_router, prefix="/api")
-app.include_router(compat_router, prefix="/api")
 
 # ── Health check ────────────────────────────────────────
 

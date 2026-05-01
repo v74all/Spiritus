@@ -92,11 +92,8 @@ def verify_totp(secret: str, token: str) -> bool:
     return totp.verify(token)
 
 # Dependency functions
-async def get_current_user(
-    token: str = Depends(oauth2_scheme),
-    db: AsyncSession = Depends(get_async_db)
-) -> User:
-    """Get the current user from JWT token."""
+async def _decode_token_to_user(token: str, db: AsyncSession) -> User:
+    """Decode a JWT and resolve to a User. Falls back to password-file admin."""
     from .models import Admin
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -104,12 +101,9 @@ async def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        payload = jwt.decode(
-            token, settings.secret_key, algorithms=["HS256"]
-        )
-        username: str = payload.get("sub")
+        payload = jwt.decode(token, settings.secret_key, algorithms=["HS256"])
+        username: Optional[str] = payload.get("sub")
         is_admin: bool = payload.get("is_admin", False)
-        user_id: Optional[int] = payload.get("user_id")
         if username is None:
             raise credentials_exception
     except JWTError:
@@ -117,15 +111,57 @@ async def get_current_user(
 
     result = await db.execute(select(Admin).where(Admin.username == username))
     admin = result.scalar_one_or_none()
-    if admin is None:
-        raise credentials_exception
+    if admin is not None:
+        return User(
+            id=admin.id,
+            username=admin.username,
+            is_admin=is_admin,
+            totp_secret=admin.totp_secret,
+        )
 
-    return User(
-        id=admin.id,
-        username=admin.username,
-        is_admin=is_admin,
-        totp_secret=admin.totp_secret
+    # Fallback for installs that authenticate via vpn-panel-password file.
+    # No DB Admin row exists yet, but the JWT was issued by /api/login.
+    return User(id=0, username=username, is_admin=is_admin, totp_secret=None)
+
+
+async def get_current_user(
+    token: str = Depends(oauth2_scheme),
+    db: AsyncSession = Depends(get_async_db),
+) -> User:
+    """Get the current user from JWT token (Authorization: Bearer)."""
+    return await _decode_token_to_user(token, db)
+
+
+async def get_current_user_cookie(
+    request: Request,
+    db: AsyncSession = Depends(get_async_db),
+) -> User:
+    """Get the current user from either cookie or Authorization header."""
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Not authenticated",
     )
+    token = request.cookies.get("access_token")
+    if not token:
+        auth = request.headers.get("Authorization", "")
+        if auth.lower().startswith("bearer "):
+            token = auth.split(" ", 1)[1].strip()
+    if not token:
+        raise credentials_exception
+    return await _decode_token_to_user(token, db)
+
+
+async def get_current_admin_cookie(
+    current_user: User = Depends(get_current_user_cookie),
+) -> User:
+    """Cookie-based admin guard for legacy panel endpoints."""
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin privileges required",
+        )
+    return current_user
+
 
 async def get_current_admin(
     current_user: User = Depends(get_current_user)
