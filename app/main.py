@@ -9,9 +9,11 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from contextlib import asynccontextmanager
 import logging
 import os
+import json
 
 from .config import settings
 from .database import init_db, shutdown_db
@@ -117,7 +119,7 @@ app.add_middleware(
 async def add_security_headers(request: Request, call_next):
     response = await call_next(request)
     response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains; preload"
-    response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:"
+    response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:"
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-XSS-Protection"] = "1; mode=block"
@@ -180,13 +182,18 @@ async def liveness_check():
 
 # ── Panel HTML (serves the frontend) ───────────────────
 
+# Setup templates
+templates = Jinja2Templates(directory="templates")
+# Ensure tojson filter exists (built into jinja2, but good to be safe)
+if "tojson" not in templates.env.filters:
+    templates.env.filters["tojson"] = lambda obj: json.dumps(obj)
+
 @app.get("/", response_class=HTMLResponse)
-async def serve_panel():
+async def serve_panel(request: Request):
     """Serve the main panel HTML."""
     template_path = os.path.join(os.getcwd(), "templates", "panel.html")
     if os.path.exists(template_path):
-        with open(template_path, 'r') as f:
-            return f.read()
+        return templates.TemplateResponse("panel.html", {"request": request})
     return HTMLResponse("<h1>V7LTHRONYX VPN Panel v2.0</h1><p>Panel template not found</p>")
 
 if __name__ == "__main__":
