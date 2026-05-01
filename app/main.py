@@ -5,17 +5,22 @@ This module initializes the FastAPI application, configures middleware,
 and mounts the API routers.
 """
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 from jinja2 import Environment, FileSystemLoader
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+import base64
+import json
 import logging
 import os
 
 from .config import settings
-from .database import init_db, shutdown_db
+from .database import get_async_db, init_db, shutdown_db
+from .models import VpnUser
 from .redis_client import close_redis
 from .observability import setup_opentelemetry, prometheus_metrics
 
@@ -246,6 +251,166 @@ async def download_app_windows():
             detail="Windows build not uploaded on this server yet.",
         )
     return FileResponse(win_path, filename="vpn-windows.zip")
+
+
+def _public_server_ip(request: Request) -> str:
+    if settings.host and settings.host != "0.0.0.0":
+        return settings.host
+    return request.url.hostname or ""
+
+
+def _subscription_user_dict(user: VpnUser) -> dict:
+    return {
+        "id": user.id,
+        "name": user.name,
+        "uuid": user.uuid,
+        "active": bool(user.active),
+        "traffic_limit_gb": (user.traffic_limit or 0) / (1024**3),
+        "traffic_used_gb": (user.traffic_used or 0) / (1024**3),
+        "expire_at": user.expire_at.isoformat() if user.expire_at else "",
+        "created_at": user.created_at.isoformat() if user.created_at else "",
+    }
+
+
+async def _subscription_user(user_uuid: str, db: AsyncSession) -> VpnUser:
+    result = await db.execute(select(VpnUser).where(VpnUser.uuid == user_uuid))
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise HTTPException(status_code=404, detail="Not found")
+    return user
+
+
+async def _subscription_links(user: VpnUser, request: Request, db: AsyncSession) -> dict:
+    from .api.compat import _load_legacy_settings, _settings_state, _user_to_legacy
+
+    await _load_legacy_settings(db)
+    if not _settings_state.get("server_ip"):
+        _settings_state["server_ip"] = _public_server_ip(request)
+    return {
+        key: value
+        for key, value in _user_to_legacy(user).items()
+        if key in {
+            "vmess",
+            "vless",
+            "cdn_vmess",
+            "trojan",
+            "grpc_vmess",
+            "httpupgrade_vmess",
+            "ss2022",
+            "vless_ws",
+        } and value
+    }
+
+
+@app.get("/sub/{user_uuid}", response_class=HTMLResponse)
+async def subscription_page(
+    user_uuid: str,
+    request: Request,
+    db: AsyncSession = Depends(get_async_db),
+):
+    """Serve the public user subscription page."""
+    user = await _subscription_user(user_uuid, db)
+    links = await _subscription_links(user, request, db)
+    template = _jinja_env.get_template("sub.html")
+    html = template.render(
+        request={"url_root": str(request.base_url)},
+        user=_subscription_user_dict(user),
+        links=links,
+        live_up=0,
+        live_down=0,
+        online_ips=[],
+        server_ip=_public_server_ip(request),
+        server_port=settings.web_port,
+        sni_host=settings.vless_ws_host,
+        ws_path=settings.vless_ws_path,
+        settings=settings,
+        apk_available=os.path.isfile(os.path.join(os.getcwd(), "static", "downloads", "app-release.apk")),
+    )
+    return HTMLResponse(content=html)
+
+
+@app.get("/sub-api/{user_uuid}")
+async def subscription_api(
+    user_uuid: str,
+    request: Request,
+    db: AsyncSession = Depends(get_async_db),
+):
+    """Return base64-encoded subscription links for client auto-import."""
+    user = await _subscription_user(user_uuid, db)
+    if not user.active:
+        raise HTTPException(status_code=404, detail="Not found")
+    links = await _subscription_links(user, request, db)
+    encoded = base64.b64encode("\n".join(links.values()).encode()).decode()
+    return Response(
+        content=encoded,
+        media_type="text/plain; charset=utf-8",
+        headers={
+            "Content-Disposition": f"inline; filename={user.name}.txt",
+            "Profile-Update-Interval": "6",
+            "Subscription-Userinfo": (
+                f"upload=0; download={int(user.traffic_used or 0)}; "
+                f"total={int(user.traffic_limit or 0)}"
+            ),
+        },
+    )
+
+
+def _subscription_json_config(
+    user: VpnUser,
+    links: dict,
+    server_ip: str,
+) -> dict:
+    outbounds = []
+    for key, link in links.items():
+        outbounds.append(
+            {
+                "tag": f"{key}-{user.name}",
+                "protocol": "freedom",
+                "settings": {},
+                "metadata": {"share_link": link},
+            }
+        )
+    outbounds.append({"tag": "direct", "protocol": "freedom"})
+    outbounds.append({"tag": "block", "protocol": "blackhole"})
+    return {
+        "log": {"loglevel": "warning"},
+        "inbounds": [
+            {
+                "tag": "socks-in",
+                "port": 10808,
+                "listen": "127.0.0.1",
+                "protocol": "socks",
+                "settings": {"udp": True},
+            },
+            {
+                "tag": "http-in",
+                "port": 10809,
+                "listen": "127.0.0.1",
+                "protocol": "http",
+                "settings": {},
+            },
+        ],
+        "outbounds": outbounds,
+        "routing": {"domainStrategy": "AsIs", "rules": []},
+        "remarks": f"V7LTHRONYX-{user.name}@{server_ip}",
+    }
+
+
+@app.get("/sub-json/{user_uuid}")
+async def subscription_json(
+    user_uuid: str,
+    request: Request,
+    db: AsyncSession = Depends(get_async_db),
+):
+    """Return a JSON subscription document for clients that support JSON import."""
+    user = await _subscription_user(user_uuid, db)
+    if not user.active:
+        raise HTTPException(status_code=404, detail="Not found")
+    links = await _subscription_links(user, request, db)
+    return JSONResponse(
+        content=_subscription_json_config(user, links, _public_server_ip(request)),
+        headers={"Content-Disposition": f"inline; filename={user.name}.json"},
+    )
 
 if __name__ == "__main__":
     import uvicorn

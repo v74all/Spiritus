@@ -11,12 +11,14 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
+import base64
 import io
 import csv
 import json
 import logging
 import os
 import time
+import urllib.parse
 import uuid as uuid_lib
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
@@ -158,6 +160,36 @@ def _build_share_links(u: VpnUser) -> Dict[str, str]:
     except Exception:
         links["vmess"] = ""
 
+    if _settings_state.get("reality_public_key"):
+        try:
+            links["vless"] = ClientConfigGenerator.generate_vless_share_url(
+                uuid=u.uuid,
+                address=server_ip,
+                port=int(_settings_state.get("vless_port") or 2053),
+                security="reality",
+                sni=_settings_state.get("reality_sni") or "www.google.com",
+                fp=_settings_state.get("fingerprint") or "chrome",
+                pbk=_settings_state.get("reality_public_key") or "",
+                sid=_settings_state.get("reality_short_id") or "",
+                flow="xtls-rprx-vision",
+                network="tcp",
+            )
+        except Exception:
+            links["vless"] = ""
+
+    if _settings_state.get("cdn_enabled") and _settings_state.get("cdn_domain"):
+        try:
+            links["cdn_vmess"] = ClientConfigGenerator.generate_vmess_share_url(
+                uuid=u.uuid,
+                address=_settings_state.get("cdn_domain"),
+                port=int(_settings_state.get("cdn_port") or 443),
+                security="tls",
+                sni=_settings_state.get("cdn_domain"),
+                path=_settings_state.get("cdn_ws_path") or "/cdn-ws",
+            )
+        except Exception:
+            links["cdn_vmess"] = ""
+
     if _settings_state.get("vless_ws_enabled") or settings.vless_ws_enabled:
         try:
             links["vless_ws"] = ClientConfigGenerator.generate_vless_share_url(
@@ -182,6 +214,47 @@ def _build_share_links(u: VpnUser) -> Dict[str, str]:
             )
         except Exception:
             links["trojan"] = ""
+
+    if _settings_state.get("grpc_enabled"):
+        try:
+            links["grpc_vmess"] = ClientConfigGenerator.generate_vmess_share_url(
+                uuid=u.uuid,
+                address=server_ip,
+                port=int(_settings_state.get("grpc_port") or 2054),
+                network="grpc",
+                security="tls",
+                sni=sni_host,
+                path=_settings_state.get("grpc_service_name") or "GunService",
+            )
+        except Exception:
+            links["grpc_vmess"] = ""
+
+    if _settings_state.get("httpupgrade_enabled"):
+        try:
+            links["httpupgrade_vmess"] = ClientConfigGenerator.generate_vmess_share_url(
+                uuid=u.uuid,
+                address=server_ip,
+                port=int(_settings_state.get("httpupgrade_port") or 2055),
+                network="httpupgrade",
+                security="tls",
+                sni=sni_host,
+                path=_settings_state.get("httpupgrade_path") or "/httpupgrade",
+            )
+        except Exception:
+            links["httpupgrade_vmess"] = ""
+
+    if _settings_state.get("ss2022_enabled") and _settings_state.get("ss2022_server_key"):
+        try:
+            method = _settings_state.get("ss2022_method") or "2022-blake3-aes-128-gcm"
+            userinfo = base64.urlsafe_b64encode(
+                f"{method}:{_settings_state['ss2022_server_key']}:{u.uuid}".encode()
+            ).decode().rstrip("=")
+            label = urllib.parse.quote(f"V7LTHRONYX-SS-{u.name}")
+            links["ss2022"] = (
+                f"ss://{userinfo}@{server_ip}:{int(_settings_state.get('ss2022_port') or 2056)}#{label}"
+            )
+        except Exception:
+            links["ss2022"] = ""
 
     return links
 
