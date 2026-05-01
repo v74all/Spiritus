@@ -133,16 +133,22 @@ setup_postgresql() {
     DB_PASS="securepassword"
     DB_NAME="vpnpanel"
     
+    # Always ensure user exists and password is correct
+    sudo -u postgres psql -c "CREATE USER ${DB_USER} WITH PASSWORD '${DB_PASS}';" 2>/dev/null || true
+    sudo -u postgres psql -c "ALTER USER ${DB_USER} WITH PASSWORD '${DB_PASS}';" 2>/dev/null || true
+    
     # Check if database already exists
     DB_EXISTS=$(sudo -u postgres psql -lqt 2>/dev/null | grep -c "^ ${DB_NAME} " || echo "0")
     if [[ "$DB_EXISTS" == "0" ]]; then
-        sudo -u postgres psql -c "CREATE USER ${DB_USER} WITH PASSWORD '${DB_PASS}';" 2>/dev/null || true
         sudo -u postgres psql -c "CREATE DATABASE ${DB_NAME} OWNER ${DB_USER};" 2>/dev/null || true
-        sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE ${DB_NAME} TO ${DB_USER};" 2>/dev/null || true
         print_success "PostgreSQL database created"
     else
         print_success "PostgreSQL database already exists"
     fi
+    
+    # Ensure privileges and schema access for PostgreSQL 15+
+    sudo -u postgres psql -d ${DB_NAME} -c "GRANT ALL PRIVILEGES ON DATABASE ${DB_NAME} TO ${DB_USER};" 2>/dev/null || true
+    sudo -u postgres psql -d ${DB_NAME} -c "GRANT ALL ON SCHEMA public TO ${DB_USER};" 2>/dev/null || true
 }
 
 setup_redis() {
