@@ -384,13 +384,16 @@ def generate_grafana_provisioning(
     # Datasources
     ds_path = os.path.join(output_dir, "provisioning", "datasources", "datasources.yaml")
     os.makedirs(os.path.dirname(ds_path), exist_ok=True)
-    import yaml
     try:
-        with open(ds_path, 'w') as f:
-            yaml.dump(GRAFANA_DATASOURCE, f, default_flow_style=False)
-        files["datasources"] = ds_path
+        import yaml as _yaml
     except ImportError:
-        # Fallback to JSON
+        _yaml = None
+
+    if _yaml is not None:
+        with open(ds_path, 'w') as f:
+            _yaml.dump(GRAFANA_DATASOURCE, f, default_flow_style=False)
+        files["datasources"] = ds_path
+    else:
         ds_json_path = ds_path.replace(".yaml", ".json")
         with open(ds_json_path, 'w') as f:
             json.dump(GRAFANA_DATASOURCE, f, indent=2)
@@ -428,12 +431,10 @@ def generate_grafana_provisioning(
             }
         ],
     }
-    try:
+    if _yaml is not None:
         with open(provider_path, 'w') as f:
-            yaml.dump(provider_config, f, default_flow_style=False)
+            _yaml.dump(provider_config, f, default_flow_style=False)
         files["dashboard_provider"] = provider_path
-    except ImportError:
-        pass
 
     return files
 

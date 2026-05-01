@@ -20,6 +20,7 @@ from pydantic import BaseModel
 
 from .config import settings
 from .database import AsyncSession, get_async_db
+from sqlalchemy import select
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -68,7 +69,7 @@ def create_access_token(
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=15)
+        expire = datetime.utcnow() + timedelta(hours=settings.session_lifetime_hours)
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(
         to_encode, settings.secret_key, algorithm="HS256"
@@ -96,6 +97,7 @@ async def get_current_user(
     db: AsyncSession = Depends(get_async_db)
 ) -> User:
     """Get the current user from JWT token."""
+    from .models import Admin
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -106,19 +108,23 @@ async def get_current_user(
             token, settings.secret_key, algorithms=["HS256"]
         )
         username: str = payload.get("sub")
+        is_admin: bool = payload.get("is_admin", False)
+        user_id: Optional[int] = payload.get("user_id")
         if username is None:
             raise credentials_exception
-        token_data = TokenData(username=username)
     except JWTError:
         raise credentials_exception
-    
-    # In a real implementation, you would query the database here
-    # For now, we'll return a mock user
+
+    result = await db.execute(select(Admin).where(Admin.username == username))
+    admin = result.scalar_one_or_none()
+    if admin is None:
+        raise credentials_exception
+
     return User(
-        id=1,
-        username=token_data.username,
-        is_admin=True,
-        totp_secret=None  # Would be fetched from DB in real implementation
+        id=admin.id,
+        username=admin.username,
+        is_admin=is_admin,
+        totp_secret=admin.totp_secret
     )
 
 async def get_current_admin(

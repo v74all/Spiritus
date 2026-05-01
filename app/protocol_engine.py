@@ -27,6 +27,7 @@ import logging
 from typing import Dict, Any, Optional, List
 from dataclasses import dataclass, field
 from enum import Enum
+from urllib.parse import urlencode
 
 from .config import settings
 
@@ -805,8 +806,7 @@ class ClientConfigGenerator:
                 json.dumps(ech.get("keys", [])).encode()
             ).decode()
 
-        # Build query string
-        query = "&".join(f"{k}={v}" for k, v in params.items() if v)
+        query = urlencode({k: v for k, v in params.items() if v})
         return f"vless://{uuid}@{address}:{port}?{query}#V7LTHRONYX"
 
     @staticmethod
@@ -856,7 +856,7 @@ class ClientConfigGenerator:
         }
         if path:
             params["path"] = path
-        query = "&".join(f"{k}={v}" for k, v in params.items() if v)
+        query = urlencode({k: v for k, v in params.items() if v})
         return f"trojan://{password}@{address}:{port}?{query}#V7LTHRONYX"
 
     @staticmethod
@@ -876,7 +876,7 @@ class ClientConfigGenerator:
         if obfs:
             params["obfs"] = "salamander"
             params["obfs-password"] = obfs
-        query = "&".join(f"{k}={v}" for k, v in params.items() if v)
+        query = urlencode({k: v for k, v in params.items() if v})
         return f"hysteria2://{password}@{address}:{port}?{query}#V7LTHRONYX"
 
     @staticmethod

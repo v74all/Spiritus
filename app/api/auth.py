@@ -156,46 +156,41 @@ async def login(request: LoginRequest, req: Request, db: AsyncSession = Depends(
     )
 
 @router.post("/login/2fa", response_model=Token)
-async def login_with_2fa(request: Login2FARequest, req: Request):
+async def login_with_2fa(request: Login2FARequest, req: Request, db: AsyncSession = Depends(get_async_db)):
     """Login with 2FA/TOTP verification."""
     client_ip = req.client.host
-    
+
     if _is_locked_out(client_ip):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=f"Too many failed attempts. Try again in {settings.lockout_seconds}s"
         )
-    
-    # Verify password first
-    import os
-    pw_file = os.path.join(os.getcwd(), "vpn-panel-password")
-    if os.path.exists(pw_file):
-        with open(pw_file) as f:
-            stored_pw = f.read().strip()
-        if request.password != stored_pw:
-            _record_failed_attempt(client_ip)
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid credentials"
-            )
-    
-    # Verify TOTP code
-    # TODO: Get user's TOTP secret from database
-    user_totp_secret = None  # Would be fetched from DB
-    
-    if user_totp_secret and not verify_totp(user_totp_secret, request.totp_code):
+
+    db_result = await db.execute(select(Admin).where(Admin.username == request.username))
+    admin_user = db_result.scalar_one_or_none()
+
+    if not admin_user:
         _record_failed_attempt(client_ip)
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid 2FA code"
-        )
-    
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+
+    if not verify_password(request.password, admin_user.password_hash):
+        _record_failed_attempt(client_ip)
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+
+    if not admin_user.totp_enabled or not admin_user.totp_secret:
+        _record_failed_attempt(client_ip)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="2FA not enabled for this user")
+
+    if not verify_totp(admin_user.totp_secret, request.totp_code):
+        _record_failed_attempt(client_ip)
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid 2FA code")
+
     _clear_attempts(client_ip)
-    
+
     access_token = create_access_token(
-        data={"sub": request.username, "is_admin": True}
+        data={"sub": request.username, "is_admin": True, "user_id": admin_user.id}
     )
-    
+
     return Token(
         access_token=access_token,
         token_type="bearer",
@@ -229,21 +224,18 @@ async def setup_2fa(
 @router.post("/verify-2fa", response_model=MessageResponse)
 async def verify_2fa(request: Verify2FARequest, current_user: User = Depends(get_current_user)):
     """Verify a 2FA/TOTP code."""
-    # TODO: Get user's TOTP secret from database
-    user_totp_secret = None
-    
-    if not user_totp_secret:
+    if not current_user.totp_secret:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="2FA not set up for this user"
         )
-    
-    if not verify_totp(user_totp_secret, request.totp_code):
+
+    if not verify_totp(current_user.totp_secret, request.totp_code):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid 2FA code"
         )
-    
+
     return MessageResponse(message="2FA code verified successfully")
 
 @router.post("/logout", response_model=MessageResponse)

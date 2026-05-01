@@ -108,6 +108,9 @@ async def create_reseller(
     db_result = await db.execute(select(Reseller).where(Reseller.id == result["id"]))
     reseller = db_result.scalar_one_or_none()
 
+    if reseller is None:
+        raise HTTPException(status_code=500, detail="Reseller creation failed")
+
     return ResellerResponse(
         id=reseller.id,
         username=reseller.username,

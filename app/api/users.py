@@ -148,6 +148,18 @@ async def create_user(
 
     return _user_to_response(db_user)
 
+@router.get("/count/total")
+async def get_user_count(
+    admin: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """Get total user count."""
+    result = await db.execute(select(func.count(VpnUser.id)))
+    total = result.scalar() or 0
+    active_result = await db.execute(select(func.count(VpnUser.id)).where(VpnUser.active == 1))
+    active = active_result.scalar() or 0
+    return {"total": total, "active": active}
+
 @router.get("/{user_id}", response_model=UserResponse)
 async def get_user(
     user_id: int,
@@ -310,15 +322,3 @@ async def get_user_qr(
     # Reuse config endpoint logic
     config_result = await get_user_config(user_id, protocol, admin, db)
     return {"qr_data": config_result.get("config", ""), "protocol": protocol}
-
-@router.get("/count/total")
-async def get_user_count(
-    admin: User = Depends(get_current_admin),
-    db: AsyncSession = Depends(get_async_db),
-):
-    """Get total user count."""
-    result = await db.execute(select(func.count(VpnUser.id)))
-    total = result.scalar() or 0
-    active_result = await db.execute(select(func.count(VpnUser.id)).where(VpnUser.active == 1))
-    active = active_result.scalar() or 0
-    return {"total": total, "active": active}

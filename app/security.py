@@ -23,7 +23,6 @@ import json
 import os
 import secrets
 import subprocess
-import time
 import logging
 from typing import Dict, Any, Optional, List, Tuple
 from datetime import datetime, timedelta
@@ -47,19 +46,34 @@ class WebAuthnManager:
     using the py_webauthn library patterns.
     """
 
+    CHALLENGE_TTL = 120  # seconds
+
     def __init__(self, rp_name: str = "V7LTHRONYX", rp_id: str = ""):
         self.rp_name = rp_name
         self.rp_id = rp_id  # Domain, e.g. "panel.example.com"
-        self._challenges: Dict[str, Tuple[str, float]] = {}  # username -> (challenge, timestamp)
 
-    def generate_registration_options(
+    async def _store_challenge(self, username: str, challenge: str):
+        from .redis_client import get_redis
+        r = await get_redis()
+        await r.set(f"webauthn:challenge:{username}", challenge, ex=self.CHALLENGE_TTL)
+
+    async def _pop_challenge(self, username: str) -> Optional[str]:
+        from .redis_client import get_redis
+        r = await get_redis()
+        key = f"webauthn:challenge:{username}"
+        challenge = await r.get(key)
+        if challenge:
+            await r.delete(key)
+        return challenge
+
+    async def generate_registration_options(
         self,
         username: str,
         existing_credentials: List[Dict] = None,
     ) -> Dict[str, Any]:
         """Generate WebAuthn registration options (server → client)."""
         challenge = secrets.token_urlsafe(32)
-        self._challenges[username] = (challenge, time.time())
+        await self._store_challenge(username, challenge)
 
         exclude_credentials = []
         if existing_credentials:
@@ -101,7 +115,7 @@ class WebAuthnManager:
             }
         }
 
-    def verify_registration(
+    async def verify_registration(
         self,
         username: str,
         client_data_json: str,
@@ -109,14 +123,9 @@ class WebAuthnManager:
         credential_id: str,
     ) -> Dict[str, Any]:
         """Verify WebAuthn registration response (client → server)."""
-        # Check challenge
-        if username not in self._challenges:
+        stored_challenge = await self._pop_challenge(username)
+        if stored_challenge is None:
             return {"success": False, "error": "No pending registration"}
-
-        stored_challenge, timestamp = self._challenges[username]
-        if time.time() - timestamp > 120:  # 2 minute timeout
-            del self._challenges[username]
-            return {"success": False, "error": "Challenge expired"}
 
         # Decode client data
         try:
@@ -139,9 +148,6 @@ class WebAuthnManager:
         if client_data.get("type") != "webauthn.create":
             return {"success": False, "error": "Invalid client data type"}
 
-        # Clean up challenge
-        del self._challenges[username]
-
         # Store credential (in production, parse attestation object properly)
         credential = {
             "id": credential_id,
@@ -158,14 +164,14 @@ class WebAuthnManager:
             "credential_id": credential_id,
         }
 
-    def generate_authentication_options(
+    async def generate_authentication_options(
         self,
         username: str,
         credentials: List[Dict],
     ) -> Dict[str, Any]:
         """Generate WebAuthn authentication options (server → client)."""
         challenge = secrets.token_urlsafe(32)
-        self._challenges[username] = (challenge, time.time())
+        await self._store_challenge(username, challenge)
 
         allow_credentials = []
         for cred in credentials:
@@ -187,7 +193,7 @@ class WebAuthnManager:
             }
         }
 
-    def verify_authentication(
+    async def verify_authentication(
         self,
         username: str,
         credential_id: str,
@@ -197,13 +203,9 @@ class WebAuthnManager:
         stored_credentials: List[Dict],
     ) -> Dict[str, Any]:
         """Verify WebAuthn authentication response (client → server)."""
-        if username not in self._challenges:
+        stored_challenge = await self._pop_challenge(username)
+        if stored_challenge is None:
             return {"success": False, "error": "No pending authentication"}
-
-        stored_challenge, timestamp = self._challenges[username]
-        if time.time() - timestamp > 120:
-            del self._challenges[username]
-            return {"success": False, "error": "Challenge expired"}
 
         # Find matching credential
         matched_cred = None
@@ -225,9 +227,6 @@ class WebAuthnManager:
 
         if client_data.get("type") != "webauthn.get":
             return {"success": False, "error": "Invalid client data type"}
-
-        # Clean up
-        del self._challenges[username]
 
         # In production: verify signature against stored public key
         # For now, trust the response

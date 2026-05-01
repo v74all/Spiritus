@@ -147,6 +147,9 @@ class VpnUser(Base):
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
+    # Relationships
+    payments = relationship("Payment", back_populates="user")
+
 
 # ═══════════════════════════════════════════════════════════════
 #  Agents (Multi-backend orchestrator)
@@ -274,6 +277,7 @@ class Payment(Base):
 
     # Relationships
     reseller = relationship("Reseller", back_populates="payments")
+    user = relationship("VpnUser", back_populates="payments")
 
 
 # ═══════════════════════════════════════════════════════════════
