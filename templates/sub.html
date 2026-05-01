@@ -174,7 +174,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg0);color:var(--
         <span class="limit">{{ pct }}% of {{ "%.1f"|format(limit) }} GB</span>
       </div>
       <div class="bar-track">
-        {{ '<div class="bar-fill" style="width:' ~ pct ~ '%;background:' ~ bar_color ~ ';"></div>' | safe }}
+        <div class="bar-fill" style="width: {{ pct }}%; background: {{ bar_color }};"></div>
       </div>
     </div>
   </div>
