@@ -56,6 +56,8 @@ class IranDPIThreat:
         "discord.com", "www.discord.com",
         "lovelive-anime.jp",
         "apple.com", "www.apple.com",
+        "google.com", "www.google.com",
+        "bing.com", "www.bing.com",
     }
 
     # Valid SNI candidates (TLS 1.3 + HTTP/2 verified)
@@ -65,6 +67,7 @@ class IranDPIThreat:
         "objects.githubusercontent.com",   # GitHub CDN — TLS 1.3, H2, global CDN
         "raw.githubusercontent.com",      # GitHub raw — TLS 1.3, H2
         "chat.deepseek.com",              # DeepSeek AI chat — TLS 1.3, H2, AI service
+        "web.splus.ir",                  # SPlus Iranian platform — TLS 1.3, H2
         "huggingface.co",                 # HuggingFace — TLS 1.3, H2, ML platform
         "cdn.jsdelivr.net",               # jsDelivr CDN — TLS 1.3, H2, global CDN
         "fonts.googleapis.com",           # Google Fonts — TLS 1.3, H2, very common
@@ -80,6 +83,7 @@ class IranDPIThreat:
         "digikala.com",      # Iranian e-commerce (largest in Iran)
         "snapp.ir",          # Iranian ride-hailing (like Uber)
         "divar.ir",          # Iranian classifieds marketplace
+        "web.splus.ir",     # SPlus Iranian platform
     ]
 
     # Tier 3: Same-ASN (Hetzner AS24940) — must be scanned

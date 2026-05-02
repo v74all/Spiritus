@@ -797,7 +797,7 @@ class ProtocolEngine:
             "server": f"0.0.0.0:{getattr(s, 'SHADOWTLS_PORT', 8445)}",
             "version": s.get("shadowtls_version", 3),
             "password": s.get("shadowtls_password", ""),
-            "sni": s.get("shadowtls_sni", "www.google.com"),
+            "sni": s.get("shadowtls_sni", "rubika.ir"),
             "backend": s.get("shadowtls_backend", "127.0.0.1:1080"),
             "tls_cert": s.get("shadowtls_tls_cert_path", ""),
             "tls_key": s.get("shadowtls_tls_key_path", ""),
@@ -1142,7 +1142,7 @@ class ProtocolEngine:
             "server": f"{getattr(s, 'VPN_SERVER_IP', '')}:{getattr(s, 'SHADOWTLS_PORT', 8445)}",
             "version": s.get("shadowtls_version", 3),
             "password": s.get("shadowtls_password", ""),
-            "sni": s.get("shadowtls_sni", "www.google.com"),
+            "sni": s.get("shadowtls_sni", "rubika.ir"),
         }
 
     def _client_mieru(self, uuid: str, s: Any) -> Dict:

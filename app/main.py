@@ -427,7 +427,7 @@ def _subscription_json_config(
                 "network": "tcp",
                 "security": "reality",
                 "realitySettings": {
-                    "serverName": panel_settings.get("reality_sni") or "www.google.com",
+                    "serverName": panel_settings.get("reality_sni") or "chat.deepseek.com",
                     "fingerprint": fp,
                     "publicKey": panel_settings.get("reality_public_key"),
                     "shortId": panel_settings.get("reality_short_id") or "",

@@ -58,7 +58,7 @@ XRAY_BIN = "/usr/local/bin/xray"
 V2RAY_BIN = "/usr/local/bin/xray"
 SERVER_IP = os.environ.get("VPN_SERVER_IP", "127.0.0.1")
 SERVER_PORT = os.environ.get("VPN_SERVER_PORT", "443")
-SNI_HOST = os.environ.get("VPN_SNI_HOST", "www.google.com")
+SNI_HOST = os.environ.get("VPN_SNI_HOST", "chat.deepseek.com")
 WS_PATH = "/api/v1/stream"
 API_PORT = int(os.environ.get("VPN_API_PORT", "10085"))
 WEB_PORT = int(os.environ.get("VPN_WEB_PORT", "38471"))
@@ -191,7 +191,7 @@ DEFAULT_SETTINGS = {
     "shadowtls_enabled": False,
     "shadowtls_port": 8445,
     "shadowtls_password": "",
-    "shadowtls_sni": "www.google.com",
+    "shadowtls_sni": "rubika.ir",
     "shadowtls_version": 3,
     "shadowtls_backend": "127.0.0.1:1080",
     # ── Mieru ──
@@ -251,19 +251,19 @@ DEFAULT_SETTINGS = {
     # HTTP Host Header Spoofing: Sends fake Host header to bypass DPI
     # that inspects HTTP headers. Works with VMess/VLESS+WS+TLS.
     "dpi_http_host_spoof_enabled": False,
-    "dpi_http_host_spoof_domain": "www.microsoft.com",
+    "dpi_http_host_spoof_domain": "chat.deepseek.com",
     # WebSocket Host Fronting: Uses different Host header than SNI
     # to bypass DPI that compares SNI with HTTP Host header.
     "dpi_ws_host_front_enabled": False,
-    "dpi_ws_host_front_domain": "www.cloudflare.com",
+    "dpi_ws_host_front_domain": "rubika.ir",
     # CDN Host Header Fronting: Routes traffic through CDN with
     # fake Host header to hide real destination from DPI.
     "dpi_cdn_host_front_enabled": False,
-    "dpi_cdn_host_front_domain": "www.bing.com",
+    "dpi_cdn_host_front_domain": "web.splus.ir",
     # Bug Host / Host Header Injection: Injects fake Host headers
     # into TLS ClientHello to confuse DPI pattern matching.
     "dpi_bug_host_enabled": False,
-    "dpi_bug_host_domain": "www.google.com",
+    "dpi_bug_host_domain": "chat.deepseek.com",
 }
 
 DPI_SETTING_KEYS = {
@@ -2007,13 +2007,13 @@ def build_xray_config(active_users):
     dpi_cdn_front = s.get("dpi_cdn_front", "")
     # Advanced DPI Evasion
     dpi_http_host_spoof = s.get("dpi_http_host_spoof_enabled", False)
-    dpi_http_host_spoof_domain = s.get("dpi_http_host_spoof_domain", "www.microsoft.com")
+    dpi_http_host_spoof_domain = s.get("dpi_http_host_spoof_domain", "chat.deepseek.com")
     dpi_ws_host_front = s.get("dpi_ws_host_front_enabled", False)
-    dpi_ws_host_front_domain = s.get("dpi_ws_host_front_domain", "www.cloudflare.com")
+    dpi_ws_host_front_domain = s.get("dpi_ws_host_front_domain", "rubika.ir")
     dpi_cdn_host_front = s.get("dpi_cdn_host_front_enabled", False)
-    dpi_cdn_host_front_domain = s.get("dpi_cdn_host_front_domain", "www.bing.com")
+    dpi_cdn_host_front_domain = s.get("dpi_cdn_host_front_domain", "web.splus.ir")
     dpi_bug_host = s.get("dpi_bug_host_enabled", False)
-    dpi_bug_host_domain = s.get("dpi_bug_host_domain", "www.google.com")
+    dpi_bug_host_domain = s.get("dpi_bug_host_domain", "chat.deepseek.com")
 
     # ── HTTP Host Header Spoofing: Replace Host header with a fake domain
     # to bypass DPI that inspects HTTP headers. The SNI remains the real domain,
@@ -2591,7 +2591,7 @@ def vless_link(name, user_uuid, server_ip=None):
         "fp": "chrome",
         "type": "tcp",
         "flow": "xtls-rprx-vision",
-        "sni": s.get("reality_sni", "www.google.com"),
+        "sni": s.get("reality_sni", "chat.deepseek.com"),
         "sid": s.get("reality_short_id", ""),
     })
     port = s.get("vless_port", 2053)
@@ -4188,7 +4188,7 @@ def subscription_json(user_uuid):
             "streamSettings": {
                 "network": "tcp", "security": "reality",
                 "realitySettings": {
-                    "serverName": s.get("reality_sni", "www.google.com"),
+                    "serverName": s.get("reality_sni", "chat.deepseek.com"),
                     "fingerprint": fp,
                     "publicKey": s["reality_public_key"],
                     "shortId": s.get("reality_short_id", ""),

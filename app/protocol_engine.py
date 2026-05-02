@@ -290,7 +290,7 @@ PROTOCOLS: Dict[str, ProtocolSpec] = {
         config_fields=[
             {"key": "port", "type": "int", "default": 8445, "label": "Port"},
             {"key": "password", "type": "string", "label": "Password"},
-            {"key": "sni", "type": "string", "default": "www.google.com", "label": "SNI"},
+            {"key": "sni", "type": "string", "default": "chat.deepseek.com", "label": "SNI"},
             {"key": "version", "type": "string", "default": "3", "label": "Version"},
             {"key": "backend", "type": "string", "default": "127.0.0.1:1080", "label": "Backend"},
         ],

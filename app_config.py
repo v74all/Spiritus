@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     XRAY_API_PORT: int = 10085
     VPN_SERVER_IP: str = __import__("os").environ.get("VPN_SERVER_IP", "127.0.0.1")
     VPN_SERVER_PORT: int = int(__import__("os").environ.get("VPN_SERVER_PORT", 443))
-    VPN_SNI_HOST: str = __import__("os").environ.get("VPN_SNI_HOST", "www.google.com")
+    VPN_SNI_HOST: str = __import__("os").environ.get("VPN_SNI_HOST", "chat.deepseek.com")
 
     # ── VLESS+XHTTP+REALITY (relay-fronted) ──
     VLESS_XHTTP_ENABLED: bool = False
@@ -176,7 +176,7 @@ class Settings(BaseSettings):
     SHADOWTLS_ENABLED: bool = False
     SHADOWTLS_PORT: int = 8445
     SHADOWTLS_PASSWORD: str = ""
-    SHADOWTLS_SNI: str = "www.google.com"
+    SHADOWTLS_SNI: str = "rubika.ir"
     SHADOWTLS_VERSION: int = 3
     SHADOWTLS_BACKEND: str = "127.0.0.1:1080"  # SOCKS5 backend
     SHADOWTLS_TLS_CERT_PATH: str = ""

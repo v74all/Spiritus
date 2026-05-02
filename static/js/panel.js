@@ -1119,7 +1119,7 @@ function renderConfigTab() {
       <span class="ck">Protocol</span><span class="cv" style="color:#b2bec3">ShadowTLS v3</span>
       <span class="ck">Server</span><span class="cv">${SERVER_INFO.ip}</span>
       <span class="ck">Port</span><span class="cv">${serverInfo.shadowtls_port || 8445}</span>
-      <span class="ck">SNI</span><span class="cv">${serverInfo.shadowtls_sni || 'www.google.com'}</span>`;
+      <span class="ck">SNI</span><span class="cv">${serverInfo.shadowtls_sni || 'rubika.ir'}</span>`;
   } else if (configTab === 'mieru') {
     link = u.mieru || '';
     label = 'Mieru Link';
@@ -1536,7 +1536,7 @@ async function loadSettings() {
     // Security
     setKillSwitchCheckboxes(asBool(s.kill_switch_enabled));
     // VLESS / Reality
-    document.getElementById('set-reality-sni').value = s.reality_sni || 'www.google.com';
+    document.getElementById('set-reality-sni').value = s.reality_sni || 'rubika.ir';
     document.getElementById('set-vless-port').value = s.vless_port || 2053;
     document.getElementById('vless-status').textContent = s.reality_public_key
       ? 'Active — Key: ' + s.reality_public_key.substring(0, 16) + '...'
@@ -1640,7 +1640,7 @@ async function loadSettings() {
     document.getElementById('set-shadowtls').checked = s.shadowtls_enabled || false;
     document.getElementById('set-shadowtls-port').value = s.shadowtls_port || 8445;
     document.getElementById('set-shadowtls-password').value = s.shadowtls_password || '';
-    document.getElementById('set-shadowtls-sni').value = s.shadowtls_sni || 'www.google.com';
+    document.getElementById('set-shadowtls-sni').value = s.shadowtls_sni || 'rubika.ir';
     // Mieru
     document.getElementById('set-mieru').checked = s.mieru_enabled || false;
     document.getElementById('set-mieru-port').value = s.mieru_port || 8446;
@@ -1699,13 +1699,13 @@ async function loadSettings() {
     document.getElementById('set-dpi-cdn-front').value = s.dpi_cdn_front || '';
     // Host Header Spoofing
     document.getElementById('set-dpi-http-host-spoof').checked = s.dpi_http_host_spoof_enabled || false;
-    document.getElementById('set-dpi-http-host-spoof-domain').value = s.dpi_http_host_spoof_domain || 'www.microsoft.com';
+    document.getElementById('set-dpi-http-host-spoof-domain').value = s.dpi_http_host_spoof_domain || 'chat.deepseek.com';
     document.getElementById('set-dpi-ws-host-front').checked = s.dpi_ws_host_front_enabled || false;
-    document.getElementById('set-dpi-ws-host-front-domain').value = s.dpi_ws_host_front_domain || 'www.cloudflare.com';
+    document.getElementById('set-dpi-ws-host-front-domain').value = s.dpi_ws_host_front_domain || 'rubika.ir';
     document.getElementById('set-dpi-cdn-host-front').checked = s.dpi_cdn_host_front_enabled || false;
-    document.getElementById('set-dpi-cdn-host-front-domain').value = s.dpi_cdn_host_front_domain || 'www.bing.com';
+    document.getElementById('set-dpi-cdn-host-front-domain').value = s.dpi_cdn_host_front_domain || 'web.splus.ir';
     document.getElementById('set-dpi-bug-host').checked = s.dpi_bug_host_enabled || false;
-    document.getElementById('set-dpi-bug-host-domain').value = s.dpi_bug_host_domain || 'www.google.com';
+    document.getElementById('set-dpi-bug-host-domain').value = s.dpi_bug_host_domain || 'chat.deepseek.com';
     loadBackups();
     updateSettingsStatus();
     _settingsLoaded = true;
@@ -1738,8 +1738,8 @@ async function saveSettings() {
     // Security
     kill_switch_enabled: getKillSwitchValue(),
     // VLESS / Reality
-    reality_sni: document.getElementById('set-reality-sni').value.trim() || 'www.google.com',
-    reality_dest: (document.getElementById('set-reality-sni').value.trim() || 'www.google.com') + ':443',
+    reality_sni: document.getElementById('set-reality-sni').value.trim() || 'rubika.ir',
+    reality_dest: (document.getElementById('set-reality-sni').value.trim() || 'rubika.ir') + ':443',
     vless_port: parseInt(document.getElementById('set-vless-port').value) || 2053,
     // Trojan
     trojan_enabled: document.getElementById('set-trojan').checked,
@@ -1835,7 +1835,7 @@ async function saveSettings() {
     shadowtls_enabled: document.getElementById('set-shadowtls').checked,
     shadowtls_port: parseInt(document.getElementById('set-shadowtls-port').value) || 8445,
     shadowtls_password: document.getElementById('set-shadowtls-password').value.trim(),
-    shadowtls_sni: document.getElementById('set-shadowtls-sni').value.trim() || 'www.google.com',
+    shadowtls_sni: document.getElementById('set-shadowtls-sni').value.trim() || 'rubika.ir',
     // Mieru
     mieru_enabled: document.getElementById('set-mieru').checked,
     mieru_port: parseInt(document.getElementById('set-mieru-port').value) || 8446,
@@ -3014,6 +3014,8 @@ const BURNED_SNIS = [
   'discord.com', 'www.discord.com',
   'lovelive-anime.jp',
   'apple.com', 'www.apple.com',
+  'google.com', 'www.google.com',
+  'bing.com', 'www.bing.com',
 ];
 
 /**
