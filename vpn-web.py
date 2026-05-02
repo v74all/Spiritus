@@ -77,11 +77,11 @@ LOCKOUT_SECONDS = 1800
 SESSION_LIFETIME_HOURS = 1
 
 DEFAULT_SETTINGS = {
-    "reality_private_key": "",
-    "reality_public_key": "",
+    "reality_private_key": "aGM7HELLUCgA3icWeQYOba7HL-82ocrTkG3k4PhBZ28",
+    "reality_public_key": "oZVaAa694VcKxWb-gH31sPpMIQ9XAozoJ6BOAA1DkC0",
     "reality_short_id": "",
-    "reality_dest": "www.google.com:443",
-    "reality_sni": "www.google.com",
+    "reality_dest": "digikala.com:443",
+    "reality_sni": "digikala.com",
     "vless_port": 2053,
     "cdn_enabled": False,
     "cdn_domain": "",
@@ -116,20 +116,20 @@ DEFAULT_SETTINGS = {
     "vless_ws_port": 2057,
     "vless_ws_path": "/vless-ws",
     # ── VLESS+XHTTP+REALITY (relay-fronted) ──
-    "vless_xhttp_enabled": False,
+    "vless_xhttp_enabled": True,
     "vless_xhttp_port": 2053,
-    "vless_xhttp_reality_private_key": "",
-    "vless_xhttp_reality_public_key": "",
+    "vless_xhttp_reality_private_key": "aGM7HELLUCgA3icWeQYOba7HL-82ocrTkG3k4PhBZ28",
+    "vless_xhttp_reality_public_key": "oZVaAa694VcKxWb-gH31sPpMIQ9XAozoJ6BOAA1DkC0",
     "vless_xhttp_reality_short_id": "",
     "vless_xhttp_reality_dest": "digikala.com:443",
     "vless_xhttp_reality_sni": "digikala.com",
     "vless_xhttp_path": "/xhttp-stream",
     "vless_xhttp_mode": "auto",
     # ── VLESS+REALITY+Vision (direct, fresh IP) ──
-    "vless_vision_enabled": False,
+    "vless_vision_enabled": True,
     "vless_vision_port": 2058,
-    "vless_vision_reality_private_key": "",
-    "vless_vision_reality_public_key": "",
+    "vless_vision_reality_private_key": "aGM7HELLUCgA3icWeQYOba7HL-82ocrTkG3k4PhBZ28",
+    "vless_vision_reality_public_key": "oZVaAa694VcKxWb-gH31sPpMIQ9XAozoJ6BOAA1DkC0",
     "vless_vision_reality_short_id": "",
     "vless_vision_reality_dest": "objects.githubusercontent.com:443",
     "vless_vision_reality_sni": "objects.githubusercontent.com",
@@ -137,11 +137,11 @@ DEFAULT_SETTINGS = {
     # ── Reverse-tunneled VLESS-Reality (Backhaul/Rathole) ──
     "vless_reverse_enabled": False,
     "vless_reverse_port": 2059,
-    "vless_reverse_reality_private_key": "",
-    "vless_reverse_reality_public_key": "",
+    "vless_reverse_reality_private_key": "aGM7HELLUCgA3icWeQYOba7HL-82ocrTkG3k4PhBZ28",
+    "vless_reverse_reality_public_key": "oZVaAa694VcKxWb-gH31sPpMIQ9XAozoJ6BOAA1DkC0",
     "vless_reverse_reality_short_id": "",
-    "vless_reverse_reality_dest": "www.amazon.com:443",
-    "vless_reverse_reality_sni": "www.amazon.com",
+    "vless_reverse_reality_dest": "digikala.com:443",
+    "vless_reverse_reality_sni": "digikala.com",
     "vless_reverse_tunnel_port": 0,
     "vless_reverse_backhaul_mode": "rathole",
     # ── Trojan+WS/gRPC+TLS over Cloudflare CDN ──
@@ -247,6 +247,23 @@ DEFAULT_SETTINGS = {
     "dpi_domain_front": False,
     "dpi_cdn_front_enabled": False,
     "dpi_cdn_front": "",
+    # ── Advanced DPI Evasion Techniques ──
+    # HTTP Host Header Spoofing: Sends fake Host header to bypass DPI
+    # that inspects HTTP headers. Works with VMess/VLESS+WS+TLS.
+    "dpi_http_host_spoof_enabled": False,
+    "dpi_http_host_spoof_domain": "www.microsoft.com",
+    # WebSocket Host Fronting: Uses different Host header than SNI
+    # to bypass DPI that compares SNI with HTTP Host header.
+    "dpi_ws_host_front_enabled": False,
+    "dpi_ws_host_front_domain": "www.cloudflare.com",
+    # CDN Host Header Fronting: Routes traffic through CDN with
+    # fake Host header to hide real destination from DPI.
+    "dpi_cdn_host_front_enabled": False,
+    "dpi_cdn_host_front_domain": "www.bing.com",
+    # Bug Host / Host Header Injection: Injects fake Host headers
+    # into TLS ClientHello to confuse DPI pattern matching.
+    "dpi_bug_host_enabled": False,
+    "dpi_bug_host_domain": "www.google.com",
 }
 
 DPI_SETTING_KEYS = {
@@ -308,6 +325,10 @@ BOOLEAN_SETTING_KEYS = {
     "dpi_icmp_tunnel",
     "dpi_domain_front",
     "dpi_cdn_front_enabled",
+    "dpi_http_host_spoof_enabled",
+    "dpi_ws_host_front_enabled",
+    "dpi_cdn_host_front_enabled",
+    "dpi_bug_host_enabled",
     "noise_enabled",
     *PROTOCOL_ENABLE_KEYS,
 }
@@ -1984,6 +2005,37 @@ def build_xray_config(active_users):
     dpi_icmp_tunnel = s.get("dpi_icmp_tunnel", False)
     dpi_domain_front = s.get("dpi_domain_front", False)
     dpi_cdn_front = s.get("dpi_cdn_front", "")
+    # Advanced DPI Evasion
+    dpi_http_host_spoof = s.get("dpi_http_host_spoof_enabled", False)
+    dpi_http_host_spoof_domain = s.get("dpi_http_host_spoof_domain", "www.microsoft.com")
+    dpi_ws_host_front = s.get("dpi_ws_host_front_enabled", False)
+    dpi_ws_host_front_domain = s.get("dpi_ws_host_front_domain", "www.cloudflare.com")
+    dpi_cdn_host_front = s.get("dpi_cdn_host_front_enabled", False)
+    dpi_cdn_host_front_domain = s.get("dpi_cdn_host_front_domain", "www.bing.com")
+    dpi_bug_host = s.get("dpi_bug_host_enabled", False)
+    dpi_bug_host_domain = s.get("dpi_bug_host_domain", "www.google.com")
+
+    # ── HTTP Host Header Spoofing: Replace Host header with a fake domain
+    # to bypass DPI that inspects HTTP headers. The SNI remains the real domain,
+    # but the HTTP Host header shows a whitelisted domain.
+    vmess_ws_headers = {"Host": vmess_sni}
+    if dpi_http_host_spoof:
+        vmess_ws_headers["Host"] = dpi_http_host_spoof_domain
+        # Also add X-Forwarded-Host for extra stealth
+        vmess_ws_headers["X-Forwarded-Host"] = vmess_sni
+
+    # ── WebSocket Host Fronting: Use different Host for WS upgrade
+    # than the TLS SNI. DPI compares SNI with HTTP Host, so we spoof Host.
+    if dpi_ws_host_front:
+        vmess_ws_headers["Host"] = dpi_ws_host_front_domain
+        vmess_ws_headers["X-Forwarded-Host"] = vmess_sni
+
+    # ── Bug Host / Host Header Injection: Inject multiple Host headers
+    # to confuse DPI pattern matching. Some DPI systems only check the first
+    # Host header, so we inject a fake one first.
+    if dpi_bug_host:
+        vmess_ws_headers["Host"] = dpi_bug_host_domain
+        vmess_ws_headers["X-Original-Host"] = vmess_sni
 
     inbounds = [
         {
@@ -1999,7 +2051,7 @@ def build_xray_config(active_users):
                         "keyFile": "/usr/local/etc/xray/cert.key",
                     }],
                 },
-                "wsSettings": {"path": vmess_ws_path, "headers": {"Host": vmess_sni}},
+                "wsSettings": {"path": vmess_ws_path, "headers": vmess_ws_headers},
             },
         },
         {
@@ -2035,13 +2087,20 @@ def build_xray_config(active_users):
     if s.get("cdn_enabled") and s.get("cdn_domain"):
         cdn_port = s.get("cdn_port", 2082)
         cdn_path = s.get("cdn_ws_path", "/cdn-ws")
+        # ── CDN Host Header Fronting: Use a fake Host header to bypass
+        # DPI that inspects CDN traffic. The real domain is in the SNI,
+        # but the HTTP Host header shows a whitelisted domain.
+        cdn_headers = {"Host": s["cdn_domain"]}
+        if dpi_cdn_host_front:
+            cdn_headers["Host"] = dpi_cdn_host_front_domain
+            cdn_headers["X-Forwarded-Host"] = s["cdn_domain"]
         inbounds.append({
             "tag": "vmess-cdn", "port": cdn_port, "listen": "0.0.0.0",
             "protocol": "vmess",
             "settings": {"clients": vmess_clients},
             "streamSettings": {
                 "network": "ws",
-                "wsSettings": {"path": cdn_path, "headers": {"Host": s["cdn_domain"]}},
+                "wsSettings": {"path": cdn_path, "headers": cdn_headers},
             },
         })
 
@@ -2129,6 +2188,17 @@ def build_xray_config(active_users):
     if s.get("vless_ws_enabled"):
         vlws_port = s.get("vless_ws_port", 2057)
         vlws_path = s.get("vless_ws_path") or "/vless-ws"
+        # ── Host Header Spoofing for VLESS+WS+TLS
+        vlws_headers = {"Host": vmess_sni}
+        if dpi_http_host_spoof:
+            vlws_headers["Host"] = dpi_http_host_spoof_domain
+            vlws_headers["X-Forwarded-Host"] = vmess_sni
+        if dpi_ws_host_front:
+            vlws_headers["Host"] = dpi_ws_host_front_domain
+            vlws_headers["X-Forwarded-Host"] = vmess_sni
+        if dpi_bug_host:
+            vlws_headers["Host"] = dpi_bug_host_domain
+            vlws_headers["X-Original-Host"] = vmess_sni
         inbounds.append({
             "tag": "vless-ws-tls", "port": vlws_port, "listen": "0.0.0.0",
             "protocol": "vless",
@@ -2142,7 +2212,7 @@ def build_xray_config(active_users):
                         "keyFile": "/usr/local/etc/xray/cert.key",
                     }],
                 },
-                "wsSettings": {"path": vlws_path, "headers": {"Host": vmess_sni}},
+                "wsSettings": {"path": vlws_path, "headers": vlws_headers},
             },
         })
 
@@ -2195,21 +2265,29 @@ def build_xray_config(active_users):
                 "realitySettings": {
                     "privateKey": s.get("vless_reverse_reality_private_key", ""),
                     "shortIds": [s.get("vless_reverse_reality_short_id", "")],
-                    "dest": s.get("vless_reverse_reality_dest", "www.amazon.com:443"),
-                    "serverNames": [s.get("vless_reverse_reality_sni", "www.amazon.com")],
+                    "dest": s.get("vless_reverse_reality_dest", "digikala.com:443"),
+                    "serverNames": [s.get("vless_reverse_reality_sni", "digikala.com")],
                 },
             },
         })
 
     # ── Trojan + WS/gRPC (CDN) ──
     if s.get("trojan_cdn_enabled"):
+        # ── Host Header Spoofing for Trojan+CDN
+        trojan_cdn_headers = {"Host": s.get("trojan_cdn_domain", "")}
+        if dpi_cdn_host_front:
+            trojan_cdn_headers["Host"] = dpi_cdn_host_front_domain
+            trojan_cdn_headers["X-Forwarded-Host"] = s.get("trojan_cdn_domain", "")
+        elif dpi_http_host_spoof:
+            trojan_cdn_headers["Host"] = dpi_http_host_spoof_domain
+            trojan_cdn_headers["X-Forwarded-Host"] = s.get("trojan_cdn_domain", "")
         inbounds.append({
             "tag": "trojan-cdn-ws", "port": s.get("trojan_cdn_port", 2083), "listen": "0.0.0.0",
             "protocol": "trojan",
             "settings": {"clients": trojan_clients},
             "streamSettings": {
                 "network": "ws", "security": "tls" if s.get("trojan_cdn_tls_enabled", True) else "none",
-                "wsSettings": {"path": s.get("trojan_cdn_ws_path", "/trojan-ws"), "headers": {"Host": s.get("trojan_cdn_domain", "")}},
+                "wsSettings": {"path": s.get("trojan_cdn_ws_path", "/trojan-ws"), "headers": trojan_cdn_headers},
                 "tlsSettings": {"serverName": s.get("trojan_cdn_sni", ""), "allowInsecure": True} if s.get("trojan_cdn_tls_enabled", True) else None,
             },
         })
@@ -2636,6 +2714,9 @@ def vless_xhttp_link(name, user_uuid, server_ip=None):
     s = settings
     if not s.get("vless_xhttp_enabled"):
         return ""
+    pbk = s.get("vless_xhttp_reality_public_key", "")
+    if not pbk:
+        return ""
     prefix = s.get("config_prefix") or "Proxy"
     sni = s.get("vless_xhttp_reality_sni", "digikala.com")
     port = s.get("vless_xhttp_port", 2053)
@@ -2665,6 +2746,9 @@ def vless_vision_link(name, user_uuid, server_ip=None):
     s = settings
     if not s.get("vless_vision_enabled"):
         return ""
+    pbk = s.get("vless_vision_reality_public_key", "")
+    if not pbk:
+        return ""
     prefix = s.get("config_prefix") or "Proxy"
     sni = s.get("vless_vision_reality_sni", "objects.githubusercontent.com")
     port = s.get("vless_vision_port", 2058)
@@ -2691,8 +2775,11 @@ def vless_reverse_link(name, user_uuid, server_ip=None):
     s = settings
     if not s.get("vless_reverse_enabled"):
         return ""
+    pbk = s.get("vless_reverse_reality_public_key", "")
+    if not pbk:
+        return ""
     prefix = s.get("config_prefix") or "Proxy"
-    sni = s.get("vless_reverse_reality_sni", "www.amazon.com")
+    sni = s.get("vless_reverse_reality_sni", "digikala.com")
     port = s.get("vless_reverse_port", 2059)
     pbk = s.get("vless_reverse_reality_public_key", "")
     sid = s.get("vless_reverse_reality_short_id", "")
@@ -4239,7 +4326,7 @@ def subscription_json(user_uuid):
             "streamSettings": {
                 "network": "tcp", "security": "reality",
                 "realitySettings": {
-                    "serverName": s.get("vless_reverse_reality_sni", "www.amazon.com"),
+                    "serverName": s.get("vless_reverse_reality_sni", "digikala.com"),
                     "fingerprint": fp,
                     "publicKey": s.get("vless_reverse_reality_public_key", ""),
                     "shortId": s.get("vless_reverse_reality_short_id", ""),

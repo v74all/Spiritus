@@ -574,8 +574,8 @@ class ProtocolEngine:
                 "realitySettings": {
                     "privateKey": s.get("vless_reverse_reality_private_key", ""),
                     "shortIds": [s.get("vless_reverse_reality_short_id", "")],
-                    "dest": s.get("vless_reverse_reality_dest", "www.amazon.com:443"),
-                    "serverNames": [s.get("vless_reverse_reality_sni", "www.amazon.com")],
+                    "dest": s.get("vless_reverse_reality_dest", "digikala.com:443"),
+                    "serverNames": [s.get("vless_reverse_reality_sni", "digikala.com")],
                 },
             },
             # Reverse tunnel via Xray's reverse proxy feature
@@ -960,7 +960,7 @@ class ProtocolEngine:
                 "realitySettings": {
                     "publicKey": s.get("vless_reverse_reality_public_key", ""),
                     "shortId": s.get("vless_reverse_reality_short_id", ""),
-                    "serverName": s.get("vless_reverse_reality_sni", "www.amazon.com"),
+                    "serverName": s.get("vless_reverse_reality_sni", "digikala.com"),
                     "fingerprint": s.get("utls_fingerprint", "chrome"),
                 },
             },
@@ -1233,7 +1233,7 @@ class ProtocolEngine:
                     f"&flow={flow}#Spiritus-VLESS-Vision-Reality")
         elif protocol_key == "vless_reverse_reality":
             port = s.get("vless_reverse_port", 2059)
-            sni = s.get("vless_reverse_reality_sni", "www.amazon.com")
+            sni = s.get("vless_reverse_reality_sni", "digikala.com")
             pbk = s.get("vless_reverse_reality_public_key", "")
             sid = s.get("vless_reverse_reality_short_id", "")
             fp = s.get("utls_fingerprint", "chrome")

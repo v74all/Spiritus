@@ -1157,6 +1157,70 @@
       </div>
     </div>
 
+    <!-- ═══ Host Header Spoofing ═══ -->
+    <div class="settings-section">
+      <div class="sec-header">
+        <div class="settings-title">🎭 Host Spoofing / جعل هاست</div>
+        <span class="s-indicator off" id="si-host-spoof"><span class="dot"></span> <span class="si-text">OFF</span></span>
+      </div>
+      <div class="help-box">
+        <div class="help-en">🎭 <b>Host Header Spoofing</b> replaces the HTTP Host header with a whitelisted domain while keeping the real SNI in TLS. DPI inspects HTTP headers, so a fake Host header makes traffic appear as legitimate web browsing. <b>Techniques:</b><br>
+        • <b>HTTP Host Spoofing</b>: Replaces Host header with a popular domain (e.g., microsoft.com)<br>
+        • <b>WebSocket Host Fronting</b>: Uses different Host for WS upgrade than TLS SNI<br>
+        • <b>CDN Host Fronting</b>: Routes through CDN with fake Host header<br>
+        • <b>Bug Host Injection</b>: Injects fake Host headers to confuse DPI pattern matching</div>
+        <div class="help-fa">🎭 <b>جعل هاست</b> هدر HTTP Host را با یک دامنه مجاز جایگزین می‌کند در حالی که SNI واقعی در TLS باقی می‌ماند. DPI هدرهای HTTP را بررسی می‌کند، پس یک هدر Host جعلی ترافیک را شبیه وب‌گردی عادی نشان می‌دهد.<br>
+        • <b>جعل هاست HTTP</b>: هدر Host را با یک دامنه محبوب جایگزین می‌کند<br>
+        • <b>فرانتینگ هاست WebSocket</b>: هاست متفاوتی برای آپگرید WS نسبت به SNI TLS استفاده می‌کند<br>
+        • <b>فرانتینگ هاست CDN</b>: ترافیک را از طریق CDN با هدر Host جعلی هدایت می‌کند<br>
+        • <b>تزریق باگ هاست</b>: هدرهای Host جعلی تزریق می‌کند تا تطبیق الگوی DPI را مختل کند</div>
+      </div>
+      
+      <div class="settings-row">
+        <div><div class="settings-label">HTTP Host Spoofing / جعل هاست HTTP</div>
+          <div class="settings-desc">Replace Host header with a fake domain / جایگزینی هدر Host با دامنه جعلی</div></div>
+        <label class="toggle"><input type="checkbox" id="set-dpi-http-host-spoof"><span class="toggle-slider"></span></label>
+      </div>
+      <div class="settings-row">
+        <div><div class="settings-label">Spoof Domain / دامنه جعلی</div>
+          <div class="settings-desc">Domain to use as fake Host header / دامنه برای هدر Host جعلی</div></div>
+        <input type="text" id="set-dpi-http-host-spoof-domain" placeholder="www.microsoft.com" value="www.microsoft.com">
+      </div>
+      
+      <div class="settings-row">
+        <div><div class="settings-label">WS Host Fronting / فرانتینگ هاست WS</div>
+          <div class="settings-desc">Use different Host for WS upgrade than SNI / هاست متفاوت برای آپگرید WS</div></div>
+        <label class="toggle"><input type="checkbox" id="set-dpi-ws-host-front"><span class="toggle-slider"></span></label>
+      </div>
+      <div class="settings-row">
+        <div><div class="settings-label">Fronting Domain / دامنه فرانتینگ</div>
+          <div class="settings-desc">Domain for WS Host fronting / دامنه برای فرانتینگ هاست WS</div></div>
+        <input type="text" id="set-dpi-ws-host-front-domain" placeholder="www.cloudflare.com" value="www.cloudflare.com">
+      </div>
+      
+      <div class="settings-row">
+        <div><div class="settings-label">CDN Host Fronting / فرانتینگ هاست CDN</div>
+          <div class="settings-desc">Route through CDN with fake Host header / هدایت از طریق CDN با هدر Host جعلی</div></div>
+        <label class="toggle"><input type="checkbox" id="set-dpi-cdn-host-front"><span class="toggle-slider"></span></label>
+      </div>
+      <div class="settings-row">
+        <div><div class="settings-label">CDN Front Domain / دامنه فرانت CDN</div>
+          <div class="settings-desc">Domain for CDN Host fronting / دامنه برای فرانتینگ هاست CDN</div></div>
+        <input type="text" id="set-dpi-cdn-host-front-domain" placeholder="www.bing.com" value="www.bing.com">
+      </div>
+      
+      <div class="settings-row">
+        <div><div class="settings-label">Bug Host Injection / تزریق باگ هاست</div>
+          <div class="settings-desc">Inject fake Host headers to confuse DPI / تزریق هدرهای Host جعلی برای مختل کردن DPI</div></div>
+        <label class="toggle"><input type="checkbox" id="set-dpi-bug-host"><span class="toggle-slider"></span></label>
+      </div>
+      <div class="settings-row">
+        <div><div class="settings-label">Bug Host Domain / دامنه باگ هاست</div>
+          <div class="settings-desc">Domain for Bug Host injection / دامنه برای تزریق باگ هاست</div></div>
+        <input type="text" id="set-dpi-bug-host-domain" placeholder="www.google.com" value="www.google.com">
+      </div>
+    </div>
+
     <!-- ═══ Tunneling Techniques ═══ -->
     <div class="settings-section">
       <div class="sec-header">

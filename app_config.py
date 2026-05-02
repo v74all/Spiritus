@@ -60,8 +60,8 @@ class Settings(BaseSettings):
     VLESS_REVERSE_REALITY_PRIVATE_KEY: str = ""
     VLESS_REVERSE_REALITY_PUBLIC_KEY: str = ""
     VLESS_REVERSE_REALITY_SHORT_ID: str = ""
-    VLESS_REVERSE_REALITY_DEST: str = "www.amazon.com:443"
-    VLESS_REVERSE_REALITY_SNI: str = "www.amazon.com"
+    VLESS_REVERSE_REALITY_DEST: str = "digikala.com:443"
+    VLESS_REVERSE_REALITY_SNI: str = "digikala.com"
     VLESS_REVERSE_TUNNEL_PORT: int = 0  # 0 = auto-assign
     VLESS_REVERSE_BACKHAUL_MODE: str = "rathole"  # rathole / backhaul / relay
 

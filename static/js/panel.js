@@ -1590,8 +1590,8 @@ async function loadSettings() {
     // VLESS Reverse Reality
     document.getElementById('set-vless-reverse').checked = s.vless_reverse_enabled || false;
     document.getElementById('set-vless-reverse-port').value = s.vless_reverse_port || 2059;
-    document.getElementById('set-vless-reverse-reality-sni').value = s.vless_reverse_reality_sni || 'www.amazon.com';
-    document.getElementById('set-vless-reverse-reality-dest').value = s.vless_reverse_reality_dest || 'www.amazon.com:443';
+    document.getElementById('set-vless-reverse-reality-sni').value = s.vless_reverse_reality_sni || 'digikala.com';
+    document.getElementById('set-vless-reverse-reality-dest').value = s.vless_reverse_reality_dest || 'digikala.com:443';
     document.getElementById('set-vless-reverse-tunnel-port').value = s.vless_reverse_tunnel_port || 0;
     document.getElementById('set-vless-reverse-backhaul-mode').value = s.vless_reverse_backhaul_mode || 'rathole';
     document.getElementById('set-vless-reverse-reality-short-id').value = s.vless_reverse_reality_short_id || '';
@@ -1697,6 +1697,15 @@ async function loadSettings() {
     document.getElementById('set-dpi-domain-front').checked = s.dpi_domain_front || false;
     document.getElementById('set-dpi-cdn-front-enabled').checked = s.dpi_cdn_front_enabled || false;
     document.getElementById('set-dpi-cdn-front').value = s.dpi_cdn_front || '';
+    // Host Header Spoofing
+    document.getElementById('set-dpi-http-host-spoof').checked = s.dpi_http_host_spoof_enabled || false;
+    document.getElementById('set-dpi-http-host-spoof-domain').value = s.dpi_http_host_spoof_domain || 'www.microsoft.com';
+    document.getElementById('set-dpi-ws-host-front').checked = s.dpi_ws_host_front_enabled || false;
+    document.getElementById('set-dpi-ws-host-front-domain').value = s.dpi_ws_host_front_domain || 'www.cloudflare.com';
+    document.getElementById('set-dpi-cdn-host-front').checked = s.dpi_cdn_host_front_enabled || false;
+    document.getElementById('set-dpi-cdn-host-front-domain').value = s.dpi_cdn_host_front_domain || 'www.bing.com';
+    document.getElementById('set-dpi-bug-host').checked = s.dpi_bug_host_enabled || false;
+    document.getElementById('set-dpi-bug-host-domain').value = s.dpi_bug_host_domain || 'www.google.com';
     loadBackups();
     updateSettingsStatus();
     _settingsLoaded = true;
@@ -1777,8 +1786,8 @@ async function saveSettings() {
     // VLESS Reverse Reality
     vless_reverse_enabled: document.getElementById('set-vless-reverse').checked,
     vless_reverse_port: parseInt(document.getElementById('set-vless-reverse-port').value) || 2059,
-    vless_reverse_reality_sni: document.getElementById('set-vless-reverse-reality-sni').value.trim() || 'www.amazon.com',
-    vless_reverse_reality_dest: document.getElementById('set-vless-reverse-reality-dest').value.trim() || 'www.amazon.com:443',
+    vless_reverse_reality_sni: document.getElementById('set-vless-reverse-reality-sni').value.trim() || 'digikala.com',
+    vless_reverse_reality_dest: document.getElementById('set-vless-reverse-reality-dest').value.trim() || 'digikala.com:443',
     vless_reverse_tunnel_port: parseInt(document.getElementById('set-vless-reverse-tunnel-port').value) || 0,
     vless_reverse_backhaul_mode: document.getElementById('set-vless-reverse-backhaul-mode').value,
     vless_reverse_reality_short_id: document.getElementById('set-vless-reverse-reality-short-id').value.trim(),
@@ -1883,6 +1892,15 @@ async function saveSettings() {
     dpi_domain_front: document.getElementById('set-dpi-domain-front').checked,
     dpi_cdn_front_enabled: document.getElementById('set-dpi-cdn-front-enabled').checked,
     dpi_cdn_front: document.getElementById('set-dpi-cdn-front').value.trim(),
+    // Host Header Spoofing
+    dpi_http_host_spoof_enabled: document.getElementById('set-dpi-http-host-spoof').checked,
+    dpi_http_host_spoof_domain: document.getElementById('set-dpi-http-host-spoof-domain').value.trim(),
+    dpi_ws_host_front_enabled: document.getElementById('set-dpi-ws-host-front').checked,
+    dpi_ws_host_front_domain: document.getElementById('set-dpi-ws-host-front-domain').value.trim(),
+    dpi_cdn_host_front_enabled: document.getElementById('set-dpi-cdn-host-front').checked,
+    dpi_cdn_host_front_domain: document.getElementById('set-dpi-cdn-host-front-domain').value.trim(),
+    dpi_bug_host_enabled: document.getElementById('set-dpi-bug-host').checked,
+    dpi_bug_host_domain: document.getElementById('set-dpi-bug-host-domain').value.trim(),
   };
   const r = await fetch(API+'/settings', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data)});
   const d = await r.json();
