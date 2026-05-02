@@ -1573,8 +1573,8 @@ async function loadSettings() {
     // VLESS XHTTP Reality
     document.getElementById('set-vless-xhttp').checked = s.vless_xhttp_enabled || false;
     document.getElementById('set-vless-xhttp-port').value = s.vless_xhttp_port || 2053;
-    document.getElementById('set-vless-xhttp-reality-sni').value = s.vless_xhttp_reality_sni || 'www.microsoft.com';
-    document.getElementById('set-vless-xhttp-reality-dest').value = s.vless_xhttp_reality_dest || 'www.microsoft.com:443';
+    document.getElementById('set-vless-xhttp-reality-sni').value = s.vless_xhttp_reality_sni || 'digikala.com';
+    document.getElementById('set-vless-xhttp-reality-dest').value = s.vless_xhttp_reality_dest || 'digikala.com:443';
     document.getElementById('set-vless-xhttp-path').value = s.vless_xhttp_path || '/xhttp-stream';
     document.getElementById('set-vless-xhttp-mode').value = s.vless_xhttp_mode || 'auto';
     document.getElementById('set-vless-xhttp-reality-short-id').value = s.vless_xhttp_reality_short_id || '';
@@ -1582,8 +1582,8 @@ async function loadSettings() {
     // VLESS Vision Reality
     document.getElementById('set-vless-vision').checked = s.vless_vision_enabled || false;
     document.getElementById('set-vless-vision-port').value = s.vless_vision_port || 2058;
-    document.getElementById('set-vless-vision-reality-sni').value = s.vless_vision_reality_sni || 'www.yahoo.com';
-    document.getElementById('set-vless-vision-reality-dest').value = s.vless_vision_reality_dest || 'www.yahoo.com:443';
+    document.getElementById('set-vless-vision-reality-sni').value = s.vless_vision_reality_sni || 'objects.githubusercontent.com';
+    document.getElementById('set-vless-vision-reality-dest').value = s.vless_vision_reality_dest || 'objects.githubusercontent.com:443';
     document.getElementById('set-vless-vision-flow').value = s.vless_vision_flow || 'xtls-rprx-vision';
     document.getElementById('set-vless-vision-reality-short-id').value = s.vless_vision_reality_short_id || '';
     document.getElementById('set-vless-vision-reality-public-key').value = s.vless_vision_reality_public_key || '';
@@ -1762,16 +1762,16 @@ async function saveSettings() {
     // VLESS XHTTP Reality
     vless_xhttp_enabled: document.getElementById('set-vless-xhttp').checked,
     vless_xhttp_port: parseInt(document.getElementById('set-vless-xhttp-port').value) || 2053,
-    vless_xhttp_reality_sni: document.getElementById('set-vless-xhttp-reality-sni').value.trim() || 'www.microsoft.com',
-    vless_xhttp_reality_dest: document.getElementById('set-vless-xhttp-reality-dest').value.trim() || 'www.microsoft.com:443',
+    vless_xhttp_reality_sni: document.getElementById('set-vless-xhttp-reality-sni').value.trim() || 'digikala.com',
+    vless_xhttp_reality_dest: document.getElementById('set-vless-xhttp-reality-dest').value.trim() || 'digikala.com:443',
     vless_xhttp_path: document.getElementById('set-vless-xhttp-path').value.trim() || '/xhttp-stream',
     vless_xhttp_mode: document.getElementById('set-vless-xhttp-mode').value,
     vless_xhttp_reality_short_id: document.getElementById('set-vless-xhttp-reality-short-id').value.trim(),
     // VLESS Vision Reality
     vless_vision_enabled: document.getElementById('set-vless-vision').checked,
     vless_vision_port: parseInt(document.getElementById('set-vless-vision-port').value) || 2058,
-    vless_vision_reality_sni: document.getElementById('set-vless-vision-reality-sni').value.trim() || 'www.yahoo.com',
-    vless_vision_reality_dest: document.getElementById('set-vless-vision-reality-dest').value.trim() || 'www.yahoo.com:443',
+    vless_vision_reality_sni: document.getElementById('set-vless-vision-reality-sni').value.trim() || 'objects.githubusercontent.com',
+    vless_vision_reality_dest: document.getElementById('set-vless-vision-reality-dest').value.trim() || 'objects.githubusercontent.com:443',
     vless_vision_flow: document.getElementById('set-vless-vision-flow').value.trim() || 'xtls-rprx-vision',
     vless_vision_reality_short_id: document.getElementById('set-vless-vision-reality-short-id').value.trim(),
     // VLESS Reverse Reality

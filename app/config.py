@@ -66,16 +66,16 @@ class Settings(BaseSettings):
     vless_xhttp_port: int = Field(2053, env="VLESS_XHTTP_PORT")
     vless_xhttp_mode: str = Field("auto", env="VLESS_XHTTP_MODE")
     vless_xhttp_path: str = Field("/xhttp", env="VLESS_XHTTP_PATH")
-    vless_xhttp_reality_sni: str = Field("www.microsoft.com", env="VLESS_XHTTP_REALITY_SNI")
-    vless_xhttp_reality_dest: str = Field("www.microsoft.com:443", env="VLESS_XHTTP_REALITY_DEST")
+    vless_xhttp_reality_sni: str = Field("digikala.com", env="VLESS_XHTTP_REALITY_SNI")
+    vless_xhttp_reality_dest: str = Field("digikala.com:443", env="VLESS_XHTTP_REALITY_DEST")
     vless_xhttp_reality_short_id: str = Field("", env="VLESS_XHTTP_REALITY_SHORT_ID")
     vless_xhttp_reality_public_key: str = Field("oZVaAa694VcKxWb-gH31sPpMIQ9XAozoJ6BOAA1DkC0", env="VLESS_XHTTP_REALITY_PUBLIC_KEY")
     
     # VLESS Vision REALITY
     vless_vision_enabled: bool = Field(True, env="VLESS_VISION_ENABLED")
     vless_vision_port: int = Field(2058, env="VLESS_VISION_PORT")
-    vless_vision_reality_sni: str = Field("www.cloudflare.com", env="VLESS_VISION_REALITY_SNI")
-    vless_vision_reality_dest: str = Field("www.cloudflare.com:443", env="VLESS_VISION_REALITY_DEST")
+    vless_vision_reality_sni: str = Field("objects.githubusercontent.com", env="VLESS_VISION_REALITY_SNI")
+    vless_vision_reality_dest: str = Field("objects.githubusercontent.com:443", env="VLESS_VISION_REALITY_DEST")
     vless_vision_reality_short_id: str = Field("", env="VLESS_VISION_REALITY_SHORT_ID")
     vless_vision_reality_public_key: str = Field("oZVaAa694VcKxWb-gH31sPpMIQ9XAozoJ6BOAA1DkC0", env="VLESS_VISION_REALITY_PUBLIC_KEY")
     

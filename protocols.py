@@ -527,8 +527,8 @@ class ProtocolEngine:
                 "realitySettings": {
                     "privateKey": s.get("vless_xhttp_reality_private_key", ""),
                     "shortIds": [s.get("vless_xhttp_reality_short_id", "")],
-                    "dest": s.get("vless_xhttp_reality_dest", "www.microsoft.com:443"),
-                    "serverNames": [s.get("vless_xhttp_reality_sni", "www.microsoft.com")],
+                    "dest": s.get("vless_xhttp_reality_dest", "digikala.com:443"),
+                    "serverNames": [s.get("vless_xhttp_reality_sni", "digikala.com")],
                 },
                 "xhttpSettings": {
                     "path": s.get("vless_xhttp_path", "/xhttp-stream"),
@@ -552,8 +552,8 @@ class ProtocolEngine:
                 "realitySettings": {
                     "privateKey": s.get("vless_vision_reality_private_key", ""),
                     "shortIds": [s.get("vless_vision_reality_short_id", "")],
-                    "dest": s.get("vless_vision_reality_dest", "www.yahoo.com:443"),
-                    "serverNames": [s.get("vless_vision_reality_sni", "www.yahoo.com")],
+                    "dest": s.get("vless_vision_reality_dest", "objects.githubusercontent.com:443"),
+                    "serverNames": [s.get("vless_vision_reality_sni", "objects.githubusercontent.com")],
                 },
             },
         }
@@ -908,7 +908,7 @@ class ProtocolEngine:
                 "realitySettings": {
                     "publicKey": s.get("vless_xhttp_reality_public_key", ""),
                     "shortId": s.get("vless_xhttp_reality_short_id", ""),
-                    "serverName": s.get("vless_xhttp_reality_sni", "www.microsoft.com"),
+                    "serverName": s.get("vless_xhttp_reality_sni", "digikala.com"),
                     "fingerprint": s.get("utls_fingerprint", "chrome"),
                 },
                 "xhttpSettings": {
@@ -938,7 +938,7 @@ class ProtocolEngine:
                 "realitySettings": {
                     "publicKey": s.get("vless_vision_reality_public_key", ""),
                     "shortId": s.get("vless_vision_reality_short_id", ""),
-                    "serverName": s.get("vless_vision_reality_sni", "www.yahoo.com"),
+                    "serverName": s.get("vless_vision_reality_sni", "objects.githubusercontent.com"),
                     "fingerprint": s.get("utls_fingerprint", "chrome"),
                 },
             },
@@ -1212,7 +1212,7 @@ class ProtocolEngine:
     def _vless_share_link(self, protocol_key: str, uuid: str, server: str, s: Any) -> str:
         if protocol_key == "vless_xhttp_reality":
             port = s.get("vless_xhttp_port", 2053)
-            sni = s.get("vless_xhttp_reality_sni", "www.microsoft.com")
+            sni = s.get("vless_xhttp_reality_sni", "digikala.com")
             pbk = s.get("vless_xhttp_reality_public_key", "")
             sid = s.get("vless_xhttp_reality_short_id", "")
             fp = s.get("utls_fingerprint", "chrome")
@@ -1223,7 +1223,7 @@ class ProtocolEngine:
                     f"&path={path}&mode={mode}#Spiritus-VLESS-XHTTP-Reality")
         elif protocol_key == "vless_vision_reality":
             port = s.get("vless_vision_port", 2058)
-            sni = s.get("vless_vision_reality_sni", "www.yahoo.com")
+            sni = s.get("vless_vision_reality_sni", "objects.githubusercontent.com")
             pbk = s.get("vless_vision_reality_public_key", "")
             sid = s.get("vless_vision_reality_short_id", "")
             fp = s.get("utls_fingerprint", "chrome")

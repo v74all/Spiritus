@@ -121,8 +121,8 @@ DEFAULT_SETTINGS = {
     "vless_xhttp_reality_private_key": "",
     "vless_xhttp_reality_public_key": "",
     "vless_xhttp_reality_short_id": "",
-    "vless_xhttp_reality_dest": "www.microsoft.com:443",
-    "vless_xhttp_reality_sni": "www.microsoft.com",
+    "vless_xhttp_reality_dest": "digikala.com:443",
+    "vless_xhttp_reality_sni": "digikala.com",
     "vless_xhttp_path": "/xhttp-stream",
     "vless_xhttp_mode": "auto",
     # ── VLESS+REALITY+Vision (direct, fresh IP) ──
@@ -131,8 +131,8 @@ DEFAULT_SETTINGS = {
     "vless_vision_reality_private_key": "",
     "vless_vision_reality_public_key": "",
     "vless_vision_reality_short_id": "",
-    "vless_vision_reality_dest": "www.yahoo.com:443",
-    "vless_vision_reality_sni": "www.yahoo.com",
+    "vless_vision_reality_dest": "objects.githubusercontent.com:443",
+    "vless_vision_reality_sni": "objects.githubusercontent.com",
     "vless_vision_flow": "xtls-rprx-vision",
     # ── Reverse-tunneled VLESS-Reality (Backhaul/Rathole) ──
     "vless_reverse_enabled": False,
@@ -2157,8 +2157,8 @@ def build_xray_config(active_users):
                 "realitySettings": {
                     "privateKey": s.get("vless_xhttp_reality_private_key", ""),
                     "shortIds": [s.get("vless_xhttp_reality_short_id", "")],
-                    "dest": s.get("vless_xhttp_reality_dest", "www.microsoft.com:443"),
-                    "serverNames": [s.get("vless_xhttp_reality_sni", "www.microsoft.com")],
+                    "dest": s.get("vless_xhttp_reality_dest", "digikala.com:443"),
+                    "serverNames": [s.get("vless_xhttp_reality_sni", "digikala.com")],
                 },
                 "xhttpSettings": {
                     "path": s.get("vless_xhttp_path", "/xhttp-stream"),
@@ -2178,8 +2178,8 @@ def build_xray_config(active_users):
                 "realitySettings": {
                     "privateKey": s.get("vless_vision_reality_private_key", ""),
                     "shortIds": [s.get("vless_vision_reality_short_id", "")],
-                    "dest": s.get("vless_vision_reality_dest", "www.yahoo.com:443"),
-                    "serverNames": [s.get("vless_vision_reality_sni", "www.yahoo.com")],
+                    "dest": s.get("vless_vision_reality_dest", "objects.githubusercontent.com:443"),
+                    "serverNames": [s.get("vless_vision_reality_sni", "objects.githubusercontent.com")],
                 },
             },
         })
@@ -2637,7 +2637,7 @@ def vless_xhttp_link(name, user_uuid, server_ip=None):
     if not s.get("vless_xhttp_enabled"):
         return ""
     prefix = s.get("config_prefix") or "Proxy"
-    sni = s.get("vless_xhttp_reality_sni", "www.microsoft.com")
+    sni = s.get("vless_xhttp_reality_sni", "digikala.com")
     port = s.get("vless_xhttp_port", 2053)
     pbk = s.get("vless_xhttp_reality_public_key", "")
     sid = s.get("vless_xhttp_reality_short_id", "")
@@ -2666,7 +2666,7 @@ def vless_vision_link(name, user_uuid, server_ip=None):
     if not s.get("vless_vision_enabled"):
         return ""
     prefix = s.get("config_prefix") or "Proxy"
-    sni = s.get("vless_vision_reality_sni", "www.yahoo.com")
+    sni = s.get("vless_vision_reality_sni", "objects.githubusercontent.com")
     port = s.get("vless_vision_port", 2058)
     pbk = s.get("vless_vision_reality_public_key", "")
     sid = s.get("vless_vision_reality_short_id", "")
@@ -4199,7 +4199,7 @@ def subscription_json(user_uuid):
             "streamSettings": {
                 "network": "xhttp", "security": "reality",
                 "realitySettings": {
-                    "serverName": s.get("vless_xhttp_reality_sni", "www.microsoft.com"),
+                    "serverName": s.get("vless_xhttp_reality_sni", "digikala.com"),
                     "fingerprint": fp,
                     "publicKey": s.get("vless_xhttp_reality_public_key", ""),
                     "shortId": s.get("vless_xhttp_reality_short_id", ""),
@@ -4221,7 +4221,7 @@ def subscription_json(user_uuid):
             "streamSettings": {
                 "network": "tcp", "security": "reality",
                 "realitySettings": {
-                    "serverName": s.get("vless_vision_reality_sni", "www.yahoo.com"),
+                    "serverName": s.get("vless_vision_reality_sni", "objects.githubusercontent.com"),
                     "fingerprint": fp,
                     "publicKey": s.get("vless_vision_reality_public_key", ""),
                     "shortId": s.get("vless_vision_reality_short_id", ""),

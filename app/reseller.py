@@ -299,7 +299,7 @@ class SelfServicePortal:
                 address=server_address,
                 port=2058,
                 security="reality",
-                sni="www.yahoo.com",
+                sni="objects.githubusercontent.com",
                 fp="chrome",
                 pbk="",
                 sid="",

@@ -39,8 +39,8 @@ class Settings(BaseSettings):
     VLESS_XHTTP_REALITY_PRIVATE_KEY: str = ""
     VLESS_XHTTP_REALITY_PUBLIC_KEY: str = ""
     VLESS_XHTTP_REALITY_SHORT_ID: str = ""
-    VLESS_XHTTP_REALITY_DEST: str = "www.microsoft.com:443"
-    VLESS_XHTTP_REALITY_SNI: str = "www.microsoft.com"
+    VLESS_XHTTP_REALITY_DEST: str = "digikala.com:443"
+    VLESS_XHTTP_REALITY_SNI: str = "digikala.com"
     VLESS_XHTTP_PATH: str = "/xhttp-stream"
     VLESS_XHTTP_MODE: str = "auto"  # auto / packet-up / stream-up / stream-one
 
@@ -50,8 +50,8 @@ class Settings(BaseSettings):
     VLESS_VISION_REALITY_PRIVATE_KEY: str = ""
     VLESS_VISION_REALITY_PUBLIC_KEY: str = ""
     VLESS_VISION_REALITY_SHORT_ID: str = ""
-    VLESS_VISION_REALITY_DEST: str = "www.yahoo.com:443"
-    VLESS_VISION_REALITY_SNI: str = "www.yahoo.com"
+    VLESS_VISION_REALITY_DEST: str = "objects.githubusercontent.com:443"
+    VLESS_VISION_REALITY_SNI: str = "objects.githubusercontent.com"
     VLESS_VISION_FLOW: str = "xtls-rprx-vision"
 
     # ── Reverse-tunneled VLESS-Reality (Backhaul/Rathole) ──

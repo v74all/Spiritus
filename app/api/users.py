@@ -280,7 +280,7 @@ async def get_user_config(
             address=server_address,
             port=2058,
             security="reality",
-            sni="www.yahoo.com",
+            sni="objects.githubusercontent.com",
             fp="chrome",
             flow="xtls-rprx-vision" if "vision" in protocol else "",
             network="xhttp" if "xhttp" in protocol else "tcp",
