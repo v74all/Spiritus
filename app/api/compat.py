@@ -17,6 +17,7 @@ import csv
 import json
 import logging
 import os
+import secrets
 import subprocess
 import time
 import urllib.parse
@@ -371,17 +372,17 @@ def _build_share_links(u: VpnUser, server_ip: Optional[str] = None) -> Dict[str,
             links["tuic"] = ""
 
     # VLESS xHTTP REALITY
-    if _settings_state.get("vless_xhttp_enabled") and _settings_state.get("reality_public_key"):
+    if _settings_state.get("vless_xhttp_enabled") and (_settings_state.get("reality_public_key") or _settings_state.get("vless_xhttp_reality_public_key")):
         try:
             links["vless_xhttp"] = ClientConfigGenerator.generate_vless_share_url(
                 uuid=u.uuid,
                 address=server_ip,
                 port=int(_settings_state.get("vless_xhttp_port") or 2053),
                 security="reality",
-                sni=_settings_state.get("reality_sni") or "www.google.com",
+                sni=_settings_state.get("vless_xhttp_reality_sni") or _settings_state.get("reality_sni") or "www.microsoft.com",
                 fp=_settings_state.get("fingerprint") or "chrome",
-                pbk=_settings_state.get("reality_public_key") or "",
-                sid=_settings_state.get("reality_short_id") or "",
+                pbk=_settings_state.get("vless_xhttp_reality_public_key") or _settings_state.get("reality_public_key") or "",
+                sid=_settings_state.get("vless_xhttp_reality_short_id") or _settings_state.get("reality_short_id") or "",
                 network="xhttp",
                 xhttp_mode=_settings_state.get("vless_xhttp_mode") or "auto",
                 path=_settings_state.get("vless_xhttp_path") or "/xhttp",
@@ -390,17 +391,17 @@ def _build_share_links(u: VpnUser, server_ip: Optional[str] = None) -> Dict[str,
             links["vless_xhttp"] = ""
 
     # VLESS Vision REALITY
-    if _settings_state.get("vless_vision_enabled") and _settings_state.get("reality_public_key"):
+    if _settings_state.get("vless_vision_enabled") and (_settings_state.get("reality_public_key") or _settings_state.get("vless_vision_reality_public_key")):
         try:
             links["vless_vision"] = ClientConfigGenerator.generate_vless_share_url(
                 uuid=u.uuid,
                 address=server_ip,
                 port=int(_settings_state.get("vless_vision_port") or 2058),
                 security="reality",
-                sni=_settings_state.get("reality_sni") or "www.google.com",
+                sni=_settings_state.get("vless_vision_reality_sni") or _settings_state.get("reality_sni") or "www.cloudflare.com",
                 fp=_settings_state.get("fingerprint") or "chrome",
-                pbk=_settings_state.get("reality_public_key") or "",
-                sid=_settings_state.get("reality_short_id") or "",
+                pbk=_settings_state.get("vless_vision_reality_public_key") or _settings_state.get("reality_public_key") or "",
+                sid=_settings_state.get("vless_vision_reality_short_id") or _settings_state.get("reality_short_id") or "",
                 flow="xtls-rprx-vision",
                 network="tcp",
             )
@@ -408,17 +409,17 @@ def _build_share_links(u: VpnUser, server_ip: Optional[str] = None) -> Dict[str,
             links["vless_vision"] = ""
 
     # VLESS Reverse REALITY
-    if _settings_state.get("vless_reverse_enabled") and _settings_state.get("reality_public_key"):
+    if _settings_state.get("vless_reverse_enabled") and (_settings_state.get("reality_public_key") or _settings_state.get("vless_xhttp_reality_public_key")):
         try:
             links["vless_reverse"] = ClientConfigGenerator.generate_vless_share_url(
                 uuid=u.uuid,
                 address=server_ip,
                 port=int(_settings_state.get("vless_reverse_port") or 2059),
                 security="reality",
-                sni=_settings_state.get("reality_sni") or "www.google.com",
+                sni=_settings_state.get("vless_xhttp_reality_sni") or _settings_state.get("reality_sni") or "www.microsoft.com",
                 fp=_settings_state.get("fingerprint") or "chrome",
-                pbk=_settings_state.get("reality_public_key") or "",
-                sid=_settings_state.get("reality_short_id") or "",
+                pbk=_settings_state.get("vless_xhttp_reality_public_key") or _settings_state.get("reality_public_key") or "",
+                sid=_settings_state.get("vless_xhttp_reality_short_id") or _settings_state.get("reality_short_id") or "",
                 network="tcp",
             )
         except Exception:
@@ -552,6 +553,20 @@ def _default_legacy_settings() -> Dict[str, Any]:
         "cdn_domain": "",
         "cdn_ws_path": "/cdn-ws",
         "cdn_port": 2082,
+        # REALITY keys (auto-generated)
+        "reality_public_key": settings.reality_public_key,
+        "reality_private_key": settings.reality_private_key,
+        "reality_short_id": secrets.token_hex(8),
+        # VLESS XHTTP REALITY settings
+        "vless_xhttp_reality_sni": "www.microsoft.com",
+        "vless_xhttp_reality_dest": "www.microsoft.com:443",
+        "vless_xhttp_reality_short_id": secrets.token_hex(8),
+        "vless_xhttp_reality_public_key": settings.reality_public_key,
+        # VLESS Vision REALITY settings
+        "vless_vision_reality_sni": "www.cloudflare.com",
+        "vless_vision_reality_dest": "www.cloudflare.com:443",
+        "vless_vision_reality_short_id": secrets.token_hex(8),
+        "vless_vision_reality_public_key": settings.reality_public_key,
     }
 
 
@@ -1168,8 +1183,8 @@ async def legacy_server_info(
         "vmess_sni": s.get("vmess_sni", "www.aparat.com"),
         "vmess_ws_path": s.get("vmess_ws_path", "/api/v1/stream"),
         # VLESS Reality (Vision)
-        "vless": bool(s.get("reality_public_key")),
-        "vless_enabled": bool(s.get("reality_public_key")),
+        "vless": bool(s.get("reality_public_key")) or _as_bool(s.get("vless_xhttp_enabled", False)) or _as_bool(s.get("vless_vision_enabled", False)),
+        "vless_enabled": bool(s.get("reality_public_key")) or _as_bool(s.get("vless_xhttp_enabled", False)) or _as_bool(s.get("vless_vision_enabled", False)),
         "vless_port": s.get("vless_port", 2053),
         "vless_sni": s.get("reality_sni", "www.google.com"),
         "vless_public_key": s.get("reality_public_key", ""),
@@ -1177,9 +1192,19 @@ async def legacy_server_info(
         # VLESS xHTTP REALITY
         "vless_xhttp_enabled": _as_bool(s.get("vless_xhttp_enabled", False)),
         "vless_xhttp_port": s.get("vless_xhttp_port", 2053),
+        "vless_xhttp_mode": s.get("vless_xhttp_mode", "auto"),
+        "vless_xhttp_path": s.get("vless_xhttp_path", "/xhttp"),
+        "vless_xhttp_reality_sni": s.get("vless_xhttp_reality_sni", "www.microsoft.com"),
+        "vless_xhttp_reality_dest": s.get("vless_xhttp_reality_dest", "www.microsoft.com:443"),
+        "vless_xhttp_reality_short_id": s.get("vless_xhttp_reality_short_id", ""),
+        "vless_xhttp_reality_public_key": s.get("vless_xhttp_reality_public_key", s.get("reality_public_key", "")),
         # VLESS Vision REALITY
         "vless_vision_enabled": _as_bool(s.get("vless_vision_enabled", False)),
         "vless_vision_port": s.get("vless_vision_port", 2058),
+        "vless_vision_reality_sni": s.get("vless_vision_reality_sni", "www.cloudflare.com"),
+        "vless_vision_reality_dest": s.get("vless_vision_reality_dest", "www.cloudflare.com:443"),
+        "vless_vision_reality_short_id": s.get("vless_vision_reality_short_id", ""),
+        "vless_vision_reality_public_key": s.get("vless_vision_reality_public_key", s.get("reality_public_key", "")),
         # VLESS Reverse REALITY
         "vless_reverse_enabled": _as_bool(s.get("vless_reverse_enabled", False)),
         "vless_reverse_port": s.get("vless_reverse_port", 2059),
@@ -1359,7 +1384,9 @@ async def legacy_get_settings(
         "kill_switch_enabled": False,
         "reality_sni": "www.google.com",
         "vless_port": 2053,
-        "reality_public_key": "",
+        "reality_public_key": settings.reality_public_key,
+        "vless": True,
+        "vless_enabled": True,
         "trojan_enabled": False,
         "trojan_port": 2083,
         "grpc_enabled": False,
@@ -1390,8 +1417,8 @@ async def legacy_get_settings(
         "cdn_ws_path": settings.cdn_ws_path,
         "cdn_port": settings.cdn_port,
         "telegram_enabled": False,
-        "telegram_bot_token": settings.telegram_bot_token,
-        "telegram_chat_id": settings.telegram_chat_id,
+        "telegram_bot_token": getattr(settings, 'telegram_bot_token', ''),
+        "telegram_chat_id": getattr(settings, 'telegram_chat_id', ''),
         "telegram_notify_user_disabled": True,
         "telegram_notify_user_expired": True,
         "telegram_notify_kill_switch": True,
@@ -1407,6 +1434,49 @@ async def legacy_get_settings(
         "dpi_domain_front": False,
         "dpi_cdn_front_enabled": False,
         "dpi_cdn_front": "",
+        # VLESS XHTTP REALITY
+        "vless_xhttp_enabled": True,
+        "vless_xhttp_port": 2053,
+        "vless_xhttp_mode": "auto",
+        "vless_xhttp_path": "/xhttp",
+        "vless_xhttp_reality_sni": "www.microsoft.com",
+        "vless_xhttp_reality_dest": "www.microsoft.com:443",
+        "vless_xhttp_reality_short_id": "",
+        "vless_xhttp_reality_public_key": settings.reality_public_key,
+        # VLESS Vision REALITY
+        "vless_vision_enabled": True,
+        "vless_vision_port": 2058,
+        "vless_vision_reality_sni": "www.cloudflare.com",
+        "vless_vision_reality_dest": "www.cloudflare.com:443",
+        "vless_vision_reality_short_id": "",
+        "vless_vision_reality_public_key": settings.reality_public_key,
+        # VLESS Reverse REALITY
+        "vless_reverse_enabled": True,
+        "vless_reverse_port": 2059,
+        # Hysteria2
+        "hysteria2_enabled": True,
+        "hysteria2_port": 8443,
+        # TUIC
+        "tuic_enabled": True,
+        "tuic_port": 8444,
+        # AmneziaWG
+        "amneziawg_enabled": False,
+        "amneziawg_port": 51820,
+        # ShadowTLS
+        "shadowtls_enabled": False,
+        "shadowtls_port": 8445,
+        # Mieru
+        "mieru_enabled": False,
+        "mieru_port": 8446,
+        # NaiveProxy
+        "naiveproxy_enabled": False,
+        "naiveproxy_port": 8447,
+        # WireGuard
+        "wireguard_enabled": False,
+        "wireguard_port": 51821,
+        # OpenVPN
+        "openvpn_enabled": False,
+        "openvpn_port": 1194,
     }
     merged = _normalize_settings_types({**defaults, **await _load_legacy_settings(db)})
     return merged

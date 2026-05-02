@@ -55,33 +55,33 @@ async def lifespan(app: FastAPI):
     # Initialize Telegram bot
     from .telegram_bot import telegram_bot
     from .config import settings as s
-    if s.telegram_bot_token:
-        telegram_bot.token = s.telegram_bot_token
-        telegram_bot.chat_id = s.telegram_chat_id
-        if s.telegram_admin_chat_ids:
-            telegram_bot.admin_chat_ids = s.telegram_admin_chat_ids.split(",")
+    if getattr(s, 'telegram_bot_token', None):
+        telegram_bot.token = getattr(s, 'telegram_bot_token', '')
+        telegram_bot.chat_id = getattr(s, 'telegram_chat_id', '')
+        if getattr(s, 'telegram_admin_chat_ids', None):
+            telegram_bot.admin_chat_ids = getattr(s, 'telegram_admin_chat_ids', '').split(",")
         logger.info("Telegram bot configured")
 
     # Initialize payment gateways
     from .payments import payment_manager
-    if s.zarinpal_merchant_id:
+    if getattr(s, 'zarinpal_merchant_id', None):
         payment_manager.setup_zarinpal(
-            merchant_id=s.zarinpal_merchant_id,
-            sandbox=s.zarinpal_sandbox,
-            callback_url=s.zarinpal_callback_url,
+            merchant_id=getattr(s, 'zarinpal_merchant_id', ''),
+            sandbox=getattr(s, 'zarinpal_sandbox', True),
+            callback_url=getattr(s, 'zarinpal_callback_url', ''),
         )
         logger.info("Zarinpal gateway configured")
-    if s.idpay_api_key:
+    if getattr(s, 'idpay_api_key', None):
         payment_manager.setup_idpay(
-            api_key=s.idpay_api_key,
-            sandbox=s.idpay_sandbox,
-            callback_url=s.idpay_callback_url,
+            api_key=getattr(s, 'idpay_api_key', ''),
+            sandbox=getattr(s, 'idpay_sandbox', True),
+            callback_url=getattr(s, 'idpay_callback_url', ''),
         )
         logger.info("IDPay gateway configured")
-    if s.usdt_wallet_address:
+    if getattr(s, 'usdt_wallet_address', None):
         payment_manager.setup_usdt(
-            wallet_address=s.usdt_wallet_address,
-            api_key=s.usdt_trongrid_api_key,
+            wallet_address=getattr(s, 'usdt_wallet_address', ''),
+            api_key=getattr(s, 'usdt_trongrid_api_key', ''),
         )
         logger.info("USDT TRC-20 gateway configured")
     

@@ -51,36 +51,33 @@ class Settings(BaseSettings):
     xray_config_path: str = "/usr/local/etc/xray/config.json"
     xray_bin_path: str = "/usr/local/bin/xray"
     
-    # Telegram Bot
-    telegram_bot_token: str = Field("", env="TELEGRAM_BOT_TOKEN")
-    telegram_chat_id: str = Field("", env="TELEGRAM_CHAT_ID")
-    telegram_admin_chat_ids: str = Field("", env="TELEGRAM_ADMIN_CHAT_IDS")
-    
-    # Payment Gateways
-    zarinpal_merchant_id: str = Field("", env="ZARINPAL_MERCHANT_ID")
-    zarinpal_sandbox: bool = Field(True, env="ZARINPAL_SANDBOX")
-    zarinpal_callback_url: str = Field("", env="ZARINPAL_CALLBACK_URL")
-    idpay_api_key: str = Field("", env="IDPAY_API_KEY")
-    idpay_sandbox: bool = Field(True, env="IDPAY_SANDBOX")
-    idpay_callback_url: str = Field("", env="IDPAY_CALLBACK_URL")
-    usdt_wallet_address: str = Field("", env="USDT_WALLET_ADDRESS")
-    usdt_trongrid_api_key: str = Field("", env="USDT_TRONGRID_API_KEY")
-    
-    # mTLS
-    mtls_ca_cert_path: str = Field("/opt/spiritus/mtls/ca.crt", env="MTLS_CA_CERT_PATH")
-    mtls_ca_key_path: str = Field("/opt/spiritus/mtls/ca.key", env="MTLS_CA_KEY_PATH")
-    mtls_clients_dir: str = Field("/opt/spiritus/mtls/clients", env="MTLS_CLIENTS_DIR")
-    
-    # Fail2ban
-    fail2ban_max_retries: int = Field(3, env="FAIL2BAN_MAX_RETRIES")
-    fail2ban_ban_time: int = Field(3600, env="FAIL2BAN_BAN_TIME")
-    fail2ban_find_time: int = Field(600, env="FAIL2BAN_FIND_TIME")
+    # REALITY
+    reality_private_key: str = "aGM7HELLUCgA3icWeQYOba7HL-82ocrTkG3k4PhBZ28"
+    reality_public_key: str = "oZVaAa694VcKxWb-gH31sPpMIQ9XAozoJ6BOAA1DkC0"
     
     # Protocols
     vless_ws_enabled: bool = Field(False, env="VLESS_WS_ENABLED")
     vless_ws_port: int = Field(2057, env="VLESS_WS_PORT")
     vless_ws_path: str = Field("/vless-ws", env="VLESS_WS_PATH")
     vless_ws_host: str = Field("", env="VLESS_WS_HOST")
+    
+    # VLESS XHTTP REALITY
+    vless_xhttp_enabled: bool = Field(True, env="VLESS_XHTTP_ENABLED")
+    vless_xhttp_port: int = Field(2053, env="VLESS_XHTTP_PORT")
+    vless_xhttp_mode: str = Field("auto", env="VLESS_XHTTP_MODE")
+    vless_xhttp_path: str = Field("/xhttp", env="VLESS_XHTTP_PATH")
+    vless_xhttp_reality_sni: str = Field("www.microsoft.com", env="VLESS_XHTTP_REALITY_SNI")
+    vless_xhttp_reality_dest: str = Field("www.microsoft.com:443", env="VLESS_XHTTP_REALITY_DEST")
+    vless_xhttp_reality_short_id: str = Field("", env="VLESS_XHTTP_REALITY_SHORT_ID")
+    vless_xhttp_reality_public_key: str = Field("oZVaAa694VcKxWb-gH31sPpMIQ9XAozoJ6BOAA1DkC0", env="VLESS_XHTTP_REALITY_PUBLIC_KEY")
+    
+    # VLESS Vision REALITY
+    vless_vision_enabled: bool = Field(True, env="VLESS_VISION_ENABLED")
+    vless_vision_port: int = Field(2058, env="VLESS_VISION_PORT")
+    vless_vision_reality_sni: str = Field("www.cloudflare.com", env="VLESS_VISION_REALITY_SNI")
+    vless_vision_reality_dest: str = Field("www.cloudflare.com:443", env="VLESS_VISION_REALITY_DEST")
+    vless_vision_reality_short_id: str = Field("", env="VLESS_VISION_REALITY_SHORT_ID")
+    vless_vision_reality_public_key: str = Field("oZVaAa694VcKxWb-gH31sPpMIQ9XAozoJ6BOAA1DkC0", env="VLESS_VISION_REALITY_PUBLIC_KEY")
     
     # CDN
     cdn_enabled: bool = Field(False, env="CDN_ENABLED")
