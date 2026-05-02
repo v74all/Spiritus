@@ -1190,6 +1190,7 @@ async def legacy_server_info(
         "vless_public_key": s.get("reality_public_key", ""),
         "vless_short_id": s.get("reality_short_id", ""),
         # VLESS xHTTP REALITY
+        "vless_xhttp": _as_bool(s.get("vless_xhttp_enabled", False)),
         "vless_xhttp_enabled": _as_bool(s.get("vless_xhttp_enabled", False)),
         "vless_xhttp_port": s.get("vless_xhttp_port", 2053),
         "vless_xhttp_mode": s.get("vless_xhttp_mode", "auto"),
@@ -1199,6 +1200,7 @@ async def legacy_server_info(
         "vless_xhttp_reality_short_id": s.get("vless_xhttp_reality_short_id", ""),
         "vless_xhttp_reality_public_key": s.get("vless_xhttp_reality_public_key", s.get("reality_public_key", "")),
         # VLESS Vision REALITY
+        "vless_vision": _as_bool(s.get("vless_vision_enabled", False)),
         "vless_vision_enabled": _as_bool(s.get("vless_vision_enabled", False)),
         "vless_vision_port": s.get("vless_vision_port", 2058),
         "vless_vision_reality_sni": s.get("vless_vision_reality_sni", "www.cloudflare.com"),
@@ -1206,6 +1208,7 @@ async def legacy_server_info(
         "vless_vision_reality_short_id": s.get("vless_vision_reality_short_id", ""),
         "vless_vision_reality_public_key": s.get("vless_vision_reality_public_key", s.get("reality_public_key", "")),
         # VLESS Reverse REALITY
+        "vless_reverse": _as_bool(s.get("vless_reverse_enabled", False)),
         "vless_reverse_enabled": _as_bool(s.get("vless_reverse_enabled", False)),
         "vless_reverse_port": s.get("vless_reverse_port", 2059),
         # Trojan
@@ -1235,27 +1238,35 @@ async def legacy_server_info(
         "vless_ws_port": s.get("vless_ws_port", settings.vless_ws_port),
         "vless_ws_path": s.get("vless_ws_path", settings.vless_ws_path),
         # Hysteria2
+        "hysteria2": _as_bool(s.get("hysteria2_enabled", False)),
         "hysteria2_enabled": _as_bool(s.get("hysteria2_enabled", False)),
         "hysteria2_port": s.get("hysteria2_port", 8443),
         # TUIC v5
+        "tuic": _as_bool(s.get("tuic_enabled", False)),
         "tuic_enabled": _as_bool(s.get("tuic_enabled", False)),
         "tuic_port": s.get("tuic_port", 8444),
         # AmneziaWG
+        "amneziawg": _as_bool(s.get("amneziawg_enabled", False)),
         "amneziawg_enabled": _as_bool(s.get("amneziawg_enabled", False)),
         "amneziawg_port": s.get("amneziawg_port", 51820),
         # ShadowTLS v3
+        "shadowtls": _as_bool(s.get("shadowtls_enabled", False)),
         "shadowtls_enabled": _as_bool(s.get("shadowtls_enabled", False)),
         "shadowtls_port": s.get("shadowtls_port", 8445),
         # Mieru
+        "mieru": _as_bool(s.get("mieru_enabled", False)),
         "mieru_enabled": _as_bool(s.get("mieru_enabled", False)),
         "mieru_port": s.get("mieru_port", 8446),
         # NaiveProxy
+        "naiveproxy": _as_bool(s.get("naiveproxy_enabled", False)),
         "naiveproxy_enabled": _as_bool(s.get("naiveproxy_enabled", False)),
         "naiveproxy_port": s.get("naiveproxy_port", 8447),
         # WireGuard
+        "wireguard": _as_bool(s.get("wireguard_enabled", False)),
         "wireguard_enabled": _as_bool(s.get("wireguard_enabled", False)),
         "wireguard_port": s.get("wireguard_port", 51821),
         # OpenVPN
+        "openvpn": _as_bool(s.get("openvpn_enabled", False)),
         "openvpn_enabled": _as_bool(s.get("openvpn_enabled", False)),
         "openvpn_port": s.get("openvpn_port", 1194),
         # CDN
