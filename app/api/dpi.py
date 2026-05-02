@@ -55,6 +55,7 @@ class DPIConfigGenerateRequest(BaseModel):
     user_uuid: str = Field(..., min_length=1)
     short_id: str = Field("", description="Auto-generated if empty")
     sni: str = Field("", description="Auto-selected if empty")
+    protocol: str = Field("vless_xhttp_reality", description="Protocol type for SNI selection")
     xhttp_path: str = Field("/api/v2/stream")
     xhttp_mode: str = Field("auto")
     port: int = Field(443)
@@ -294,9 +295,16 @@ async def generate_dpi_safe_config(
     if not req.short_id:
         req.short_id = reality_key_manager.generate_short_id()
 
-    # Auto-select SNI if not provided
+    # Auto-select SNI if not provided, based on protocol type
     if not req.sni:
-        req.sni = await sni_manager.get_best_sni()
+        protocol_type = ""
+        if req.protocol == "vless_xhttp_reality":
+            protocol_type = "xhttp"
+        elif req.protocol == "vless_vision_reality":
+            protocol_type = "vision"
+        elif req.protocol == "vless_reverse_reality":
+            protocol_type = "reverse"
+        req.sni = await sni_manager.get_best_sni(protocol_type)
 
     # Generate key pair for the config
     keys = await reality_key_manager.generate_key_pair()
@@ -324,16 +332,24 @@ async def generate_dpi_safe_config(
         port=req.port,
     )
 
+    # Determine which URL to return based on protocol
+    share_url = client_config.get("xhttp_url", "")
+    if req.protocol == "vless_vision_reality":
+        share_url = client_config.get("vision_url", "")
+    elif req.protocol == "vless_reverse_reality":
+        # For reverse, we might want to generate a specific URL
+        share_url = client_config.get("vision_url", "").replace("xtls-rprx-vision", "xtls-rprx-vision")
+
     return {
         "success": True,
-        "protocol": "vless_xhttp_reality",
+        "protocol": req.protocol,
         "server_config": server_config,
         "client_config": client_config,
         "sni": req.sni,
         "short_id": req.short_id,
         "fingerprint": "chrome",
         "port": req.port,
-        "share_url": client_config.get("xhttp_url", ""),
+        "share_url": share_url,
         "warnings": [
             "Do NOT use UDP-based protocols (Hysteria2, TUIC, WireGuard) under Iran DPI",
             f"Keep sustained flow rate under {flow_rate_limiter.MAX_SUSTAINED_MBPS} Mbps",

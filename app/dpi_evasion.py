@@ -109,6 +109,19 @@ class IranDPIThreat:
         return [s for s in snis if s not in cls.BURNED_SNIS]
 
     @classmethod
+    def get_preferred_sni_for_protocol(cls, protocol_type: str) -> str:
+        """Get the preferred SNI for a specific protocol type."""
+        if protocol_type in ["xhttp", "reverse"]:
+            # For XHTTP/Reverse: prefer Iran-domestic (same ASN = stable)
+            return "digikala.com"
+        elif protocol_type == "vision":
+            # For Vision: prefer international CDN
+            return "objects.githubusercontent.com"
+        else:
+            # Default fallback
+            return "digikala.com"
+
+    @classmethod
     def is_burned_sni(cls, sni: str) -> bool:
         """Check if an SNI is known to be blocked."""
         return sni.lower().strip() in cls.BURNED_SNIS
@@ -178,7 +191,7 @@ class SNIManager:
         logger.info(f"SNI Manager initialized: {len(self._sni_pool)} candidates, "
                      f"server ASN: {self._server_asn}")
 
-    async def get_best_sni(self, prefer_same_asn: bool = True) -> str:
+    async def get_best_sni(self, protocol_type: str = "", prefer_same_asn: bool = True) -> str:
         """Get the best SNI for current conditions.
 
         Priority:
@@ -188,6 +201,12 @@ class SNIManager:
         """
         if not self._initialized:
             await self.initialize()
+
+        # If protocol type is specified, use preferred SNI for that protocol
+        if protocol_type:
+            preferred_sni = IranDPIThreat.get_preferred_sni_for_protocol(protocol_type)
+            if preferred_sni in self._sni_pool and not self._sni_pool[preferred_sni].blocked:
+                return preferred_sni
 
         # Check if rotation is needed
         now = time.time()
@@ -217,7 +236,9 @@ class SNIManager:
             for domain, entry in self._sni_pool.items():
                 if not entry.blocked:
                     return domain
-            # Last resort
+            # Last resort - use protocol-specific preferred SNI or default
+            if protocol_type:
+                return IranDPIThreat.get_preferred_sni_for_protocol(protocol_type)
             return "objects.githubusercontent.com"
 
         # Sort by score (descending), pick top with some randomization
