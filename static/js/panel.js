@@ -2963,3 +2963,134 @@ document.addEventListener('DOMContentLoaded', function() {
   } catch(e){}
   document.getElementById('login-pass').focus();
 })();
+
+// ═══════════════════════════════════════════════════════════════
+//  SNI Auto-Select & Smart Defaults
+// ═══════════════════════════════════════════════════════════════
+
+// Safe SNI pool organized by tier (Iran 2026)
+const SNI_POOL = {
+  tier1_international: [
+    { domain: 'objects.githubusercontent.com', label: '🌐 GitHub CDN (توصیه‌شده)', recommended: true },
+    { domain: 'chat.deepseek.com', label: '🤖 DeepSeek AI' },
+    { domain: 'cdn.jsdelivr.net', label: '🌐 jsDelivr CDN' },
+    { domain: 'huggingface.co', label: '🤗 HuggingFace' },
+    { domain: 'raw.githubusercontent.com', label: '🌐 GitHub Raw' },
+    { domain: 'fonts.googleapis.com', label: '🌐 Google Fonts' },
+    { domain: 'api.github.com', label: '🌐 GitHub API' },
+  ],
+  tier2_iran: [
+    { domain: 'digikala.com', label: '🇮🇷 دیجی‌کالا (پایدارترین)', recommended_for_xhttp: true },
+    { domain: 'snapp.ir', label: '🇮🇷 اسنپ' },
+    { domain: 'dotic.ir', label: '🇮🇷 داتیک' },
+    { domain: 'rubika.ir', label: '🇮🇷 روبیکا' },
+  ],
+};
+
+// Burned SNIs that must NOT be used (Iran 2026 DPI)
+const BURNED_SNIS = [
+  'speedtest.net', 'www.speedtest.net',
+  'microsoft.com', 'www.microsoft.com',
+  'yahoo.com', 'www.yahoo.com',
+  'cloudflare.com', 'www.cloudflare.com',
+  'discord.com', 'www.discord.com',
+  'lovelive-anime.jp',
+  'apple.com', 'www.apple.com',
+];
+
+/**
+ * Auto-select the best SNI for a given protocol type.
+ * - xhttp: prefers Iran-domestic (same ASN = no reverse-DNS flag)
+ * - vision: prefers international CDN (TLS 1.3 + H2)
+ * - reverse: prefers Iran-domestic
+ */
+async function autoSelectBestSNI(protocolType) {
+  let sniInput, destInput;
+
+  switch (protocolType) {
+    case 'xhttp':
+      sniInput = document.getElementById('set-vless-xhttp-reality-sni');
+      destInput = document.getElementById('set-vless-xhttp-reality-dest');
+      break;
+    case 'vision':
+      sniInput = document.getElementById('set-vless-vision-reality-sni');
+      destInput = document.getElementById('set-vless-vision-reality-dest');
+      break;
+    case 'reverse':
+      sniInput = document.getElementById('set-vless-reverse-reality-sni');
+      destInput = document.getElementById('set-vless-reverse-reality-dest');
+      break;
+    default:
+      return;
+  }
+
+  // Try to get best SNI from DPI API
+  try {
+    const token = localStorage.getItem('token') || '';
+    const resp = await fetch(API + '/dpi/sni/best', {
+      headers: { 'Authorization': 'Bearer ' + token },
+      credentials: 'same-origin',
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data.sni && !BURNED_SNIS.includes(data.sni)) {
+        sniInput.value = data.sni;
+        destInput.value = data.sni + ':443';
+        toast('🤖 بهترین SNI خودکار انتخاب شد: ' + data.sni, 'success');
+        return;
+      }
+    }
+  } catch (e) {
+    // API not available, use local logic
+  }
+
+  // Fallback: local selection logic
+  let bestSNI;
+  if (protocolType === 'xhttp' || protocolType === 'reverse') {
+    // For XHTTP/Reverse: prefer Iran-domestic (same ASN = stable)
+    bestSNI = 'digikala.com';
+  } else {
+    // For Vision: prefer international CDN
+    bestSNI = 'objects.githubusercontent.com';
+  }
+
+  sniInput.value = bestSNI;
+  destInput.value = bestSNI + ':443';
+  toast('🤖 بهترین SNI انتخاب شد: ' + bestSNI, 'success');
+}
+
+/**
+ * Auto-fill dest field when SNI changes.
+ * Appends :443 to the SNI domain.
+ */
+function setupSNIAutoFill() {
+  const pairs = [
+    ['set-vless-xhttp-reality-sni', 'set-vless-xhttp-reality-dest'],
+    ['set-vless-vision-reality-sni', 'set-vless-vision-reality-dest'],
+    ['set-vless-reverse-reality-sni', 'set-vless-reverse-reality-dest'],
+  ];
+
+  pairs.forEach(([sniId, destId]) => {
+    const sniInput = document.getElementById(sniId);
+    const destInput = document.getElementById(destId);
+    if (sniInput && destInput) {
+      sniInput.addEventListener('change', function() {
+        const sni = this.value.trim();
+        if (sni && !sni.includes(':')) {
+          destInput.value = sni + ':443';
+        }
+      });
+      sniInput.addEventListener('input', function() {
+        const sni = this.value.trim();
+        if (sni && !sni.includes(':')) {
+          destInput.value = sni + ':443';
+        }
+      });
+    }
+  });
+}
+
+// Initialize SNI auto-fill on page load
+document.addEventListener('DOMContentLoaded', function() {
+  setupSNIAutoFill();
+});

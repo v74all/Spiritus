@@ -60,22 +60,30 @@ class IranDPIThreat:
 
     # Valid SNI candidates (TLS 1.3 + HTTP/2 verified)
     # Tier 1: International — likely to pass reverse-DNS check on non-Hetzner ASN
+    # These are large CDN/tech domains with TLS 1.3 + H2 support
     TIER1_SNIS = [
-        "objects.githubusercontent.com",
-        "raw.githubusercontent.com",
-        "chat.deepseek.com",
-        "huggingface.co",
+        "objects.githubusercontent.com",   # GitHub CDN — TLS 1.3, H2, global CDN
+        "raw.githubusercontent.com",      # GitHub raw — TLS 1.3, H2
+        "chat.deepseek.com",              # DeepSeek AI chat — TLS 1.3, H2, AI service
+        "huggingface.co",                 # HuggingFace — TLS 1.3, H2, ML platform
+        "cdn.jsdelivr.net",               # jsDelivr CDN — TLS 1.3, H2, global CDN
+        "fonts.googleapis.com",           # Google Fonts — TLS 1.3, H2, very common
+        "api.github.com",                 # GitHub API — TLS 1.3, H2
+        "registry.npmjs.org",            # npm registry — TLS 1.3, H2
     ]
 
     # Tier 2: Iran-domestic — paradoxically most stable (same ASN = no reverse-DNS flag)
+    # These Iranian sites are on local ASNs, so DPI won't flag them
     TIER2_SNIS = [
-        "dotic.ir",
-        "rubika.ir",
-        "digikala.com",
+        "dotic.ir",          # Iranian tech platform
+        "rubika.ir",         # Iranian messaging app
+        "digikala.com",      # Iranian e-commerce (largest in Iran)
+        "snapp.ir",          # Iranian ride-hailing (like Uber)
+        "divar.ir",          # Iranian classifieds marketplace
     ]
 
     # Tier 3: Same-ASN (Hetzner AS24940) — must be scanned
-    # Populated dynamically by SNI scanner
+    # Populated dynamically by RealiTLScanner
     TIER3_SNIS: List[str] = []
 
     # UDP-based protocols to AVOID (Iran throttles UDP)
@@ -292,31 +300,82 @@ class SNIManager:
 
         Uses RealiTLScanner approach: connect to IPs in the ASN range
         and check for valid TLS 1.3 certificates.
+
+        If RealiTLScanner binary is available at /usr/local/bin/RealiTLScanner,
+        it will be used for high-performance scanning. Otherwise, falls back
+        to known domain validation.
         """
         async with self._scan_lock:
             logger.info(f"Scanning ASN {asn} for valid SNI candidates...")
 
-            # Known Hetzner AS24940 domains with TLS 1.3
-            # In production, use RealiTLScanner: github.com/XTLS/RealiTLScanner
-            known_hetzner_domains = [
-                "hetzner.com",
-                "docs.hetzner.com",
-                "console.hetzner.cloud",
-            ]
-
+            # Try RealiTLScanner binary first
+            scanner_bin = "/usr/local/bin/RealiTLScanner"
             validated = []
-            for domain in known_hetzner_domains:
-                result = await self.validate_sni(domain)
-                if result["tls13"] and not result.get("error"):
-                    validated.append(domain)
-                    if domain not in self._sni_pool:
-                        self._sni_pool[domain] = SNIEntry(
-                            domain=domain,
-                            tier=3,
-                            tls13_supported=True,
-                            h2_supported=result["h2"],
-                            asn_match=(asn == self._server_asn),
+
+            if os.path.isfile(scanner_bin) and os.access(scanner_bin, os.X_OK):
+                try:
+                    # Run RealiTLScanner: scan the server's own IP range
+                    # Output: one domain per line with TLS info
+                    cmd = [scanner_bin, "-addr", self._server_ip or "0.0.0.0",
+                           "-thread", "4", "-timeout", "5", "-json"]
+                    proc = await asyncio.create_subprocess_exec(
+                        *cmd,
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.PIPE,
+                    )
+                    try:
+                        stdout, stderr = await asyncio.wait_for(
+                            proc.communicate(), timeout=120
                         )
+                        if proc.returncode == 0 and stdout:
+                            for line in stdout.decode("utf-8", errors="ignore").strip().split("\n"):
+                                line = line.strip()
+                                if not line:
+                                    continue
+                                try:
+                                    entry = json.loads(line)
+                                    domain = entry.get("domain", "")
+                                    tls13 = entry.get("tls13", False)
+                                    h2 = entry.get("h2", False)
+                                    if domain and tls13 and domain not in IranDPIThreat.BURNED_SNIS:
+                                        validated.append(domain)
+                                        if domain not in self._sni_pool:
+                                            self._sni_pool[domain] = SNIEntry(
+                                                domain=domain,
+                                                tier=3,
+                                                tls13_supported=True,
+                                                h2_supported=h2,
+                                                asn_match=(asn == self._server_asn),
+                                            )
+                                except (json.JSONDecodeError, KeyError):
+                                    continue
+                            logger.info(f"RealiTLScanner found {len(validated)} valid SNIs")
+                    except asyncio.TimeoutError:
+                        proc.kill()
+                        logger.warning("RealiTLScanner timed out, using fallback")
+                except Exception as e:
+                    logger.warning(f"RealiTLScanner failed: {e}, using fallback")
+
+            # Fallback: validate known domains
+            if not validated:
+                known_domains = [
+                    "hetzner.com",
+                    "docs.hetzner.com",
+                    "console.hetzner.cloud",
+                ]
+
+                for domain in known_domains:
+                    result = await self.validate_sni(domain)
+                    if result["tls13"] and not result.get("error"):
+                        validated.append(domain)
+                        if domain not in self._sni_pool:
+                            self._sni_pool[domain] = SNIEntry(
+                                domain=domain,
+                                tier=3,
+                                tls13_supported=True,
+                                h2_supported=result["h2"],
+                                asn_match=(asn == self._server_asn),
+                            )
 
             # Update tier 3 list
             IranDPIThreat.TIER3_SNIS = validated
