@@ -4505,6 +4505,18 @@ def api_server_info():
     has_hu = _as_bool(s.get("httpupgrade_enabled"))
     has_ss2022 = _as_bool(s.get("ss2022_enabled")) and bool(s.get("ss2022_server_key"))
     has_vless_ws = _as_bool(s.get("vless_ws_enabled"))
+    has_vless_xhttp = _as_bool(s.get("vless_xhttp_enabled"))
+    has_vless_vision = _as_bool(s.get("vless_vision_enabled"))
+    has_vless_reverse = _as_bool(s.get("vless_reverse_enabled"))
+    has_trojan_cdn = _as_bool(s.get("trojan_cdn_enabled"))
+    has_hysteria2 = _as_bool(s.get("hysteria2_enabled"))
+    has_tuic = _as_bool(s.get("tuic_enabled"))
+    has_amneziawg = _as_bool(s.get("amneziawg_enabled"))
+    has_shadowtls = _as_bool(s.get("shadowtls_enabled"))
+    has_mieru = _as_bool(s.get("mieru_enabled"))
+    has_naiveproxy = _as_bool(s.get("naiveproxy_enabled"))
+    has_wireguard = _as_bool(s.get("wireguard_enabled"))
+    has_openvpn = _as_bool(s.get("openvpn_enabled"))
     return jsonify({
         "vmess": True,
         "vless": has_vless,
@@ -4514,6 +4526,40 @@ def api_server_info():
         "httpupgrade": has_hu,
         "ss2022": has_ss2022,
         "vless_ws": has_vless_ws,
+        "vless_xhttp": has_vless_xhttp,
+        "vless_vision": has_vless_vision,
+        "vless_reverse": has_vless_reverse,
+        "trojan_cdn": has_trojan_cdn,
+        "hysteria2": has_hysteria2,
+        "tuic": has_tuic,
+        "amneziawg": has_amneziawg,
+        "shadowtls": has_shadowtls,
+        "mieru": has_mieru,
+        "naiveproxy": has_naiveproxy,
+        "wireguard": has_wireguard,
+        "openvpn": has_openvpn,
+        # Enabled flags (for tab visibility)
+        "vmess_enabled": True,
+        "vless_enabled": has_vless,
+        "cdn_enabled": has_cdn,
+        "trojan_enabled": has_trojan,
+        "grpc_enabled": has_grpc,
+        "httpupgrade_enabled": has_hu,
+        "ss2022_enabled": has_ss2022,
+        "vless_ws_enabled": has_vless_ws,
+        "vless_xhttp_enabled": has_vless_xhttp,
+        "vless_vision_enabled": has_vless_vision,
+        "vless_reverse_enabled": has_vless_reverse,
+        "trojan_cdn_enabled": has_trojan_cdn,
+        "hysteria2_enabled": has_hysteria2,
+        "tuic_enabled": has_tuic,
+        "amneziawg_enabled": has_amneziawg,
+        "shadowtls_enabled": has_shadowtls,
+        "mieru_enabled": has_mieru,
+        "naiveproxy_enabled": has_naiveproxy,
+        "wireguard_enabled": has_wireguard,
+        "openvpn_enabled": has_openvpn,
+        # Ports & paths
         "vmess_port": s.get("vmess_port", 443),
         "vless_port": s.get("vless_port", 2053),
         "vless_sni": s.get("reality_sni", ""),
@@ -4530,6 +4576,33 @@ def api_server_info():
         "ss2022_port": s.get("ss2022_port", 2056),
         "vless_ws_port": s.get("vless_ws_port", 2057),
         "vless_ws_path": s.get("vless_ws_path", "/vless-ws"),
+        # New protocol ports & paths
+        "vless_xhttp_port": s.get("vless_xhttp_port", 2053),
+        "vless_xhttp_mode": s.get("vless_xhttp_mode", "auto"),
+        "vless_xhttp_path": s.get("vless_xhttp_path", "/xhttp-stream"),
+        "vless_vision_port": s.get("vless_vision_port", 2058),
+        "vless_reverse_port": s.get("vless_reverse_port", 2059),
+        "vless_reverse_backhaul_mode": s.get("vless_reverse_backhaul_mode", "rathole"),
+        "trojan_cdn_domain": s.get("trojan_cdn_domain", ""),
+        "trojan_cdn_port": s.get("trojan_cdn_port", 2083),
+        "trojan_cdn_ws_path": s.get("trojan_cdn_ws_path", "/trojan-ws"),
+        "hysteria2_port": s.get("hysteria2_port", 8443),
+        "hysteria2_salamander": _as_bool(s.get("hysteria2_salamander_enabled", False)),
+        "tuic_port": s.get("tuic_port", 8444),
+        "tuic_congestion": s.get("tuic_congestion_control", "cubic"),
+        "amneziawg_port": s.get("amneziawg_port", 51820),
+        "amneziawg_mtu": s.get("amneziawg_mtu", 1280),
+        "shadowtls_port": s.get("shadowtls_port", 8445),
+        "shadowtls_sni": s.get("shadowtls_sni", "rubika.ir"),
+        "mieru_port": s.get("mieru_port", 8446),
+        "mieru_encryption": s.get("mieru_encryption", "aes-256-gcm"),
+        "mieru_transport": s.get("mieru_transport", "tcp"),
+        "naiveproxy_port": s.get("naiveproxy_port", 8447),
+        "wireguard_port": s.get("wireguard_port", 51821),
+        "wireguard_mtu": s.get("wireguard_mtu", 1280),
+        "openvpn_port": s.get("openvpn_port", 1194),
+        "openvpn_proto": s.get("openvpn_proto", "udp"),
+        # Misc
         "kill_switch": _as_bool(s.get("kill_switch_enabled", False)),
         "fragment_enabled": _as_bool(s.get("fragment_enabled", False)),
         "mux_enabled": _as_bool(s.get("mux_enabled", False)),
