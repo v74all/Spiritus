@@ -1340,10 +1340,36 @@
         <div class="settings-desc">Default port for new protocols / پورت پیش‌فرض برای پروتکل‌های جدید</div></div>
       
       <div class="settings-row" style="margin-top:12px">
-        <div><div class="settings-label">IPv6 Support</div>
-          <div class="settings-desc">Enable IPv6 connectivity / فعال‌سازی اتصال IPv6</div></div>
+        <div><div class="settings-label">IPv6 Support / پشتیبانی IPv6</div>
+          <div class="settings-desc">Enable IPv6 dual-stack configs / فعال‌سازی کانفیگ‌های IPv6 <span id="detected-ipv6" style="color:var(--accent);margin-inline-start:8px"></span></div></div>
         <label class="toggle"><input type="checkbox" id="set-network-ipv6"><span class="toggle-slider"></span></label>
       </div>
+    </div>
+
+    <!-- ═══ VLESS WS Plain Domain Fronting ═══ -->
+    <div class="settings-section">
+      <div class="sec-header">
+        <div class="settings-title">🔄 VLESS WS Plain (Domain Fronting)</div>
+        <span class="s-indicator off" id="si-vless-ws-plain"><span class="dot"></span> <span class="si-text">OFF</span></span>
+      </div>
+      <div class="help-box">
+        <div class="help-en">🔄 <b>VLESS WS Plain Domain Fronting</b> uses a trusted Iranian domain (e.g., snapp.ir) as the front address with plain WebSocket (no TLS). The DPI sees a connection to snapp.ir — a trusted domestic site — while the Host header points to your real VPN server. <b>How:</b> 1) Enable 2) Set a trusted .ir domain as the front address 3) Set your real server IP/domain as the Host header. Port 2052 avoids common DPI port triggers.</div>
+        <div class="help-fa">🔄 <b>VLESS WS Plain Domain Fronting</b> از یک دامنه معتبر ایرانی (مثلاً snapp.ir) به عنوان آدرس ظاهری با وب‌سوکت ساده (بدون TLS) استفاده می‌کنه. DPI یک اتصال به snapp.ir می‌بینه — یک سایت داخلی معتبر — در حالی که هدر Host به سرور واقعی VPN شما اشاره می‌کنه. <b>روش کار:</b> ۱) فعال کنید ۲) دامنه .ir معتبر به عنوان آدرس ظاهری تنظیم کنید ۳) IP/دامنه واقعی سرور رو به عنوان Host تنظیم کنید. پورت ۲۰۵۲ از تریگرهای رایج DPI دوری می‌کنه.</div>
+      </div>
+      <div class="settings-row">
+        <div><div class="settings-label">VLESS WS Plain / ویلس وب‌سوکت ساده</div>
+          <div class="settings-desc">Enable domain fronting via trusted .ir domains / فعال‌سازی Domain Fronting با دامنه‌های معتبر .ir</div></div>
+        <label class="toggle"><input type="checkbox" id="set-vless-ws-plain-front"><span class="toggle-slider"></span></label>
+      </div>
+      <div class="form-group" style="margin-top:12px"><label>Front Domain / دامنه ظاهری</label>
+        <input type="text" id="set-vless-ws-plain-front-domain" value="snapp.ir" placeholder="snapp.ir">
+        <div class="settings-desc">Trusted .ir domain as the visible address / دامنه معتبر .ir به عنوان آدرس قابل مشاهده</div></div>
+      <div class="form-group"><label>Port / پورت</label>
+        <input type="number" id="set-vless-ws-plain-front-port" value="2052" min="1" max="65535">
+        <div class="settings-desc">Plain WS port (no trigger ports like 443, 80) / پورت WS ساده (پورت‌های حساس مثل ۴۴۳ و ۸۰ نباشه)</div></div>
+      <div class="form-group"><label>WS Path / مسیر وب‌سوکت</label>
+        <input type="text" id="set-vless-ws-plain-front-path" value="/" placeholder="/">
+        <div class="settings-desc">WebSocket path on the front domain / مسیر وب‌سوکت روی دامنه ظاهری</div></div>
     </div>
 
     <!-- ═══ Cloudflare CDN ═══ -->

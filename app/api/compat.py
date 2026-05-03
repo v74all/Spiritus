@@ -71,6 +71,8 @@ _PROTOCOL_ENABLE_KEYS = {
     "httpupgrade_enabled",
     "ss2022_enabled",
     "vless_ws_enabled",
+    "vless_ws_plain_front_enabled",
+    "ipv6_enabled",
     "vless_xhttp_enabled",
     "vless_vision_enabled",
     "vless_reverse_enabled",
@@ -222,8 +224,49 @@ def _days_left(expire_at: Optional[datetime]) -> int:
     return max(0, delta.days)
 
 
+def _detect_ipv6() -> str:
+    """Detect server's IPv6 address. Returns empty string if none."""
+    # Check explicit setting first
+    configured = _settings_state.get("server_ipv6") or settings.vpn_server_ipv6
+    if configured and not _is_placeholder_host(configured):
+        return configured.strip()
+
+    try:
+        import re
+        result = subprocess.run(
+            ["ip", "-6", "addr", "show", "scope", "global"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if result.returncode == 0:
+            for line in result.stdout.split("\n"):
+                m = re.search(r'inet6\s+([0-9a-f:]+)/(\d+)', line)
+                if m:
+                    addr = m.group(1)
+                    # Skip link-local (fe80::) and loopback
+                    if not addr.startswith("fe80:") and addr != "::1":
+                        return addr
+    except Exception:
+        pass
+
+    # Fallback: curl to check public IPv6
+    try:
+        result = subprocess.run(
+            ["curl", "-s6", "--max-time", "3", "https://api6.ipify.org"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
+    except Exception:
+        pass
+
+    return ""
+
+
 def _build_share_links(u: VpnUser, server_ip: Optional[str] = None) -> Dict[str, str]:
-    """Generate protocol share URLs for a user. Best-effort — empty if disabled."""
+    """生成用户分享链接。Best-effort — 如果协议关闭则为空字符串。
+
+    当 IPv6 启用时，同时生成所有协议的 IPv6 版本（_ipv6 后缀）。
+    """
     try:
         from ..protocol_engine import ClientConfigGenerator
     except Exception:
@@ -238,6 +281,12 @@ def _build_share_links(u: VpnUser, server_ip: Optional[str] = None) -> Dict[str,
         _emergency_relay = _settings_state.get("emergency_relay_address", "").strip()
     if _emergency_relay:
         server_ip = _emergency_relay
+
+    # ── IPv6 address (auto-detect or configured) ──
+    _ipv6_enabled = _settings_state.get("ipv6_enabled") or settings.ipv6_enabled
+    _ipv6_addr = ""
+    if _ipv6_enabled:
+        _ipv6_addr = _detect_ipv6()
     sni_host = _settings_state.get("vmess_sni") or "www.aparat.com"
     ws_path = _settings_state.get("vmess_ws_path") or "/api/v1/stream"
 
@@ -352,6 +401,24 @@ def _build_share_links(u: VpnUser, server_ip: Optional[str] = None) -> Dict[str,
             )
         except Exception:
             links["vless_ws"] = ""
+
+    if _settings_state.get("vless_ws_plain_front_enabled"):
+        try:
+            _front_domain = _settings_state.get("vless_ws_plain_front_domain") or "snapp.ir"
+            _front_path = _settings_state.get("vless_ws_plain_front_path") or "/"
+            links["vless_ws_plain_front"] = ClientConfigGenerator.generate_vless_share_url(
+                uuid=u.uuid,
+                address=_front_domain,
+                port=int(_settings_state.get("vless_ws_plain_front_port") or 2052),
+                network="ws",
+                security="none",
+                host=sni_host or server_ip,
+                path=_front_path,
+                fp="",
+                **_dpi_vless_kwargs(),
+            )
+        except Exception:
+            links["vless_ws_plain_front"] = ""
 
     if _settings_state.get("trojan_enabled"):
         try:
@@ -518,6 +585,45 @@ def _build_share_links(u: VpnUser, server_ip: Optional[str] = None) -> Dict[str,
         except Exception:
             links["trojan_cdn"] = ""
 
+    # ── IPv6 variants: generate dual-stack copies of all non-empty links ──
+    if _ipv6_addr and _ipv6_enabled:
+        _v6 = _ipv6_addr
+        # IPv6 addresses must be bracket-wrapped in URLs
+        _v6_bracket = f"[{_v6}]" if ":" in _v6 and not _v6.startswith("[") else _v6
+
+        _ipv6_links = {}
+        for key, url in links.items():
+            if not url:
+                continue
+            try:
+                # Replace IPv4 address with IPv6 in the URL
+                # vless://uuid@1.2.3.4:port?...  →  vless://uuid@[::1]:port?...
+                if key.startswith("vless_"):
+                    _v6_url = url.replace(f"@{server_ip}:", f"@{_v6_bracket}:", 1)
+                elif key in ("vmess", "vless", "cdn_vmess", "grpc_vmess", "httpupgrade_vmess"):
+                    _v6_url = url.replace(f"@{server_ip}:", f"@{_v6_bracket}:", 1)
+                elif key == "ss2022":
+                    _v6_url = url.replace(f"@{server_ip}:", f"@{_v6_bracket}:", 1)
+                elif key == "hysteria2":
+                    _v6_url = url.replace(f"@{server_ip}:", f"@{_v6_bracket}:", 1)
+                elif key == "tuic":
+                    _v6_url = url.replace(f"@{server_ip}:", f"@{_v6_bracket}:", 1)
+                elif key == "trojan":
+                    _v6_url = url.replace(f"@{server_ip}:", f"@{_v6_bracket}:", 1)
+                else:
+                    # Generic fallback: try replacing any occurrence
+                    _v6_url = url.replace(f"@{server_ip}:", f"@{_v6_bracket}:", 1)
+                    if _v6_url == url:
+                        _v6_url = url.replace(f"={server_ip}&", f"={_v6_bracket}&", 1)
+
+                if _v6_url != url:
+                    _v6_url = _v6_url.replace("#V7LTHRONYX", "#V7LTHRONYX-IPv6")
+                    _ipv6_links[f"{key}_ipv6"] = _v6_url
+            except Exception:
+                pass
+
+        links.update(_ipv6_links)
+
     return links
 
 
@@ -628,6 +734,9 @@ def _default_legacy_settings() -> Dict[str, Any]:
         "mux_concurrency": 8,
         "fingerprint": "chrome",
         "kill_switch_enabled": False,
+        # IPv6 dual-stack (auto-detect or manual)
+        "ipv6_enabled": settings.ipv6_enabled,
+        "server_ipv6": settings.vpn_server_ipv6,
         # Emergency Relay (OFF by default — activate when server IP is blocked)
         "emergency_relay_enabled": False,
         "emergency_relay_address": "",
@@ -658,6 +767,11 @@ def _default_legacy_settings() -> Dict[str, Any]:
         "vless_vision_reality_dest": "objects.githubusercontent.com:443",
         "vless_vision_reality_short_id": secrets.token_hex(8),
         "vless_vision_reality_public_key": settings.reality_public_key,
+        # VLESS WS Plain Front (Iranian domain fronting, no TLS)
+        "vless_ws_plain_front_enabled": settings.vless_ws_plain_front_enabled,
+        "vless_ws_plain_front_port": settings.vless_ws_plain_front_port,
+        "vless_ws_plain_front_domain": settings.vless_ws_plain_front_domain,
+        "vless_ws_plain_front_path": settings.vless_ws_plain_front_path,
     }
 
 
@@ -1384,6 +1498,12 @@ async def legacy_server_info(
         "vless_ws_enabled": _as_bool(s.get("vless_ws_enabled", settings.vless_ws_enabled)),
         "vless_ws_port": s.get("vless_ws_port", settings.vless_ws_port),
         "vless_ws_path": s.get("vless_ws_path", settings.vless_ws_path),
+        # VLESS WS Plain Front (Iranian domain fronting, no TLS)
+        "vless_ws_plain_front": _as_bool(s.get("vless_ws_plain_front_enabled", settings.vless_ws_plain_front_enabled)),
+        "vless_ws_plain_front_enabled": _as_bool(s.get("vless_ws_plain_front_enabled", settings.vless_ws_plain_front_enabled)),
+        "vless_ws_plain_front_port": s.get("vless_ws_plain_front_port", settings.vless_ws_plain_front_port),
+        "vless_ws_plain_front_domain": s.get("vless_ws_plain_front_domain", settings.vless_ws_plain_front_domain),
+        "vless_ws_plain_front_path": s.get("vless_ws_plain_front_path", settings.vless_ws_plain_front_path),
         # Hysteria2
         "hysteria2": _as_bool(s.get("hysteria2_enabled", False)),
         "hysteria2_enabled": _as_bool(s.get("hysteria2_enabled", False)),
@@ -1451,6 +1571,9 @@ async def legacy_server_info(
         "dpi_multi_path": _as_bool(s.get("dpi_multi_path", False)),
         "dpi_protocol_hop": _as_bool(s.get("dpi_protocol_hop", False)),
         "dpi_aggression_level": s.get("dpi_aggression_level", "medium"),
+        # IPv6
+        "ipv6_enabled": _as_bool(s.get("ipv6_enabled", settings.ipv6_enabled)),
+        "server_ipv6": s.get("server_ipv6", settings.vpn_server_ipv6),
         # Emergency Relay
         "emergency_relay_enabled": _as_bool(s.get("emergency_relay_enabled", False)),
         "emergency_relay_address": s.get("emergency_relay_address", ""),
@@ -1768,6 +1891,8 @@ def _generate_xray_server_config() -> dict:
     reality_pk = s.get("reality_private_key") or settings.reality_private_key
     reality_pub = s.get("reality_public_key") or settings.reality_public_key
     reality_sid = s.get("reality_short_id") or ""
+    # IPv6 dual-stack: "::" accepts both v4+v6 on Linux (IPV6_V6ONLY=false)
+    listen_addr = "::" if _as_bool(s.get("ipv6_enabled")) else "0.0.0.0"
 
     cert_file = "/etc/ssl/certs/fullchain.pem"
     key_file = "/etc/ssl/private/privkey.pem"
@@ -1781,7 +1906,7 @@ def _generate_xray_server_config() -> dict:
     inbounds.append({
         "tag": "in-vmess-ws",
         "port": int(s.get("vmess_port") or 443),
-        "listen": "0.0.0.0",
+        "listen": listen_addr,
         "protocol": "vmess",
         "settings": {"clients": vmess_clients},
         "streamSettings": {
@@ -1802,7 +1927,7 @@ def _generate_xray_server_config() -> dict:
         inbounds.append({
             "tag": "in-vless-reality",
             "port": int(s.get("vless_port") or 2053),
-            "listen": "0.0.0.0",
+            "listen": listen_addr,
             "protocol": "vless",
             "settings": {"clients": vless_clients, "decryption": "none"},
             "streamSettings": {
@@ -1835,7 +1960,7 @@ def _generate_xray_server_config() -> dict:
         inbounds.append({
             "tag": "in-vless-xhttp",
             "port": xhttp_port,
-            "listen": "0.0.0.0",
+            "listen": listen_addr,
             "protocol": "vless",
             "settings": {"clients": vless_clients, "decryption": "none"},
             "streamSettings": {
@@ -1864,7 +1989,7 @@ def _generate_xray_server_config() -> dict:
         inbounds.append({
             "tag": "in-vless-vision",
             "port": int(s.get("vless_vision_port") or 2058),
-            "listen": "0.0.0.0",
+            "listen": listen_addr,
             "protocol": "vless",
             "settings": {"clients": vless_clients, "decryption": "none"},
             "streamSettings": {
@@ -1889,7 +2014,7 @@ def _generate_xray_server_config() -> dict:
         inbounds.append({
             "tag": "in-vless-reverse",
             "port": int(s.get("vless_reverse_port") or 2059),
-            "listen": "0.0.0.0",
+            "listen": listen_addr,
             "protocol": "vless",
             "settings": {"clients": vless_clients, "decryption": "none"},
             "streamSettings": {
@@ -1911,7 +2036,7 @@ def _generate_xray_server_config() -> dict:
         inbounds.append({
             "tag": "in-trojan",
             "port": int(s.get("trojan_port") or 2083),
-            "listen": "0.0.0.0",
+            "listen": listen_addr,
             "protocol": "trojan",
             "settings": {"clients": trojan_clients},
             "streamSettings": {
@@ -1930,7 +2055,7 @@ def _generate_xray_server_config() -> dict:
         inbounds.append({
             "tag": "in-grpc",
             "port": int(s.get("grpc_port") or 2054),
-            "listen": "0.0.0.0",
+            "listen": listen_addr,
             "protocol": "vmess",
             "settings": {"clients": vmess_clients},
             "streamSettings": {
@@ -1950,7 +2075,7 @@ def _generate_xray_server_config() -> dict:
         inbounds.append({
             "tag": "in-httpupgrade",
             "port": int(s.get("httpupgrade_port") or 2055),
-            "listen": "0.0.0.0",
+            "listen": listen_addr,
             "protocol": "vmess",
             "settings": {"clients": vmess_clients},
             "streamSettings": {
@@ -1970,7 +2095,7 @@ def _generate_xray_server_config() -> dict:
         inbounds.append({
             "tag": "in-vless-ws",
             "port": int(s.get("vless_ws_port") or 2057),
-            "listen": "0.0.0.0",
+            "listen": listen_addr,
             "protocol": "vless",
             "settings": {"clients": vless_clients, "decryption": "none"},
             "streamSettings": {
@@ -1985,12 +2110,32 @@ def _generate_xray_server_config() -> dict:
             "sniffing": {"enabled": True, "destOverride": ["http", "tls"]},
         })
 
+    # VLESS WS Plain (no TLS) — Iranian domain fronting
+    if _as_bool(s.get("vless_ws_plain_front_enabled")):
+        _front_host = s.get("vless_ws_plain_front_domain") or "snapp.ir"
+        inbounds.append({
+            "tag": "in-vless-ws-plain",
+            "port": int(s.get("vless_ws_plain_front_port") or 2052),
+            "listen": listen_addr,
+            "protocol": "vless",
+            "settings": {"clients": vless_clients, "decryption": "none"},
+            "streamSettings": {
+                "network": "ws",
+                "security": "none",
+                "wsSettings": {
+                    "path": s.get("vless_ws_plain_front_path") or "/",
+                    "headers": {"Host": _front_host},
+                },
+            },
+            "sniffing": {"enabled": True, "destOverride": ["http", "tls"]},
+        })
+
     # ShadowSocks 2022
     if _as_bool(s.get("ss2022_enabled")) and s.get("ss2022_server_key"):
         inbounds.append({
             "tag": "in-ss2022",
             "port": int(s.get("ss2022_port") or 2056),
-            "listen": "0.0.0.0",
+            "listen": listen_addr,
             "protocol": "shadowsocks",
             "settings": {
                 "method": s.get("ss2022_method") or "2022-blake3-aes-128-gcm",
@@ -2011,7 +2156,7 @@ def _generate_xray_server_config() -> dict:
     inbounds.append({
         "tag": "in-http-relay",
         "port": 8080,
-        "listen": "0.0.0.0",
+        "listen": listen_addr,
         "protocol": "http",
         "settings": {"auth": "noauth"},
         "sniffing": {"enabled": True, "destOverride": ["http"]},
@@ -2023,7 +2168,7 @@ def _generate_xray_server_config() -> dict:
         inbounds.append({
             "tag": "in-cdn-ws",
             "port": int(s.get("cdn_port") or 2082),
-            "listen": "0.0.0.0",
+            "listen": listen_addr,
             "protocol": "vmess",
             "settings": {"clients": vmess_clients},
             "streamSettings": {

@@ -200,6 +200,7 @@ body{font-family:var(--font-body);background:var(--bg0);color:var(--t1);
         {% if links.httpupgrade_vmess %}<button class="qr-tab" onclick="showQr('httpupgrade')">HU</button>{% endif %}
         {% if links.ss2022 %}<button class="qr-tab" onclick="showQr('ss2022')">SS2022</button>{% endif %}
         {% if links.vless_ws %}<button class="qr-tab" onclick="showQr('vless_ws')">VLESS-WS</button>{% endif %}
+        {% if links.vless_ws_plain_front %}<button class="qr-tab" onclick="showQr('vless_ws_plain_front')">VLESS-Plain</button>{% endif %}
         {% if links.vless_xhttp %}<button class="qr-tab" onclick="showQr('vless_xhttp')">VLESS-XHTTP</button>{% endif %}
         {% if links.vless_vision %}<button class="qr-tab" onclick="showQr('vless_vision')">Vision</button>{% endif %}
         {% if links.vless_reverse %}<button class="qr-tab" onclick="showQr('vless_reverse')">Reverse</button>{% endif %}
@@ -290,6 +291,15 @@ body{font-family:var(--font-body);background:var(--bg0);color:var(--t1);
         <div class="config-box">
           <div class="config-link" id="link-vless_ws">{{ links.vless_ws }}</div>
           <button class="btn-copy" onclick="copyLink(event, 'vless_ws')">Copy</button>
+        </div>
+      </div>
+      {% endif %}
+      {% if links.vless_ws_plain_front %}
+      <div class="config-item">
+        <div class="config-label"><span class="config-badge" style="background:#e67e2222;color:#e67e22">VLESS-Plain</span> WS Plain (Domain Fronting)</div>
+        <div class="config-box">
+          <div class="config-link" id="link-vless_ws_plain_front">{{ links.vless_ws_plain_front }}</div>
+          <button class="btn-copy" onclick="copyLink(event, 'vless_ws_plain_front')">Copy</button>
         </div>
       </div>
       {% endif %}
@@ -403,6 +413,24 @@ body{font-family:var(--font-body);background:var(--bg0);color:var(--t1);
       {% endif %}
     </div>
   </div>
+
+  <!-- IPv6 Configs -->
+  {% if links.vmess_ipv6 or links.vless_ipv6 or links.vless_ws_ipv6 or links.vless_ws_plain_front_ipv6 or links.vless_xhttp_ipv6 or links.vless_vision_ipv6 %}
+  <div class="card" style="border-color:rgba(0,240,255,.15)">
+    <div class="card-title" style="color:var(--accent)">IPv6 Configs</div>
+    {% for key in ['vmess_ipv6','vless_ipv6','cdn_vmess_ipv6','vless_ws_ipv6','vless_ws_plain_front_ipv6','trojan_ipv6','grpc_vmess_ipv6','httpupgrade_vmess_ipv6','ss2022_ipv6','vless_xhttp_ipv6','vless_vision_ipv6','vless_reverse_ipv6','trojan_cdn_ipv6','hysteria2_ipv6','tuic_ipv6'] %}
+    {% if links.get(key) %}
+    <div class="config-item">
+      <div class="config-label"><span class="config-badge" style="background:rgba(0,240,255,.15);color:var(--accent)">IPv6</span> {{ key.replace('_ipv6','').replace('_',' ').upper() }}</div>
+      <div class="config-box">
+        <div class="config-link" id="link-{{ key }}">{{ links[key] }}</div>
+        <button class="btn-copy" onclick="copyLink(event, '{{ key }}')">Copy</button>
+      </div>
+    </div>
+    {% endif %}
+    {% endfor %}
+  </div>
+  {% endif %}
 
   <!-- Subscription Link -->
   <div class="card">

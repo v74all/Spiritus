@@ -953,12 +953,14 @@ def _generate_xray_server_config(panel_settings: dict) -> dict:
     reality_pk = panel_settings.get("reality_private_key") or settings.reality_private_key
     reality_pub = panel_settings.get("reality_public_key") or settings.reality_public_key
     reality_sid = panel_settings.get("reality_short_id") or ""
+    # IPv6 dual-stack: "::" accepts both v4+v6 on Linux (IPV6_V6ONLY=false)
+    listen_addr = "::" if panel_settings.get("ipv6_enabled") else "0.0.0.0"
 
     # VMess WS+TLS (always-on)
     inbounds.append({
         "tag": "in-vmess-ws",
         "port": int(panel_settings.get("vmess_port") or 443),
-        "listen": "0.0.0.0",
+        "listen": listen_addr,
         "protocol": "vmess",
         "settings": {"clients": []},
         "streamSettings": {
@@ -980,7 +982,7 @@ def _generate_xray_server_config(panel_settings: dict) -> dict:
         inbounds.append({
             "tag": "in-vless-reality",
             "port": int(panel_settings.get("vless_port") or 2053),
-            "listen": "0.0.0.0",
+            "listen": listen_addr,
             "protocol": "vless",
             "settings": {"clients": [], "decryption": "none"},
             "streamSettings": {
@@ -1012,7 +1014,7 @@ def _generate_xray_server_config(panel_settings: dict) -> dict:
         inbounds.append({
             "tag": "in-vless-xhttp",
             "port": xhttp_port,
-            "listen": "0.0.0.0",
+            "listen": listen_addr,
             "protocol": "vless",
             "settings": {"clients": [], "decryption": "none"},
             "streamSettings": {
@@ -1043,7 +1045,7 @@ def _generate_xray_server_config(panel_settings: dict) -> dict:
         inbounds.append({
             "tag": "in-vless-vision",
             "port": int(panel_settings.get("vless_vision_port") or 2058),
-            "listen": "0.0.0.0",
+            "listen": listen_addr,
             "protocol": "vless",
             "settings": {"clients": [], "decryption": "none"},
             "streamSettings": {
@@ -1065,7 +1067,7 @@ def _generate_xray_server_config(panel_settings: dict) -> dict:
         inbounds.append({
             "tag": "in-trojan",
             "port": int(panel_settings.get("trojan_port") or 2083),
-            "listen": "0.0.0.0",
+            "listen": listen_addr,
             "protocol": "trojan",
             "settings": {"clients": []},
             "streamSettings": {
@@ -1085,7 +1087,7 @@ def _generate_xray_server_config(panel_settings: dict) -> dict:
         inbounds.append({
             "tag": "in-grpc",
             "port": int(panel_settings.get("grpc_port") or 2054),
-            "listen": "0.0.0.0",
+            "listen": listen_addr,
             "protocol": "vmess",
             "settings": {"clients": []},
             "streamSettings": {
@@ -1106,7 +1108,7 @@ def _generate_xray_server_config(panel_settings: dict) -> dict:
         inbounds.append({
             "tag": "in-httpupgrade",
             "port": int(panel_settings.get("httpupgrade_port") or 2055),
-            "listen": "0.0.0.0",
+            "listen": listen_addr,
             "protocol": "vmess",
             "settings": {"clients": []},
             "streamSettings": {
@@ -1127,7 +1129,7 @@ def _generate_xray_server_config(panel_settings: dict) -> dict:
         inbounds.append({
             "tag": "in-vless-ws",
             "port": int(panel_settings.get("vless_ws_port") or 2057),
-            "listen": "0.0.0.0",
+            "listen": listen_addr,
             "protocol": "vless",
             "settings": {"clients": [], "decryption": "none"},
             "streamSettings": {
@@ -1143,12 +1145,35 @@ def _generate_xray_server_config(panel_settings: dict) -> dict:
             "sniffing": {"enabled": True, "destOverride": ["http", "tls"]},
         })
 
+    # VLESS WS Plain (no TLS) — Iranian domain fronting
+    # Used with CDN/proxy that terminates TLS at edge (e.g., Cloudflare, Argo)
+    # Client connects to trusted Iranian domain (snapp.ir) on plain HTTP,
+    # CDN forwards to this inbound based on Host header
+    if panel_settings.get("vless_ws_plain_front_enabled"):
+        _front_host = panel_settings.get("vless_ws_plain_front_domain") or "snapp.ir"
+        inbounds.append({
+            "tag": "in-vless-ws-plain",
+            "port": int(panel_settings.get("vless_ws_plain_front_port") or 2052),
+            "listen": listen_addr,
+            "protocol": "vless",
+            "settings": {"clients": [], "decryption": "none"},
+            "streamSettings": {
+                "network": "ws",
+                "security": "none",
+                "wsSettings": {
+                    "path": panel_settings.get("vless_ws_plain_front_path") or "/",
+                    "headers": {"Host": _front_host},
+                },
+            },
+            "sniffing": {"enabled": True, "destOverride": ["http", "tls"]},
+        })
+
     # ShadowSocks 2022
     if panel_settings.get("ss2022_enabled") and panel_settings.get("ss2022_server_key"):
         inbounds.append({
             "tag": "in-ss2022",
             "port": int(panel_settings.get("ss2022_port") or 2056),
-            "listen": "0.0.0.0",
+            "listen": listen_addr,
             "protocol": "shadowsocks",
             "settings": {
                 "method": panel_settings.get("ss2022_method") or "2022-blake3-aes-128-gcm",
@@ -1172,7 +1197,7 @@ def _generate_xray_server_config(panel_settings: dict) -> dict:
         inbounds.append({
             "tag": "in-cdn-ws",
             "port": int(panel_settings.get("cdn_port") or 2082),
-            "listen": "0.0.0.0",
+            "listen": listen_addr,
             "protocol": "vmess",
             "settings": {"clients": []},
             "streamSettings": {

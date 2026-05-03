@@ -331,6 +331,24 @@ PROTOCOLS: Dict[str, ProtocolSpec] = {
     ),
 
     # ── WireGuard ──
+    "vless_ws_plain_front": ProtocolSpec(
+        key="vless_ws_plain_front",
+        name="VLESS + WS Plain (Domain Fronting)",
+        name_fa="VLESS + WS Plain (Domain Fronting)",
+        category=ProtocolCategory.xray,
+        backend=ProtocolBackend.xray,
+        description="VLESS with plain WebSocket (no TLS). Uses trusted Iranian domain as front address for DPI bypass.",
+        description_fa="VLESS با WebSocket ساده (بدون TLS). از دامنه ایرانی معتبر به عنوان فرانت برای دور زدن DPI استفاده می‌کند.",
+        requires_tls=False,
+        supports_cdn=False,
+        supports_reality=False,
+        config_fields=[
+            {"key": "port", "type": "int", "default": 2052, "label": "Port"},
+            {"key": "ws_path", "type": "string", "default": "/", "label": "WS Path"},
+            {"key": "front_domain", "type": "string", "default": "snapp.ir", "label": "Front Domain"},
+            {"key": "ws_host", "type": "string", "label": "WS Host (actual server)"},
+        ],
+    ),
     "amneziawg": ProtocolSpec(
         key="amneziawg",
         name="AmneziaWG 2.0",
@@ -605,6 +623,39 @@ class XrayConfigGenerator:
             "streamSettings": {
                 "network": "ws",
                 "security": "tls",
+                "wsSettings": ws_settings
+            }
+        }
+
+    @staticmethod
+    def generate_vless_ws_plain(
+        user_uuid: str,
+        port: int = 2052,
+        ws_path: str = "/",
+        host: str = "",
+    ) -> Dict[str, Any]:
+        """Generate VLESS + WS Plain (no TLS) inbound for domain fronting.
+
+        Used with Iranian trusted domains (snapp.ir, digikala.com) as the
+        front address. The actual connection is routed through CDN/proxy
+        based on the Host header.
+        """
+        ws_settings = {"path": ws_path}
+        if host:
+            ws_settings["headers"] = {"Host": host}
+
+        return {
+            "tag": "vless-ws-plain-front",
+            "listen": "0.0.0.0",
+            "port": port,
+            "protocol": "vless",
+            "settings": {
+                "clients": [{"id": user_uuid}],
+                "decryption": "none"
+            },
+            "streamSettings": {
+                "network": "ws",
+                "security": "none",
                 "wsSettings": ws_settings
             }
         }

@@ -49,6 +49,8 @@ class Settings(BaseSettings):
     
     # Xray
     vpn_server_ip: str = Field("", env="VPN_SERVER_IP")
+    vpn_server_ipv6: str = Field("", env="VPN_SERVER_IPV6")
+    ipv6_enabled: bool = Field(False, env="IPV6_ENABLED")
     vpn_server_port: int = Field(443, env="VPN_SERVER_PORT")
     vpn_sni_host: str = Field("www.google.com", env="VPN_SNI_HOST")
     xray_config_path: str = "/usr/local/etc/xray/config.json"
@@ -63,7 +65,11 @@ class Settings(BaseSettings):
     vless_ws_port: int = Field(2057, env="VLESS_WS_PORT")
     vless_ws_path: str = Field("/vless-ws", env="VLESS_WS_PATH")
     vless_ws_host: str = Field("", env="VLESS_WS_HOST")
-    
+    vless_ws_plain_front_enabled: bool = Field(True, env="VLESS_WS_PLAIN_FRONT_ENABLED")
+    vless_ws_plain_front_port: int = Field(2052, env="VLESS_WS_PLAIN_FRONT_PORT")
+    vless_ws_plain_front_domain: str = Field("snapp.ir", env="VLESS_WS_PLAIN_FRONT_DOMAIN")
+    vless_ws_plain_front_path: str = Field("/", env="VLESS_WS_PLAIN_FRONT_PATH")
+
     # VLESS XHTTP REALITY
     vless_xhttp_enabled: bool = Field(True, env="VLESS_XHTTP_ENABLED")
     vless_xhttp_port: int = Field(2053, env="VLESS_XHTTP_PORT")

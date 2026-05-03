@@ -1820,6 +1820,14 @@ async function loadSettings() {
     if (aggEl) aggEl.value = s.dpi_aggression_level || 'medium';
     document.getElementById('set-emergency-relay').checked = s.emergency_relay_enabled || false;
     document.getElementById('set-emergency-relay-address').value = s.emergency_relay_address || '';
+    document.getElementById('set-network-ipv6').checked = s.ipv6_enabled || false;
+    var v6el = document.getElementById('detected-ipv6');
+    if (v6el && s.server_ipv6) v6el.textContent = 'IPv6: ' + s.server_ipv6;
+    // VLESS WS Plain Domain Fronting
+    document.getElementById('set-vless-ws-plain-front').checked = s.vless_ws_plain_front_enabled || false;
+    document.getElementById('set-vless-ws-plain-front-domain').value = s.vless_ws_plain_front_domain || 'snapp.ir';
+    document.getElementById('set-vless-ws-plain-front-port').value = s.vless_ws_plain_front_port || 2052;
+    document.getElementById('set-vless-ws-plain-front-path').value = s.vless_ws_plain_front_path || '/';
     loadBackups();
     updateSettingsStatus();
     _settingsLoaded = true;
@@ -2075,6 +2083,12 @@ async function saveSettings() {
     // Emergency Relay
     emergency_relay_enabled: document.getElementById('set-emergency-relay').checked,
     emergency_relay_address: document.getElementById('set-emergency-relay-address').value.trim(),
+    ipv6_enabled: document.getElementById('set-network-ipv6').checked,
+    // VLESS WS Plain Domain Fronting
+    vless_ws_plain_front_enabled: document.getElementById('set-vless-ws-plain-front').checked,
+    vless_ws_plain_front_domain: document.getElementById('set-vless-ws-plain-front-domain').value.trim(),
+    vless_ws_plain_front_port: parseInt(document.getElementById('set-vless-ws-plain-front-port').value) || 2052,
+    vless_ws_plain_front_path: document.getElementById('set-vless-ws-plain-front-path').value.trim() || '/',
   };
   const r = await fetch(API+'/settings', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data)});
   const d = await r.json();

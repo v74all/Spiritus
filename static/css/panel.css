@@ -63,20 +63,8 @@
 [dir="rtl"] .filter-bar,
 [dir="rtl"] .proto-bar { flex-direction: row-reverse; }
 
-[dir="rtl"] .stat-item {
-  border-right: none;
-  border-left: 1px solid var(--glass-border);
-}
-[dir="rtl"] .stat-item:last-child { border-left: none; }
-
-[dir="rtl"] .sysmon-item {
-  border-right: none;
-  border-left: 1px solid var(--glass-border);
-}
-[dir="rtl"] .sysmon-item:last-child { border-left: none; }
-
-[dir="rtl"] .filter-search { margin-left: 0; margin-right: auto; }
-[dir="rtl"] .filter-pill .pill-count { margin-left: 0; margin-right: 6px; }
+/* stat-item, sysmon-item, filter-search, filter-pill use logical properties
+   (border-inline-end, margin-inline-start) — no RTL overrides needed */
 
 [dir="rtl"] .user-card { text-align: right; }
 [dir="rtl"] .user-card .card-actions { justify-content: flex-start; }
@@ -650,11 +638,11 @@ input, button, textarea, select { font-family: inherit; font-size: inherit; }
   min-width: 80px;
   padding: 12px var(--sp-md);
   text-align: center;
-  border-right: 1px solid var(--glass-border);
+  border-inline-end: 1px solid var(--glass-border);
   transition: var(--transition);
 }
 
-.sysmon-item:last-child { border-right: none; }
+.sysmon-item:last-child { border-inline-end: none; }
 .sysmon-item:hover { background: rgba(255, 255, 255, 0.02); }
 
 .sysmon-lbl {
@@ -714,12 +702,12 @@ input, button, textarea, select { font-family: inherit; font-size: inherit; }
   flex: 1;
   padding: 20px var(--sp-md);
   text-align: center;
-  border-right: 1px solid var(--glass-border);
+  border-inline-end: 1px solid var(--glass-border);
   transition: var(--transition);
   position: relative;
 }
 
-.stat-item:last-child { border-right: none; }
+.stat-item:last-child { border-inline-end: none; }
 .stat-item:hover { background: rgba(255, 255, 255, 0.02); }
 
 .stat-value {
@@ -856,7 +844,7 @@ input, button, textarea, select { font-family: inherit; font-size: inherit; }
   border-radius: 9px;
   font-size: 10px;
   font-weight: 700;
-  margin-left: 6px;
+  margin-inline-start: 6px;
   background: rgba(255, 255, 255, 0.12);
 }
 
@@ -866,7 +854,7 @@ input, button, textarea, select { font-family: inherit; font-size: inherit; }
   flex: 1;
   min-width: 140px;
   max-width: 280px;
-  margin-left: auto;
+  margin-inline-start: auto;
   padding: 9px 16px;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--border);
@@ -916,8 +904,8 @@ input, button, textarea, select { font-family: inherit; font-size: inherit; }
   content: '';
   position: absolute;
   top: 0;
-  left: 0;
-  right: 0;
+  inset-inline-start: 0;
+  inset-inline-end: 0;
   height: 1px;
   background: linear-gradient(90deg, transparent, var(--accent-glow), var(--purple), transparent);
   opacity: 0.4;
@@ -1143,8 +1131,8 @@ input, button, textarea, select { font-family: inherit; font-size: inherit; }
   content: '';
   position: absolute;
   top: 0;
-  left: 0;
-  right: 0;
+  inset-inline-start: 0;
+  inset-inline-end: 0;
   height: 1px;
   background: linear-gradient(90deg, transparent, var(--accent-glow), transparent);
 }
@@ -1524,14 +1512,14 @@ input, button, textarea, select { font-family: inherit; font-size: inherit; }
 
 .site-row.row-danger {
   background: rgba(255, 180, 171, 0.06);
-  border-left: 3px solid var(--red);
+  border-inline-start: 3px solid var(--red);
 }
 
 .site-row.row-danger .site-host { color: var(--red); }
 
 .site-row.row-warning {
   background: rgba(251, 191, 36, 0.05);
-  border-left: 3px solid var(--yellow);
+  border-inline-start: 3px solid var(--yellow);
 }
 
 /* ── Recent Rows ── */
@@ -1550,7 +1538,7 @@ input, button, textarea, select { font-family: inherit; font-size: inherit; }
 
 .recent-row.row-danger {
   background: rgba(255, 180, 171, 0.06);
-  border-left: 3px solid var(--red);
+  border-inline-start: 3px solid var(--red);
 }
 
 .recent-time { color: var(--t3); min-width: 55px; font-family: var(--font-mono); font-size: 11px; }
@@ -1613,7 +1601,7 @@ input, button, textarea, select { font-family: inherit; font-size: inherit; }
   font-weight: 700;
   padding: 2px 8px;
   border-radius: 6px;
-  margin-left: auto;
+  margin-inline-start: auto;
   flex-shrink: 0;
 }
 
@@ -1888,7 +1876,7 @@ input, button, textarea, select { font-family: inherit; font-size: inherit; }
   margin-bottom: 10px;
 }
 
-.bulk-qr-title small { font-weight: 600; color: var(--t3); margin-left: 6px; }
+.bulk-qr-title small { font-weight: 600; color: var(--t3); margin-inline-start: 6px; }
 
 .bulk-qr-row {
   display: flex;
@@ -1976,7 +1964,7 @@ input, button, textarea, select { font-family: inherit; font-size: inherit; }
   position: absolute;
   height: 18px;
   width: 18px;
-  left: 2px;
+  inset-inline-start: 2px;
   bottom: 2px;
   background: var(--t2);
   border-radius: 50%;
