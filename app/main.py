@@ -396,26 +396,21 @@ async def _subscription_links(user: VpnUser, request: Request, db: AsyncSession)
     if not _settings_state.get("server_ip"):
         _settings_state["server_ip"] = _public_server_ip(request)
     server_ip = _public_server_ip(request)
-    return {
-        key: value
-        for key, value in _user_to_legacy(user, server_ip=server_ip).items()
-        if key in {
-            "vmess",
-            "vless",
-            "vless_ws",
-            "vless_xhttp",
-            "vless_vision",
-            "vless_reverse",
-            "cdn_vmess",
-            "trojan",
-            "trojan_cdn",
-            "grpc_vmess",
-            "httpupgrade_vmess",
-            "ss2022",
-            "hysteria2",
-            "tuic",
-        } and value
+    # Return ALL non-empty links including IPv6 variants and VLESS Plain
+    legacy = _user_to_legacy(user, server_ip=server_ip)
+    _link_keys = {
+        "vmess", "vless", "vless_ws", "vless_ws_plain_front",
+        "vless_xhttp", "vless_vision", "vless_reverse",
+        "cdn_vmess", "trojan", "trojan_cdn",
+        "grpc_vmess", "httpupgrade_vmess", "ss2022",
+        "hysteria2", "tuic",
     }
+    links = {k: legacy.get(k, "") for k in _link_keys if legacy.get(k)}
+    # Include IPv6 variants
+    for k, v in legacy.items():
+        if k.endswith("_ipv6") and v:
+            links[k] = v
+    return links
 
 
 @app.get("/sub/{user_uuid}", response_class=HTMLResponse)

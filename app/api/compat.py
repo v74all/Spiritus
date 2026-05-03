@@ -515,10 +515,14 @@ def _build_share_links(u: VpnUser, server_ip: Optional[str] = None) -> Dict[str,
     # VLESS xHTTP REALITY
     if _settings_state.get("vless_xhttp_enabled") and (_settings_state.get("reality_public_key") or _settings_state.get("vless_xhttp_reality_public_key")):
         try:
+            # Resolve port avoiding collision with standard VLESS Reality (same logic as Xray config generator)
+            _rxp = int(_settings_state.get("vless_xhttp_port") or 0)
+            _vrp = int(_settings_state.get("vless_port") or 2053)
+            _xhttp_port = _rxp if (_rxp and _rxp != _vrp) else 8449
             links["vless_xhttp"] = ClientConfigGenerator.generate_vless_share_url(
                 uuid=u.uuid,
                 address=server_ip,
-                port=int(_settings_state.get("vless_xhttp_port") or 2053),
+                port=_xhttp_port,
                 security="reality",
                 sni=_settings_state.get("vless_xhttp_reality_sni") or _settings_state.get("reality_sni") or "digikala.com",
                 fp=_settings_state.get("fingerprint") or "chrome",
@@ -552,17 +556,17 @@ def _build_share_links(u: VpnUser, server_ip: Optional[str] = None) -> Dict[str,
             links["vless_vision"] = ""
 
     # VLESS Reverse REALITY
-    if _settings_state.get("vless_reverse_enabled") and (_settings_state.get("reality_public_key") or _settings_state.get("vless_xhttp_reality_public_key")):
+    if _settings_state.get("vless_reverse_enabled") and (_settings_state.get("reality_public_key") or _settings_state.get("vless_reverse_reality_public_key")):
         try:
             links["vless_reverse"] = ClientConfigGenerator.generate_vless_share_url(
                 uuid=u.uuid,
                 address=server_ip,
                 port=int(_settings_state.get("vless_reverse_port") or 2059),
                 security="reality",
-                sni=_settings_state.get("vless_xhttp_reality_sni") or _settings_state.get("reality_sni") or "digikala.com",
+                sni=_settings_state.get("vless_reverse_reality_sni") or "digikala.com",
                 fp=_settings_state.get("fingerprint") or "chrome",
-                pbk=_settings_state.get("vless_xhttp_reality_public_key") or _settings_state.get("reality_public_key") or "",
-                sid=_settings_state.get("vless_xhttp_reality_short_id") or _settings_state.get("reality_short_id") or "",
+                pbk=_settings_state.get("vless_reverse_reality_public_key") or _settings_state.get("reality_public_key") or "",
+                sid=_settings_state.get("vless_reverse_reality_short_id") or "",
                 network="tcp",
                 **_dpi_vless_kwargs(),
             )
@@ -666,11 +670,28 @@ def _user_to_legacy(u: VpnUser, server_ip: Optional[str] = None) -> Dict[str, An
         "httpupgrade_vmess": links.get("httpupgrade_vmess", ""),
         "ss2022": links.get("ss2022", ""),
         "vless_ws": links.get("vless_ws", ""),
+        "vless_ws_plain_front": links.get("vless_ws_plain_front", ""),
         "vless_xhttp": links.get("vless_xhttp", ""),
         "vless_vision": links.get("vless_vision", ""),
         "vless_reverse": links.get("vless_reverse", ""),
         "hysteria2": links.get("hysteria2", ""),
         "tuic": links.get("tuic", ""),
+        # IPv6 variants
+        "vmess_ipv6": links.get("vmess_ipv6", ""),
+        "vless_ipv6": links.get("vless_ipv6", ""),
+        "vless_ws_ipv6": links.get("vless_ws_ipv6", ""),
+        "vless_ws_plain_front_ipv6": links.get("vless_ws_plain_front_ipv6", ""),
+        "vless_xhttp_ipv6": links.get("vless_xhttp_ipv6", ""),
+        "vless_vision_ipv6": links.get("vless_vision_ipv6", ""),
+        "vless_reverse_ipv6": links.get("vless_reverse_ipv6", ""),
+        "cdn_vmess_ipv6": links.get("cdn_vmess_ipv6", ""),
+        "trojan_ipv6": links.get("trojan_ipv6", ""),
+        "trojan_cdn_ipv6": links.get("trojan_cdn_ipv6", ""),
+        "grpc_vmess_ipv6": links.get("grpc_vmess_ipv6", ""),
+        "httpupgrade_vmess_ipv6": links.get("httpupgrade_vmess_ipv6", ""),
+        "ss2022_ipv6": links.get("ss2022_ipv6", ""),
+        "hysteria2_ipv6": links.get("hysteria2_ipv6", ""),
+        "tuic_ipv6": links.get("tuic_ipv6", ""),
     }
 
 
@@ -693,6 +714,9 @@ def _default_legacy_settings() -> Dict[str, Any]:
         "vless_vision_port": 2058,
         "vless_reverse_enabled": True,
         "vless_reverse_port": 2059,
+        "vless_reverse_reality_short_id": secrets.token_hex(8),
+        "vless_reverse_reality_sni": "digikala.com",
+        "vless_reverse_reality_public_key": settings.reality_public_key,
         "vless_ws_enabled": True,
         "vless_ws_port": settings.vless_ws_port,
         "vless_ws_path": settings.vless_ws_path,
@@ -1820,13 +1844,18 @@ def _get_active_vmess_clients() -> list:
                 return [{"id": row.uuid, "alterId": 0, "email": row.name} for row in result.all()]
         try:
             loop = asyncio.get_running_loop()
-            return [_fetch()]
+            # Running inside async context — create new loop in new thread
+            import concurrent.futures
+            def _run_in_thread():
+                new_loop = asyncio.new_event_loop()
+                try:
+                    return new_loop.run_until_complete(_fetch())
+                finally:
+                    new_loop.close()
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                return pool.submit(_run_in_thread).result(timeout=10)
         except RuntimeError:
-            loop = asyncio.new_event_loop()
-            try:
-                return loop.run_until_complete(_fetch())
-            finally:
-                loop.close()
+            return asyncio.run(_fetch())
     except Exception as e:
         logger.warning(f"Failed to fetch VMess clients: {e}")
         return []
@@ -1845,13 +1874,17 @@ def _get_active_vless_clients() -> list:
                 return [{"id": row.uuid, "email": row.name} for row in result.all()]
         try:
             loop = asyncio.get_running_loop()
-            return [_fetch()]
+            import concurrent.futures
+            def _run_in_thread():
+                new_loop = asyncio.new_event_loop()
+                try:
+                    return new_loop.run_until_complete(_fetch())
+                finally:
+                    new_loop.close()
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                return pool.submit(_run_in_thread).result(timeout=10)
         except RuntimeError:
-            loop = asyncio.new_event_loop()
-            try:
-                return loop.run_until_complete(_fetch())
-            finally:
-                loop.close()
+            return asyncio.run(_fetch())
     except Exception as e:
         logger.warning(f"Failed to fetch VLESS clients: {e}")
         return []
@@ -1870,13 +1903,17 @@ def _get_active_trojan_clients() -> list:
                 return [{"password": row.uuid, "email": row.name} for row in result.all()]
         try:
             loop = asyncio.get_running_loop()
-            return [_fetch()]
+            import concurrent.futures
+            def _run_in_thread():
+                new_loop = asyncio.new_event_loop()
+                try:
+                    return new_loop.run_until_complete(_fetch())
+                finally:
+                    new_loop.close()
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                return pool.submit(_run_in_thread).result(timeout=10)
         except RuntimeError:
-            loop = asyncio.new_event_loop()
-            try:
-                return loop.run_until_complete(_fetch())
-            finally:
-                loop.close()
+            return asyncio.run(_fetch())
     except Exception as e:
         logger.warning(f"Failed to fetch Trojan clients: {e}")
         return []
@@ -2197,6 +2234,11 @@ def _generate_xray_server_config() -> dict:
 def _schedule_xray_sync():
     """Schedule a background Xray config sync after settings change."""
     try:
+        import asyncio
+        loop = asyncio.get_running_loop()
+        loop.create_task(_sync_xray_config_async())
+    except RuntimeError:
+        # No running loop (e.g., called from thread) — fall back to thread
         import threading
         t = threading.Thread(target=_sync_xray_config_now, daemon=True)
         t.start()
@@ -2204,11 +2246,10 @@ def _schedule_xray_sync():
         pass
 
 
-def _sync_xray_config_now():
-    """Generate and write the Xray server config, then restart Xray."""
+async def _sync_xray_config_async():
+    """Generate and write the Xray server config (async, runs in main event loop)."""
     try:
-        import time
-        time.sleep(0.5)  # Small delay to let settings settle
+        await asyncio.sleep(0.5)  # Small delay to let settings settle
 
         config = _generate_xray_server_config()
         config_path = settings.xray_config_path
@@ -2219,7 +2260,22 @@ def _sync_xray_config_now():
         subprocess.run(["systemctl", "restart", "xray"], capture_output=True, timeout=10)
         logger.info(f"Xray config auto-synced ({len(config.get('inbounds', []))} inbounds)")
     except Exception as e:
-        logger.warning(f"Background Xray sync failed: {e}")
+        logger.warning(f"Async Xray sync failed: {e}")
+
+
+def _sync_xray_config_now():
+    """Generate and write the Xray server config (sync, for thread fallback)."""
+    try:
+        import time
+        time.sleep(0.5)
+        config = _generate_xray_server_config()
+        config_path = settings.xray_config_path
+        with open(config_path, "w") as f:
+            json.dump(config, f, indent=2)
+        subprocess.run(["systemctl", "restart", "xray"], capture_output=True, timeout=10)
+        logger.info(f"Xray config synced ({len(config.get('inbounds', []))} inbounds)")
+    except Exception as e:
+        logger.warning(f"Xray sync failed: {e}")
 
 
 @router.post("/settings")
