@@ -597,6 +597,7 @@ def _default_legacy_settings() -> Dict[str, Any]:
         "ss2022_enabled": True,
         "ss2022_port": 2056,
         "ss2022_method": "2022-blake3-aes-128-gcm",
+        "ss2022_server_key": secrets.token_hex(16),
         "hysteria2_enabled": True,
         "hysteria2_port": 8443,
         "tuic_enabled": True,
@@ -1803,6 +1804,31 @@ def _generate_xray_server_config() -> dict:
                     "dest": vision_dest,
                     "privateKey": reality_pk,
                     "shortIds": [s.get("vless_vision_reality_short_id") or ""],
+                    "fingerprint": fp,
+                },
+            },
+            "sniffing": {"enabled": True, "destOverride": ["http", "tls"]},
+        })
+
+    # VLESS Reverse REALITY (backhaul-tunneled)
+    if _as_bool(s.get("vless_reverse_enabled")):
+        rev_sni = s.get("vless_reverse_reality_sni") or "digikala.com"
+        rev_dest = s.get("vless_reverse_reality_dest") or "digikala.com:443"
+        rev_sid = s.get("vless_reverse_reality_short_id") or ""
+        inbounds.append({
+            "tag": "in-vless-reverse",
+            "port": int(s.get("vless_reverse_port") or 2059),
+            "listen": "0.0.0.0",
+            "protocol": "vless",
+            "settings": {"clients": vless_clients, "decryption": "none"},
+            "streamSettings": {
+                "network": "tcp",
+                "security": "reality",
+                "realitySettings": {
+                    "serverNames": [rev_sni],
+                    "dest": rev_dest,
+                    "privateKey": reality_pk,
+                    "shortIds": [rev_sid] if rev_sid else [""],
                     "fingerprint": fp,
                 },
             },
