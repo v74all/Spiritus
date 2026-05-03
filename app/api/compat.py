@@ -652,10 +652,6 @@ def _default_legacy_settings() -> Dict[str, Any]:
 
 
 async def _load_legacy_settings(db: AsyncSession) -> Dict[str, Any]:
-    if _settings_state:
-        _settings_state.update(_normalize_settings_types(_settings_state))
-        return dict(_settings_state)
-
     file_settings: Dict[str, Any] = {}
     settings_path = os.path.join(os.getcwd(), _LEGACY_SETTINGS_FILE)
     if os.path.exists(settings_path):
@@ -679,6 +675,7 @@ async def _load_legacy_settings(db: AsyncSession) -> Dict[str, Any]:
             logger.warning("Ignoring invalid legacy panel settings JSON")
 
     merged = {**_default_legacy_settings(), **file_settings, **db_settings}
+    _settings_state.clear()
     _settings_state.update(_normalize_settings_types(merged))
     return dict(_settings_state)
 
