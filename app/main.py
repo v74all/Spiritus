@@ -582,13 +582,17 @@ def _subscription_json_config(
         xhttp_reality_sni = panel_settings.get("vless_xhttp_reality_sni") or "digikala.com"
         xhttp_reality_pk = panel_settings.get("vless_xhttp_reality_public_key") or panel_settings.get("reality_public_key") or ""
         xhttp_reality_sid = panel_settings.get("vless_xhttp_reality_short_id") or ""
+        # Resolve port avoiding collision with standard VLESS Reality
+        _rxp = int(panel_settings.get("vless_xhttp_port") or 0)
+        _vrp = int(panel_settings.get("vless_port") or 2053)
+        _xhttp_port = _rxp if (_rxp and _rxp != _vrp) else 8449
         outbounds.append({
             "tag": f"{prefix}-VLESS-XHTTP-{user.name}",
             "protocol": "vless",
             "settings": {
                 "vnext": [{
                     "address": server_ip,
-                    "port": int(panel_settings.get("vless_xhttp_port") or 2053),
+                    "port": _xhttp_port,
                     "users": [{"id": uid, "encryption": "none", "flow": "xtls-rprx-vision"}],
                 }],
             },
@@ -934,15 +938,21 @@ def _generate_xray_server_config(panel_settings: dict) -> dict:
             "sniffing": {"enabled": True, "destOverride": ["http", "tls"]},
         })
 
-    # VLESS XHTTP REALITY
+    # VLESS XHTTP REALITY (use distinct port to avoid collision)
     if panel_settings.get("vless_xhttp_enabled"):
         xhttp_sni = panel_settings.get("vless_xhttp_reality_sni") or "digikala.com"
         xhttp_dest = panel_settings.get("vless_xhttp_reality_dest") or "digikala.com:443"
         xhttp_pk = panel_settings.get("vless_xhttp_reality_private_key") or reality_pk
         xhttp_sid = panel_settings.get("vless_xhttp_reality_short_id") or ""
+        raw_xhttp_port = int(panel_settings.get("vless_xhttp_port") or 0)
+        vless_port_val = int(panel_settings.get("vless_port") or 2053)
+        if raw_xhttp_port and raw_xhttp_port != vless_port_val:
+            xhttp_port = raw_xhttp_port
+        else:
+            xhttp_port = 8449
         inbounds.append({
             "tag": "in-vless-xhttp",
-            "port": int(panel_settings.get("vless_xhttp_port") or 2053),
+            "port": xhttp_port,
             "listen": "0.0.0.0",
             "protocol": "vless",
             "settings": {"clients": [], "decryption": "none"},
