@@ -783,6 +783,17 @@ class ClientConfigGenerator:
         xhttp_mode: str = "",
         allow_insecure: bool = False,
         ech: Optional[Dict] = None,
+        # DPI evasion parameters
+        fragment: bool = False,
+        fragment_packets: str = "tlshello",
+        fragment_length: str = "100-200",
+        fragment_interval: str = "10-20",
+        noise_packet: str = "",
+        noise_delay: str = "",
+        tcp_keepalive: bool = False,
+        mux_enabled: bool = False,
+        mux_concurrency: int = 8,
+        bug_host: str = "",
     ) -> str:
         """Generate VLESS share URL (vless://...)."""
         params = {
@@ -808,6 +819,20 @@ class ClientConfigGenerator:
             params["ech_config"] = base64.b64encode(
                 json.dumps(ech.get("keys", [])).encode()
             ).decode()
+        # DPI evasion query params
+        if fragment:
+            params["fragment"] = f"{fragment_packets},{fragment_length},{fragment_interval}"
+        if noise_packet:
+            params["noisePacket"] = noise_packet
+        if noise_delay:
+            params["noiseDelay"] = noise_delay
+        if tcp_keepalive:
+            params["keepAlive"] = "1"
+        if mux_enabled:
+            params["mux"] = "1"
+            params["mconcurrency"] = str(mux_concurrency)
+        if bug_host:
+            params["bugHost"] = bug_host
 
         query = urlencode({k: v for k, v in params.items() if v})
         return f"vless://{uuid}@{address}:{port}?{query}#V7LTHRONYX"
@@ -823,6 +848,18 @@ class ClientConfigGenerator:
         sni: str = "",
         path: str = "",
         allow_insecure: bool = False,
+        # DPI evasion parameters
+        fragment: bool = False,
+        fragment_packets: str = "tlshello",
+        fragment_length: str = "100-200",
+        fragment_interval: str = "10-20",
+        noise_packet: str = "",
+        noise_delay: str = "",
+        tcp_keepalive: bool = False,
+        mux_enabled: bool = False,
+        mux_concurrency: int = 8,
+        bug_host: str = "",
+        extra_host_header: str = "",
     ) -> str:
         """Generate VMess share URL (vmess://base64...)."""
         vmess_obj = {
@@ -834,12 +871,33 @@ class ClientConfigGenerator:
             "aid": str(alter_id),
             "net": network,
             "type": "none",
-            "host": sni,
+            "host": extra_host_header or sni,
             "path": path,
             "tls": security,
         }
         if allow_insecure and security == "tls":
             vmess_obj["allowInsecure"] = "1"
+        # DPI evasion: sockopt and MUX
+        if fragment or noise_packet or tcp_keepalive:
+            sockopt_fields = {}
+            if fragment:
+                sockopt_fields["fragment"] = {
+                    "packets": fragment_packets,
+                    "length": fragment_length,
+                    "interval": fragment_interval,
+                }
+            if noise_packet:
+                sockopt_fields["noisePacket"] = noise_packet
+            if noise_delay:
+                sockopt_fields["noiseDelay"] = noise_delay
+            if tcp_keepalive:
+                sockopt_fields["tcpKeepAlive"] = True
+            vmess_obj["sockopt"] = json.dumps(sockopt_fields)
+        if mux_enabled:
+            vmess_obj["mux"] = "true"
+            vmess_obj["muxConcurrency"] = str(mux_concurrency)
+        if bug_host:
+            vmess_obj["bugHost"] = bug_host
         encoded = base64.b64encode(
             json.dumps(vmess_obj).encode()
         ).decode()
@@ -854,6 +912,17 @@ class ClientConfigGenerator:
         network: str = "tcp",
         path: str = "",
         allow_insecure: bool = False,
+        # DPI evasion parameters
+        fragment: bool = False,
+        fragment_packets: str = "tlshello",
+        fragment_length: str = "100-200",
+        fragment_interval: str = "10-20",
+        noise_packet: str = "",
+        noise_delay: str = "",
+        tcp_keepalive: bool = False,
+        mux_enabled: bool = False,
+        mux_concurrency: int = 8,
+        bug_host: str = "",
     ) -> str:
         """Generate Trojan share URL (trojan://...)."""
         params = {
@@ -865,6 +934,20 @@ class ClientConfigGenerator:
             params["path"] = path
         if allow_insecure:
             params["allowInsecure"] = "1"
+        # DPI evasion query params
+        if fragment:
+            params["fragment"] = f"{fragment_packets},{fragment_length},{fragment_interval}"
+        if noise_packet:
+            params["noisePacket"] = noise_packet
+        if noise_delay:
+            params["noiseDelay"] = noise_delay
+        if tcp_keepalive:
+            params["keepAlive"] = "1"
+        if mux_enabled:
+            params["mux"] = "1"
+            params["mconcurrency"] = str(mux_concurrency)
+        if bug_host:
+            params["bugHost"] = bug_host
         query = urlencode({k: v for k, v in params.items() if v})
         return f"trojan://{password}@{address}:{port}?{query}#V7LTHRONYX"
 

@@ -235,6 +235,53 @@ def _build_share_links(u: VpnUser, server_ip: Optional[str] = None) -> Dict[str,
     sni_host = _settings_state.get("vmess_sni") or "www.aparat.com"
     ws_path = _settings_state.get("vmess_ws_path") or "/api/v1/stream"
 
+    # ── DPI Evasion common flags ──
+    _frag = bool(_settings_state.get("fragment_enabled"))
+    _frag_pkt = _settings_state.get("fragment_packets") or "tlshello"
+    _frag_len = _settings_state.get("fragment_length") or "100-200"
+    _frag_int = _settings_state.get("fragment_interval") or "10-20"
+    _noise_pkt = _settings_state.get("noise_packet") or ""
+    _noise_del = _settings_state.get("noise_delay") or ""
+    _keepalive = bool(_settings_state.get("dpi_tcp_keepalive"))
+    _mux = bool(_settings_state.get("mux_enabled"))
+    _mux_conc = int(_settings_state.get("mux_concurrency") or 8)
+    _bug_host = ""
+    if _settings_state.get("dpi_bug_host_enabled"):
+        _bug_host = _settings_state.get("dpi_bug_host_domain") or "chat.deepseek.com"
+    _host_spoof = ""
+    if _settings_state.get("dpi_http_host_spoof_enabled"):
+        _host_spoof = _settings_state.get("dpi_http_host_spoof_domain") or "chat.deepseek.com"
+    _ws_front = ""
+    if _settings_state.get("dpi_ws_host_front_enabled") and not _host_spoof:
+        _ws_front = _settings_state.get("dpi_ws_host_front_domain") or "rubika.ir"
+    _cdn_front = ""
+    if _settings_state.get("dpi_cdn_host_front_enabled"):
+        _cdn_front = _settings_state.get("dpi_cdn_host_front_domain") or "web.splus.ir"
+
+    def _dpi_vless_kwargs():
+        return dict(
+            fragment=_frag, fragment_packets=_frag_pkt, fragment_length=_frag_len,
+            fragment_interval=_frag_int, noise_packet=_noise_pkt, noise_delay=_noise_del,
+            tcp_keepalive=_keepalive, mux_enabled=_mux, mux_concurrency=_mux_conc,
+            bug_host=_bug_host,
+        )
+
+    def _dpi_vmess_kwargs(extra_host=""):
+        return dict(
+            fragment=_frag, fragment_packets=_frag_pkt, fragment_length=_frag_len,
+            fragment_interval=_frag_int, noise_packet=_noise_pkt, noise_delay=_noise_del,
+            tcp_keepalive=_keepalive, mux_enabled=_mux, mux_concurrency=_mux_conc,
+            bug_host=_bug_host, extra_host_header=extra_host,
+        )
+
+    def _dpi_trojan_kwargs():
+        return dict(
+            fragment=_frag, fragment_packets=_frag_pkt, fragment_length=_frag_len,
+            fragment_interval=_frag_int, noise_packet=_noise_pkt, noise_delay=_noise_del,
+            tcp_keepalive=_keepalive, mux_enabled=_mux, mux_concurrency=_mux_conc,
+            bug_host=_bug_host,
+        )
+
     links: Dict[str, str] = {}
     try:
         links["vmess"] = ClientConfigGenerator.generate_vmess_share_url(
@@ -244,6 +291,7 @@ def _build_share_links(u: VpnUser, server_ip: Optional[str] = None) -> Dict[str,
             sni=sni_host,
             path=ws_path,
             allow_insecure=True,
+            **_dpi_vmess_kwargs(extra_host=_host_spoof or _ws_front),
         )
     except Exception:
         links["vmess"] = ""
@@ -261,20 +309,23 @@ def _build_share_links(u: VpnUser, server_ip: Optional[str] = None) -> Dict[str,
                 sid=_settings_state.get("reality_short_id") or "",
                 flow="xtls-rprx-vision",
                 network="tcp",
+                **_dpi_vless_kwargs(),
             )
         except Exception:
             links["vless"] = ""
 
     if _settings_state.get("cdn_enabled") and _settings_state.get("cdn_domain"):
         try:
+            cdn_host = _cdn_front or _settings_state.get("cdn_domain")
             links["cdn_vmess"] = ClientConfigGenerator.generate_vmess_share_url(
                 uuid=u.uuid,
                 address=_settings_state.get("cdn_domain"),
                 port=int(_settings_state.get("cdn_port") or 443),
                 security="tls",
-                sni=_settings_state.get("cdn_domain"),
+                sni=cdn_host,
                 path=_settings_state.get("cdn_ws_path") or "/cdn-ws",
                 allow_insecure=True,
+                **_dpi_vmess_kwargs(extra_host=cdn_host),
             )
         except Exception:
             links["cdn_vmess"] = ""
@@ -288,8 +339,10 @@ def _build_share_links(u: VpnUser, server_ip: Optional[str] = None) -> Dict[str,
                 network="ws",
                 security="tls",
                 sni=sni_host,
+                host=_host_spoof or _ws_front or sni_host,
                 path=_settings_state.get("vless_ws_path") or settings.vless_ws_path,
                 allow_insecure=True,
+                **_dpi_vless_kwargs(),
             )
         except Exception:
             links["vless_ws"] = ""
@@ -303,6 +356,7 @@ def _build_share_links(u: VpnUser, server_ip: Optional[str] = None) -> Dict[str,
                 sni=sni_host,
                 network="tcp",
                 allow_insecure=True,
+                **_dpi_trojan_kwargs(),
             )
         except Exception:
             links["trojan"] = ""
@@ -318,6 +372,7 @@ def _build_share_links(u: VpnUser, server_ip: Optional[str] = None) -> Dict[str,
                 sni=sni_host,
                 path=_settings_state.get("grpc_service_name") or "GunService",
                 allow_insecure=True,
+                **_dpi_vmess_kwargs(),
             )
         except Exception:
             links["grpc_vmess"] = ""
@@ -333,6 +388,7 @@ def _build_share_links(u: VpnUser, server_ip: Optional[str] = None) -> Dict[str,
                 sni=sni_host,
                 path=_settings_state.get("httpupgrade_path") or "/httpupgrade",
                 allow_insecure=True,
+                **_dpi_vmess_kwargs(extra_host=_host_spoof or _ws_front),
             )
         except Exception:
             links["httpupgrade_vmess"] = ""
@@ -398,6 +454,7 @@ def _build_share_links(u: VpnUser, server_ip: Optional[str] = None) -> Dict[str,
                 network="xhttp",
                 xhttp_mode=_settings_state.get("vless_xhttp_mode") or "auto",
                 path=_settings_state.get("vless_xhttp_path") or "/xhttp",
+                **_dpi_vless_kwargs(),
             )
         except Exception:
             links["vless_xhttp"] = ""
@@ -416,6 +473,7 @@ def _build_share_links(u: VpnUser, server_ip: Optional[str] = None) -> Dict[str,
                 sid=_settings_state.get("vless_vision_reality_short_id") or _settings_state.get("reality_short_id") or "",
                 flow="xtls-rprx-vision",
                 network="tcp",
+                **_dpi_vless_kwargs(),
             )
         except Exception:
             links["vless_vision"] = ""
@@ -433,6 +491,7 @@ def _build_share_links(u: VpnUser, server_ip: Optional[str] = None) -> Dict[str,
                 pbk=_settings_state.get("vless_xhttp_reality_public_key") or _settings_state.get("reality_public_key") or "",
                 sid=_settings_state.get("vless_xhttp_reality_short_id") or _settings_state.get("reality_short_id") or "",
                 network="tcp",
+                **_dpi_vless_kwargs(),
             )
         except Exception:
             links["vless_reverse"] = ""
@@ -444,10 +503,11 @@ def _build_share_links(u: VpnUser, server_ip: Optional[str] = None) -> Dict[str,
                 password=u.uuid,
                 address=_settings_state.get("cdn_domain"),
                 port=int(_settings_state.get("trojan_cdn_port") or 443),
-                sni=_settings_state.get("cdn_domain"),
+                sni=_cdn_front or _settings_state.get("cdn_domain"),
                 network="ws",
                 path=_settings_state.get("cdn_ws_path") or "/cdn-ws",
                 allow_insecure=False,
+                **_dpi_trojan_kwargs(),
             )
         except Exception:
             links["trojan_cdn"] = ""
