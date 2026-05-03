@@ -2084,7 +2084,8 @@ async def legacy_save_settings(
     db: AsyncSession = Depends(get_async_db),
 ):
     await _save_legacy_settings(db, data)
-    return {"ok": True, "rebuild": False}
+    _schedule_xray_sync()
+    return {"ok": True, "rebuild": True}
 
 
 @router.post("/settings/regenerate-reality")
