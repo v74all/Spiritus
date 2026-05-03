@@ -1147,10 +1147,13 @@ async def sync_xray_config(
     db: AsyncSession = Depends(get_async_db),
 ):
     """Generate and apply the Xray server config from current settings."""
-    from .api.compat import _load_legacy_settings
+    from .api.compat import _load_legacy_settings, _generate_xray_server_config as _gen
 
-    panel_settings = await _load_legacy_settings(db)
-    config = _generate_xray_server_config(panel_settings)
+    # Ensure settings are loaded
+    await _load_legacy_settings(db)
+
+    # Generate config (fetches active users from DB for client auth)
+    config = _gen()
 
     # Write config to disk
     config_path = settings.xray_config_path

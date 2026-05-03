@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
+import asyncio
 import base64
 import io
 import csv
@@ -1554,6 +1555,66 @@ async def legacy_get_settings(
     return merged
 
 
+def _get_active_vmess_clients() -> list:
+    """Fetch active user UUIDs for VMess inbounds."""
+    try:
+        from ..database import AsyncSessionLocal
+        import asyncio
+        async def _fetch():
+            async with AsyncSessionLocal() as db:
+                result = await db.execute(
+                    select(VpnUser).where(VpnUser.active == 1)
+                )
+                return [{"id": u.uuid, "alterId": 0, "email": u.name} for u in result.scalars().all()]
+        loop = asyncio.new_event_loop()
+        try:
+            return loop.run_until_complete(_fetch())
+        finally:
+            loop.close()
+    except Exception:
+        return []
+
+
+def _get_active_vless_clients() -> list:
+    """Fetch active user UUIDs for VLESS inbounds."""
+    try:
+        from ..database import AsyncSessionLocal
+        import asyncio
+        async def _fetch():
+            async with AsyncSessionLocal() as db:
+                result = await db.execute(
+                    select(VpnUser).where(VpnUser.active == 1)
+                )
+                return [{"id": u.uuid, "email": u.name, "encryption": "none"} for u in result.scalars().all()]
+        loop = asyncio.new_event_loop()
+        try:
+            return loop.run_until_complete(_fetch())
+        finally:
+            loop.close()
+    except Exception:
+        return []
+
+
+def _get_active_trojan_clients() -> list:
+    """Fetch active user passwords (UUIDs) for Trojan inbounds."""
+    try:
+        from ..database import AsyncSessionLocal
+        import asyncio
+        async def _fetch():
+            async with AsyncSessionLocal() as db:
+                result = await db.execute(
+                    select(VpnUser).where(VpnUser.active == 1)
+                )
+                return [{"password": u.uuid, "email": u.name} for u in result.scalars().all()]
+        loop = asyncio.new_event_loop()
+        try:
+            return loop.run_until_complete(_fetch())
+        finally:
+            loop.close()
+    except Exception:
+        return []
+
+
 def _generate_xray_server_config() -> dict:
     """Generate the server-side Xray config with inbounds for all enabled protocols."""
     s = _settings_state
@@ -1567,13 +1628,18 @@ def _generate_xray_server_config() -> dict:
     cert_file = "/etc/ssl/certs/fullchain.pem"
     key_file = "/etc/ssl/private/privkey.pem"
 
+    # Fetch active user UUIDs for client authentication
+    vmess_clients = _get_active_vmess_clients()
+    vless_clients = _get_active_vless_clients()
+    trojan_clients = _get_active_trojan_clients()
+
     # VMess WS+TLS (always-on)
     inbounds.append({
         "tag": "in-vmess-ws",
         "port": int(s.get("vmess_port") or 443),
         "listen": "0.0.0.0",
         "protocol": "vmess",
-        "settings": {"clients": []},
+        "settings": {"clients": vmess_clients},
         "streamSettings": {
             "network": "ws",
             "security": "tls",
@@ -1594,7 +1660,7 @@ def _generate_xray_server_config() -> dict:
             "port": int(s.get("vless_port") or 2053),
             "listen": "0.0.0.0",
             "protocol": "vless",
-            "settings": {"clients": [], "decryption": "none"},
+            "settings": {"clients": vless_clients, "decryption": "none"},
             "streamSettings": {
                 "network": "tcp",
                 "security": "reality",
@@ -1627,7 +1693,7 @@ def _generate_xray_server_config() -> dict:
             "port": xhttp_port,
             "listen": "0.0.0.0",
             "protocol": "vless",
-            "settings": {"clients": [], "decryption": "none"},
+            "settings": {"clients": vless_clients, "decryption": "none"},
             "streamSettings": {
                 "network": "xhttp",
                 "security": "reality",
@@ -1656,7 +1722,7 @@ def _generate_xray_server_config() -> dict:
             "port": int(s.get("vless_vision_port") or 2058),
             "listen": "0.0.0.0",
             "protocol": "vless",
-            "settings": {"clients": [], "decryption": "none"},
+            "settings": {"clients": vless_clients, "decryption": "none"},
             "streamSettings": {
                 "network": "tcp",
                 "security": "reality",
@@ -1678,7 +1744,7 @@ def _generate_xray_server_config() -> dict:
             "port": int(s.get("trojan_port") or 2083),
             "listen": "0.0.0.0",
             "protocol": "trojan",
-            "settings": {"clients": []},
+            "settings": {"clients": trojan_clients},
             "streamSettings": {
                 "network": "tcp",
                 "security": "tls",
@@ -1697,7 +1763,7 @@ def _generate_xray_server_config() -> dict:
             "port": int(s.get("grpc_port") or 2054),
             "listen": "0.0.0.0",
             "protocol": "vmess",
-            "settings": {"clients": []},
+            "settings": {"clients": vmess_clients},
             "streamSettings": {
                 "network": "grpc",
                 "security": "tls",
@@ -1717,7 +1783,7 @@ def _generate_xray_server_config() -> dict:
             "port": int(s.get("httpupgrade_port") or 2055),
             "listen": "0.0.0.0",
             "protocol": "vmess",
-            "settings": {"clients": []},
+            "settings": {"clients": vmess_clients},
             "streamSettings": {
                 "network": "httpupgrade",
                 "security": "tls",
@@ -1737,7 +1803,7 @@ def _generate_xray_server_config() -> dict:
             "port": int(s.get("vless_ws_port") or 2057),
             "listen": "0.0.0.0",
             "protocol": "vless",
-            "settings": {"clients": [], "decryption": "none"},
+            "settings": {"clients": vless_clients, "decryption": "none"},
             "streamSettings": {
                 "network": "ws",
                 "security": "tls",
@@ -1780,7 +1846,7 @@ def _generate_xray_server_config() -> dict:
             "port": int(s.get("cdn_port") or 2082),
             "listen": "0.0.0.0",
             "protocol": "vmess",
-            "settings": {"clients": []},
+            "settings": {"clients": vmess_clients},
             "streamSettings": {
                 "network": "ws",
                 "security": "tls",
