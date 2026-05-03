@@ -1157,7 +1157,7 @@ async def sync_xray_config(
     )
     users = result.scalars().all()
     vmess_clients = [{"id": u.uuid, "alterId": 0, "email": u.name} for u in users]
-    vless_clients = [{"id": u.uuid, "email": u.name, "encryption": "none"} for u in users]
+    vless_clients = [{"id": u.uuid, "email": u.name} for u in users]
     trojan_clients = [{"password": u.uuid, "email": u.name} for u in users]
 
     # Generate server config (uses settings from compat _settings_state)

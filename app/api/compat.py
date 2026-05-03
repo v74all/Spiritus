@@ -1590,7 +1590,7 @@ def _get_active_vless_clients() -> list:
                 result = await conn.execute(
                     select(VpnUser.uuid, VpnUser.name).where(VpnUser.active == 1)
                 )
-                return [{"id": row.uuid, "email": row.name, "encryption": "none"} for row in result.all()]
+                return [{"id": row.uuid, "email": row.name} for row in result.all()]
         try:
             loop = asyncio.get_running_loop()
             return [_fetch()]
