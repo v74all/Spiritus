@@ -1558,60 +1558,75 @@ async def legacy_get_settings(
 def _get_active_vmess_clients() -> list:
     """Fetch active user UUIDs for VMess inbounds."""
     try:
-        from ..database import AsyncSessionLocal
+        from ..database import async_engine
         import asyncio
         async def _fetch():
-            async with AsyncSessionLocal() as db:
-                result = await db.execute(
-                    select(VpnUser).where(VpnUser.active == 1)
+            async with async_engine.connect() as conn:
+                result = await conn.execute(
+                    select(VpnUser.uuid, VpnUser.name).where(VpnUser.active == 1)
                 )
-                return [{"id": u.uuid, "alterId": 0, "email": u.name} for u in result.scalars().all()]
-        loop = asyncio.new_event_loop()
+                return [{"id": row.uuid, "alterId": 0, "email": row.name} for row in result.all()]
         try:
-            return loop.run_until_complete(_fetch())
-        finally:
-            loop.close()
-    except Exception:
+            loop = asyncio.get_running_loop()
+            return [_fetch()]
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            try:
+                return loop.run_until_complete(_fetch())
+            finally:
+                loop.close()
+    except Exception as e:
+        logger.warning(f"Failed to fetch VMess clients: {e}")
         return []
 
 
 def _get_active_vless_clients() -> list:
     """Fetch active user UUIDs for VLESS inbounds."""
     try:
-        from ..database import AsyncSessionLocal
+        from ..database import async_engine
         import asyncio
         async def _fetch():
-            async with AsyncSessionLocal() as db:
-                result = await db.execute(
-                    select(VpnUser).where(VpnUser.active == 1)
+            async with async_engine.connect() as conn:
+                result = await conn.execute(
+                    select(VpnUser.uuid, VpnUser.name).where(VpnUser.active == 1)
                 )
-                return [{"id": u.uuid, "email": u.name, "encryption": "none"} for u in result.scalars().all()]
-        loop = asyncio.new_event_loop()
+                return [{"id": row.uuid, "email": row.name, "encryption": "none"} for row in result.all()]
         try:
-            return loop.run_until_complete(_fetch())
-        finally:
-            loop.close()
-    except Exception:
+            loop = asyncio.get_running_loop()
+            return [_fetch()]
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            try:
+                return loop.run_until_complete(_fetch())
+            finally:
+                loop.close()
+    except Exception as e:
+        logger.warning(f"Failed to fetch VLESS clients: {e}")
         return []
 
 
 def _get_active_trojan_clients() -> list:
     """Fetch active user passwords (UUIDs) for Trojan inbounds."""
     try:
-        from ..database import AsyncSessionLocal
+        from ..database import async_engine
         import asyncio
         async def _fetch():
-            async with AsyncSessionLocal() as db:
-                result = await db.execute(
-                    select(VpnUser).where(VpnUser.active == 1)
+            async with async_engine.connect() as conn:
+                result = await conn.execute(
+                    select(VpnUser.uuid, VpnUser.name).where(VpnUser.active == 1)
                 )
-                return [{"password": u.uuid, "email": u.name} for u in result.scalars().all()]
-        loop = asyncio.new_event_loop()
+                return [{"password": row.uuid, "email": row.name} for row in result.all()]
         try:
-            return loop.run_until_complete(_fetch())
-        finally:
-            loop.close()
-    except Exception:
+            loop = asyncio.get_running_loop()
+            return [_fetch()]
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            try:
+                return loop.run_until_complete(_fetch())
+            finally:
+                loop.close()
+    except Exception as e:
+        logger.warning(f"Failed to fetch Trojan clients: {e}")
         return []
 
 
@@ -1665,7 +1680,7 @@ def _generate_xray_server_config() -> dict:
                 "network": "tcp",
                 "security": "reality",
                 "realitySettings": {
-                    "serverName": s.get("reality_sni") or "chat.deepseek.com",
+                    "serverNames": [s.get("reality_sni") or "chat.deepseek.com"],
                     "dest": s.get("reality_dest") or "chat.deepseek.com:443",
                     "privateKey": reality_pk,
                     "shortIds": [reality_sid] if reality_sid else [""],
@@ -1703,7 +1718,7 @@ def _generate_xray_server_config() -> dict:
                     "host": xhttp_sni,
                 },
                 "realitySettings": {
-                    "serverName": xhttp_sni,
+                    "serverNames": [xhttp_sni],
                     "dest": xhttp_dest,
                     "privateKey": xhttp_pk,
                     "shortIds": [xhttp_sid] if xhttp_sid else [""],
@@ -1727,7 +1742,7 @@ def _generate_xray_server_config() -> dict:
                 "network": "tcp",
                 "security": "reality",
                 "realitySettings": {
-                    "serverName": vision_sni,
+                    "serverNames": [vision_sni],
                     "dest": vision_dest,
                     "privateKey": reality_pk,
                     "shortIds": [s.get("vless_vision_reality_short_id") or ""],
@@ -1905,8 +1920,6 @@ async def legacy_save_settings(
     db: AsyncSession = Depends(get_async_db),
 ):
     await _save_legacy_settings(db, data)
-    # Auto-sync Xray config in background after settings change
-    _schedule_xray_sync()
     return {"ok": True, "rebuild": False}
 
 

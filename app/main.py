@@ -465,7 +465,7 @@ def _subscription_json_config(
                 "network": "tcp",
                 "security": "reality",
                 "realitySettings": {
-                    "serverName": panel_settings.get("reality_sni") or "chat.deepseek.com",
+                    "serverNames": [panel_settings.get("reality_sni") or "chat.deepseek.com"],
                     "fingerprint": fp,
                     "publicKey": panel_settings.get("reality_public_key"),
                     "shortId": panel_settings.get("reality_short_id") or "",
@@ -659,7 +659,7 @@ def _subscription_json_config(
                 "network": "tcp",
                 "security": "reality",
                 "realitySettings": {
-                    "serverName": rev_reality_sni,
+                    "serverNames": [rev_reality_sni],
                     "fingerprint": fp,
                     "publicKey": rev_reality_pk,
                     "shortId": rev_reality_sid,
@@ -928,7 +928,7 @@ def _generate_xray_server_config(panel_settings: dict) -> dict:
                 "network": "tcp",
                 "security": "reality",
                 "realitySettings": {
-                    "serverName": panel_settings.get("reality_sni") or "chat.deepseek.com",
+                    "serverNames": [panel_settings.get("reality_sni") or "chat.deepseek.com"],
                     "dest": panel_settings.get("reality_dest") or "chat.deepseek.com:443",
                     "privateKey": reality_pk,
                     "shortIds": [reality_sid] if reality_sid else [""],
@@ -965,7 +965,7 @@ def _generate_xray_server_config(panel_settings: dict) -> dict:
                     "host": xhttp_sni,
                 },
                 "realitySettings": {
-                    "serverName": xhttp_sni,
+                    "serverNames": [xhttp_sni],
                     "dest": xhttp_dest,
                     "privateKey": xhttp_pk,
                     "shortIds": [xhttp_sid] if xhttp_sid else [""],
@@ -991,7 +991,7 @@ def _generate_xray_server_config(panel_settings: dict) -> dict:
                 "network": "tcp",
                 "security": "reality",
                 "realitySettings": {
-                    "serverName": vision_sni,
+                    "serverNames": [vision_sni],
                     "dest": vision_dest,
                     "privateKey": vision_pk,
                     "shortIds": [vision_sid] if vision_sid else [""],
@@ -1147,13 +1147,32 @@ async def sync_xray_config(
     db: AsyncSession = Depends(get_async_db),
 ):
     """Generate and apply the Xray server config from current settings."""
-    from .api.compat import _load_legacy_settings, _generate_xray_server_config as _gen
+    from .api.compat import _load_legacy_settings
 
-    # Ensure settings are loaded
-    await _load_legacy_settings(db)
+    panel_settings = await _load_legacy_settings(db)
 
-    # Generate config (fetches active users from DB for client auth)
+    # Fetch active users for client authentication (in async context)
+    result = await db.execute(
+        select(VpnUser).where(VpnUser.active == 1)
+    )
+    users = result.scalars().all()
+    vmess_clients = [{"id": u.uuid, "alterId": 0, "email": u.name} for u in users]
+    vless_clients = [{"id": u.uuid, "email": u.name, "encryption": "none"} for u in users]
+    trojan_clients = [{"password": u.uuid, "email": u.name} for u in users]
+
+    # Generate server config (uses settings from compat _settings_state)
+    from .api.compat import _generate_xray_server_config as _gen
     config = _gen()
+
+    # Override client lists with actually fetched users
+    for inbound in config.get("inbounds", []):
+        proto = inbound.get("protocol", "")
+        if proto == "vmess":
+            inbound.setdefault("settings", {})["clients"] = vmess_clients
+        elif proto == "vless":
+            inbound.setdefault("settings", {})["clients"] = vless_clients
+        elif proto == "trojan":
+            inbound.setdefault("settings", {})["clients"] = trojan_clients
 
     # Write config to disk
     config_path = settings.xray_config_path
@@ -1162,8 +1181,10 @@ async def sync_xray_config(
             json.dump(config, f, indent=2)
         # Restart Xray to apply
         subprocess.run(["systemctl", "restart", "xray"], capture_output=True, timeout=10)
-        logger.info(f"Xray config synced to {config_path} ({len(config.get('inbounds', []))} inbounds)")
-        return {"ok": True, "message": f"Xray config applied with {len(config.get('inbounds', []))} inbounds"}
+        n_clients = len(vmess_clients)
+        n_inbounds = len(config.get("inbounds", []))
+        logger.info(f"Xray config synced: {n_inbounds} inbounds, {n_clients} clients")
+        return {"ok": True, "message": f"Xray config applied: {n_inbounds} inbounds, {n_clients} clients"}
     except Exception as e:
         logger.error(f"Failed to sync Xray config: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to sync Xray config: {str(e)}")
