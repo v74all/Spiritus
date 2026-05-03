@@ -1392,6 +1392,9 @@ async def legacy_server_info(
         "dpi_multi_path": _as_bool(s.get("dpi_multi_path", False)),
         "dpi_protocol_hop": _as_bool(s.get("dpi_protocol_hop", False)),
         "dpi_aggression_level": s.get("dpi_aggression_level", "medium"),
+        # Emergency Relay
+        "emergency_relay_enabled": _as_bool(s.get("emergency_relay_enabled", False)),
+        "emergency_relay_address": s.get("emergency_relay_address", ""),
     }
 
 
