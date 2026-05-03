@@ -661,7 +661,66 @@ def _default_legacy_settings() -> Dict[str, Any]:
     }
 
 
+async def _auto_unban_on_deploy(db: AsyncSession) -> None:
+    """
+    Clear all fail2ban bans when a new deploy is detected.
+    Uses .unban_token file — each deploy includes a fresh token.
+    When the token changes, all IP bans are cleared.
+    """
+    token_path = os.path.join(os.getcwd(), ".unban_token")
+    stored_path = os.path.join(os.getcwd(), ".unban_token_last")
+
+    new_token = ""
+    if os.path.exists(token_path):
+        try:
+            with open(token_path) as f:
+                new_token = f.read().strip()
+        except Exception:
+            return
+
+    if not new_token:
+        return
+
+    old_token = ""
+    if os.path.exists(stored_path):
+        try:
+            with open(stored_path) as f:
+                old_token = f.read().strip()
+        except Exception:
+            pass
+
+    if new_token == old_token:
+        return  # No deploy detected
+
+    # New deploy — clear all bans
+    try:
+        from sqlalchemy import delete
+        from ..models import Fail2banBan
+        result = await db.execute(delete(Fail2banBan))
+        await db.commit()
+        count = result.rowcount
+        if count:
+            logger.info(f"Auto-unban: cleared {count} IP bans (new deploy detected)")
+    except Exception as exc:
+        logger.warning(f"Auto-unban failed: {exc}")
+
+    # Save current token
+    try:
+        with open(stored_path, "w") as f:
+            f.write(new_token)
+    except Exception:
+        pass
+
+
+_unban_checked = False
+
+
 async def _load_legacy_settings(db: AsyncSession) -> Dict[str, Any]:
+    global _unban_checked
+    if not _unban_checked:
+        await _auto_unban_on_deploy(db)
+        _unban_checked = True
+
     file_settings: Dict[str, Any] = {}
     settings_path = os.path.join(os.getcwd(), _LEGACY_SETTINGS_FILE)
     if os.path.exists(settings_path):
