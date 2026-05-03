@@ -17,7 +17,9 @@ import base64
 import json
 import logging
 import os
+import subprocess
 
+from .auth import User, get_current_admin_cookie
 from .config import settings
 from .database import get_async_db, init_db, shutdown_db
 from .models import VpnUser
@@ -292,17 +294,23 @@ async def set_direction(request: Request):
 
 
 def _public_server_ip(request: Request) -> str:
+    # Use explicit VPN_SERVER_IP env var first (most reliable)
+    if settings.vpn_server_ip and settings.vpn_server_ip.strip():
+        return settings.vpn_server_ip.strip()
     configured_host = (settings.host or "").strip()
     if configured_host and configured_host not in {"0.0.0.0", "127.0.0.1", "localhost", "::1"}:
         return settings.host
     forwarded_host = (request.headers.get("x-forwarded-host") or "").split(",", 1)[0].strip()
     request_host = forwarded_host or (request.headers.get("host") or "")
-    if request_host.startswith("[") and "]" in request_host:
-        return request_host[1:request_host.index("]")]
-    if ":" in request_host:
-        host, port = request_host.rsplit(":", 1)
-        if port.isdigit():
-            return host
+    # For non-localhost requests, extract host from Host header
+    if request_host and request_host not in ("localhost", "127.0.0.1", "[::1]"):
+        if request_host.startswith("[") and "]" in request_host:
+            return request_host[1:request_host.index("]")]
+        if ":" in request_host:
+            host, port = request_host.rsplit(":", 1)
+            if port.isdigit():
+                return host
+        return request_host
     return request.url.hostname or ""
 
 
@@ -569,6 +577,159 @@ def _subscription_json_config(
             },
         })
 
+    # VLESS XHTTP REALITY (relay-fronted)
+    if panel_settings.get("vless_xhttp_enabled"):
+        xhttp_reality_sni = panel_settings.get("vless_xhttp_reality_sni") or "digikala.com"
+        xhttp_reality_pk = panel_settings.get("vless_xhttp_reality_public_key") or panel_settings.get("reality_public_key") or ""
+        xhttp_reality_sid = panel_settings.get("vless_xhttp_reality_short_id") or ""
+        outbounds.append({
+            "tag": f"{prefix}-VLESS-XHTTP-{user.name}",
+            "protocol": "vless",
+            "settings": {
+                "vnext": [{
+                    "address": server_ip,
+                    "port": int(panel_settings.get("vless_xhttp_port") or 2053),
+                    "users": [{"id": uid, "encryption": "none", "flow": "xtls-rprx-vision"}],
+                }],
+            },
+            "streamSettings": {
+                "network": "xhttp",
+                "security": "reality",
+                "xhttpSettings": {
+                    "mode": panel_settings.get("vless_xhttp_mode") or "auto",
+                    "path": panel_settings.get("vless_xhttp_path") or "/xhttp",
+                    "host": xhttp_reality_sni,
+                },
+                "realitySettings": {
+                    "serverName": xhttp_reality_sni,
+                    "fingerprint": fp,
+                    "publicKey": xhttp_reality_pk,
+                    "shortId": xhttp_reality_sid,
+                },
+            },
+        })
+
+    # VLESS Vision REALITY (direct, fresh IP)
+    if panel_settings.get("vless_vision_enabled"):
+        vision_reality_sni = panel_settings.get("vless_vision_reality_sni") or "objects.githubusercontent.com"
+        vision_reality_pk = panel_settings.get("vless_vision_reality_public_key") or panel_settings.get("reality_public_key") or ""
+        vision_reality_sid = panel_settings.get("vless_vision_reality_short_id") or ""
+        outbounds.append({
+            "tag": f"{prefix}-VLESS-Vision-{user.name}",
+            "protocol": "vless",
+            "settings": {
+                "vnext": [{
+                    "address": server_ip,
+                    "port": int(panel_settings.get("vless_vision_port") or 2058),
+                    "users": [{"id": uid, "encryption": "none", "flow": "xtls-rprx-vision"}],
+                }],
+            },
+            "streamSettings": {
+                "network": "tcp",
+                "security": "reality",
+                "realitySettings": {
+                    "serverName": vision_reality_sni,
+                    "fingerprint": fp,
+                    "publicKey": vision_reality_pk,
+                    "shortId": vision_reality_sid,
+                },
+            },
+        })
+
+    # VLESS Reverse REALITY (backhaul-tunneled)
+    if panel_settings.get("vless_reverse_enabled"):
+        rev_reality_sni = panel_settings.get("vless_reverse_reality_sni") or "digikala.com"
+        rev_reality_pk = panel_settings.get("reality_public_key") or ""
+        rev_reality_sid = panel_settings.get("vless_reverse_reality_short_id") or ""
+        outbounds.append({
+            "tag": f"{prefix}-VLESS-Reverse-{user.name}",
+            "protocol": "vless",
+            "settings": {
+                "vnext": [{
+                    "address": server_ip,
+                    "port": int(panel_settings.get("vless_reverse_port") or 2059),
+                    "users": [{"id": uid, "encryption": "none"}],
+                }],
+            },
+            "streamSettings": {
+                "network": "tcp",
+                "security": "reality",
+                "realitySettings": {
+                    "serverName": rev_reality_sni,
+                    "fingerprint": fp,
+                    "publicKey": rev_reality_pk,
+                    "shortId": rev_reality_sid,
+                },
+            },
+        })
+
+    # Trojan CDN (WS+TLS over Cloudflare)
+    if panel_settings.get("trojan_cdn_enabled") and panel_settings.get("trojan_cdn_domain"):
+        trojan_cdn_domain = panel_settings.get("trojan_cdn_domain")
+        trojan_cdn_sni = panel_settings.get("trojan_cdn_sni") or trojan_cdn_domain
+        outbounds.append({
+            "tag": f"{prefix}-Trojan-CDN-{user.name}",
+            "protocol": "trojan",
+            "settings": {
+                "servers": [{
+                    "address": trojan_cdn_domain,
+                    "port": int(panel_settings.get("trojan_cdn_port") or 443),
+                    "password": uid,
+                }],
+            },
+            "streamSettings": {
+                "network": "ws",
+                "security": "tls",
+                "wsSettings": {
+                    "path": panel_settings.get("trojan_cdn_ws_path") or "/trojan-ws",
+                    "headers": {"Host": trojan_cdn_domain},
+                },
+                "tlsSettings": {"serverName": trojan_cdn_sni, "fingerprint": fp, "allowInsecure": True},
+            },
+        })
+
+    # Trojan CDN gRPC
+    if panel_settings.get("trojan_cdn_grpc_enabled") and panel_settings.get("trojan_cdn_domain"):
+        trojan_cdn_domain = panel_settings.get("trojan_cdn_domain")
+        trojan_cdn_sni = panel_settings.get("trojan_cdn_sni") or trojan_cdn_domain
+        outbounds.append({
+            "tag": f"{prefix}-Trojan-CDN-gRPC-{user.name}",
+            "protocol": "trojan",
+            "settings": {
+                "servers": [{
+                    "address": trojan_cdn_domain,
+                    "port": int(panel_settings.get("trojan_cdn_grpc_port") or 2060),
+                    "password": uid,
+                }],
+            },
+            "streamSettings": {
+                "network": "grpc",
+                "security": "tls",
+                "grpcSettings": {"serviceName": panel_settings.get("trojan_cdn_grpc_service") or "TrojanService"},
+                "tlsSettings": {"serverName": trojan_cdn_sni, "fingerprint": fp, "allowInsecure": True},
+            },
+        })
+
+    # ShadowSocks 2022
+    if panel_settings.get("ss2022_enabled") and panel_settings.get("ss2022_server_key"):
+        outbounds.append({
+            "tag": f"{prefix}-SS2022-{user.name}",
+            "protocol": "shadowsocks",
+            "settings": {
+                "servers": [{
+                    "address": server_ip,
+                    "port": int(panel_settings.get("ss2022_port") or 2056),
+                    "method": panel_settings.get("ss2022_method") or "2022-blake3-aes-128-gcm",
+                    "password": panel_settings.get("ss2022_server_key") + ":" + uid,
+                }],
+            },
+            "streamSettings": {
+                "network": "tcp",
+                "security": "tls",
+                "tlsSettings": {"serverName": sni, "fingerprint": fp, "allowInsecure": True},
+            },
+        })
+
     if panel_settings.get("fragment_enabled") or panel_settings.get("noise_enabled"):
         for outbound in outbounds:
             stream_settings = outbound.setdefault("streamSettings", {})
@@ -720,6 +881,280 @@ async def subscription_json(
         content=_subscription_json_config(user, _public_server_ip(request), panel_settings),
         headers={"Content-Disposition": f"inline; filename={user.name}.json"},
     )
+
+def _generate_xray_server_config(panel_settings: dict) -> dict:
+    """Generate the server-side Xray config with inbounds for all enabled protocols."""
+    inbounds = []
+    sni = panel_settings.get("vmess_sni") or "www.aparat.com"
+    fp = panel_settings.get("fingerprint") or "chrome"
+    reality_pk = panel_settings.get("reality_private_key") or settings.reality_private_key
+    reality_pub = panel_settings.get("reality_public_key") or settings.reality_public_key
+    reality_sid = panel_settings.get("reality_short_id") or ""
+
+    # VMess WS+TLS (always-on)
+    inbounds.append({
+        "tag": "in-vmess-ws",
+        "port": int(panel_settings.get("vmess_port") or 443),
+        "listen": "0.0.0.0",
+        "protocol": "vmess",
+        "settings": {"clients": []},
+        "streamSettings": {
+            "network": "ws",
+            "security": "tls",
+            "wsSettings": {"path": panel_settings.get("vmess_ws_path") or "/api/v1/stream"},
+            "tlsSettings": {
+                "serverName": sni,
+                "certificates": [{"certificateFile": "/etc/ssl/certs/fullchain.pem",
+                                   "keyFile": "/etc/ssl/private/privkey.pem"}],
+                "minVersion": "1.2",
+            },
+        },
+        "sniffing": {"enabled": True, "destOverride": ["http", "tls", "quic"]},
+    })
+
+    # VLESS REALITY (Vision)
+    if panel_settings.get("reality_public_key"):
+        inbounds.append({
+            "tag": "in-vless-reality",
+            "port": int(panel_settings.get("vless_port") or 2053),
+            "listen": "0.0.0.0",
+            "protocol": "vless",
+            "settings": {"clients": [], "decryption": "none"},
+            "streamSettings": {
+                "network": "tcp",
+                "security": "reality",
+                "realitySettings": {
+                    "serverName": panel_settings.get("reality_sni") or "chat.deepseek.com",
+                    "dest": panel_settings.get("reality_dest") or "chat.deepseek.com:443",
+                    "privateKey": reality_pk,
+                    "shortIds": [reality_sid] if reality_sid else [""],
+                    "fingerprint": fp,
+                },
+            },
+            "sniffing": {"enabled": True, "destOverride": ["http", "tls"]},
+        })
+
+    # VLESS XHTTP REALITY
+    if panel_settings.get("vless_xhttp_enabled"):
+        xhttp_sni = panel_settings.get("vless_xhttp_reality_sni") or "digikala.com"
+        xhttp_dest = panel_settings.get("vless_xhttp_reality_dest") or "digikala.com:443"
+        xhttp_pk = panel_settings.get("vless_xhttp_reality_private_key") or reality_pk
+        xhttp_sid = panel_settings.get("vless_xhttp_reality_short_id") or ""
+        inbounds.append({
+            "tag": "in-vless-xhttp",
+            "port": int(panel_settings.get("vless_xhttp_port") or 2053),
+            "listen": "0.0.0.0",
+            "protocol": "vless",
+            "settings": {"clients": [], "decryption": "none"},
+            "streamSettings": {
+                "network": "xhttp",
+                "security": "reality",
+                "xhttpSettings": {
+                    "mode": panel_settings.get("vless_xhttp_mode") or "auto",
+                    "path": panel_settings.get("vless_xhttp_path") or "/xhttp",
+                    "host": xhttp_sni,
+                },
+                "realitySettings": {
+                    "serverName": xhttp_sni,
+                    "dest": xhttp_dest,
+                    "privateKey": xhttp_pk,
+                    "shortIds": [xhttp_sid] if xhttp_sid else [""],
+                    "fingerprint": fp,
+                },
+            },
+            "sniffing": {"enabled": True, "destOverride": ["http", "tls"]},
+        })
+
+    # VLESS Vision REALITY (fresh IP)
+    if panel_settings.get("vless_vision_enabled"):
+        vision_sni = panel_settings.get("vless_vision_reality_sni") or "objects.githubusercontent.com"
+        vision_dest = panel_settings.get("vless_vision_reality_dest") or "objects.githubusercontent.com:443"
+        vision_pk = panel_settings.get("vless_vision_reality_private_key") or reality_pk
+        vision_sid = panel_settings.get("vless_vision_reality_short_id") or ""
+        inbounds.append({
+            "tag": "in-vless-vision",
+            "port": int(panel_settings.get("vless_vision_port") or 2058),
+            "listen": "0.0.0.0",
+            "protocol": "vless",
+            "settings": {"clients": [], "decryption": "none"},
+            "streamSettings": {
+                "network": "tcp",
+                "security": "reality",
+                "realitySettings": {
+                    "serverName": vision_sni,
+                    "dest": vision_dest,
+                    "privateKey": vision_pk,
+                    "shortIds": [vision_sid] if vision_sid else [""],
+                    "fingerprint": fp,
+                },
+            },
+            "sniffing": {"enabled": True, "destOverride": ["http", "tls"]},
+        })
+
+    # Trojan
+    if panel_settings.get("trojan_enabled"):
+        inbounds.append({
+            "tag": "in-trojan",
+            "port": int(panel_settings.get("trojan_port") or 2083),
+            "listen": "0.0.0.0",
+            "protocol": "trojan",
+            "settings": {"clients": []},
+            "streamSettings": {
+                "network": "tcp",
+                "security": "tls",
+                "tlsSettings": {
+                    "serverName": sni,
+                    "certificates": [{"certificateFile": "/etc/ssl/certs/fullchain.pem",
+                                       "keyFile": "/etc/ssl/private/privkey.pem"}],
+                },
+            },
+            "sniffing": {"enabled": True, "destOverride": ["http", "tls"]},
+        })
+
+    # gRPC
+    if panel_settings.get("grpc_enabled"):
+        inbounds.append({
+            "tag": "in-grpc",
+            "port": int(panel_settings.get("grpc_port") or 2054),
+            "listen": "0.0.0.0",
+            "protocol": "vmess",
+            "settings": {"clients": []},
+            "streamSettings": {
+                "network": "grpc",
+                "security": "tls",
+                "grpcSettings": {"serviceName": panel_settings.get("grpc_service_name") or "GunService"},
+                "tlsSettings": {
+                    "serverName": sni,
+                    "certificates": [{"certificateFile": "/etc/ssl/certs/fullchain.pem",
+                                       "keyFile": "/etc/ssl/private/privkey.pem"}],
+                },
+            },
+            "sniffing": {"enabled": True, "destOverride": ["http", "tls"]},
+        })
+
+    # HTTPUpgrade
+    if panel_settings.get("httpupgrade_enabled"):
+        inbounds.append({
+            "tag": "in-httpupgrade",
+            "port": int(panel_settings.get("httpupgrade_port") or 2055),
+            "listen": "0.0.0.0",
+            "protocol": "vmess",
+            "settings": {"clients": []},
+            "streamSettings": {
+                "network": "httpupgrade",
+                "security": "tls",
+                "httpupgradeSettings": {"path": panel_settings.get("httpupgrade_path") or "/httpupgrade"},
+                "tlsSettings": {
+                    "serverName": sni,
+                    "certificates": [{"certificateFile": "/etc/ssl/certs/fullchain.pem",
+                                       "keyFile": "/etc/ssl/private/privkey.pem"}],
+                },
+            },
+            "sniffing": {"enabled": True, "destOverride": ["http", "tls"]},
+        })
+
+    # VLESS WS+TLS
+    if panel_settings.get("vless_ws_enabled"):
+        inbounds.append({
+            "tag": "in-vless-ws",
+            "port": int(panel_settings.get("vless_ws_port") or 2057),
+            "listen": "0.0.0.0",
+            "protocol": "vless",
+            "settings": {"clients": [], "decryption": "none"},
+            "streamSettings": {
+                "network": "ws",
+                "security": "tls",
+                "wsSettings": {"path": panel_settings.get("vless_ws_path") or "/vless-ws"},
+                "tlsSettings": {
+                    "serverName": sni,
+                    "certificates": [{"certificateFile": "/etc/ssl/certs/fullchain.pem",
+                                       "keyFile": "/etc/ssl/private/privkey.pem"}],
+                },
+            },
+            "sniffing": {"enabled": True, "destOverride": ["http", "tls"]},
+        })
+
+    # ShadowSocks 2022
+    if panel_settings.get("ss2022_enabled") and panel_settings.get("ss2022_server_key"):
+        inbounds.append({
+            "tag": "in-ss2022",
+            "port": int(panel_settings.get("ss2022_port") or 2056),
+            "listen": "0.0.0.0",
+            "protocol": "shadowsocks",
+            "settings": {
+                "method": panel_settings.get("ss2022_method") or "2022-blake3-aes-128-gcm",
+                "password": panel_settings.get("ss2022_server_key"),
+            },
+            "streamSettings": {
+                "network": "tcp",
+                "security": "tls",
+                "tlsSettings": {
+                    "serverName": sni,
+                    "certificates": [{"certificateFile": "/etc/ssl/certs/fullchain.pem",
+                                       "keyFile": "/etc/ssl/private/privkey.pem"}],
+                },
+            },
+            "sniffing": {"enabled": True, "destOverride": ["http", "tls"]},
+        })
+
+    # CDN WS+TLS
+    if panel_settings.get("cdn_enabled") and panel_settings.get("cdn_domain"):
+        cdn_domain = panel_settings.get("cdn_domain")
+        inbounds.append({
+            "tag": "in-cdn-ws",
+            "port": int(panel_settings.get("cdn_port") or 2082),
+            "listen": "0.0.0.0",
+            "protocol": "vmess",
+            "settings": {"clients": []},
+            "streamSettings": {
+                "network": "ws",
+                "security": "tls",
+                "wsSettings": {"path": panel_settings.get("cdn_ws_path") or "/cdn-ws"},
+                "tlsSettings": {
+                    "serverName": cdn_domain,
+                    "certificates": [{"certificateFile": "/etc/ssl/certs/fullchain.pem",
+                                       "keyFile": "/etc/ssl/private/privkey.pem"}],
+                },
+            },
+            "sniffing": {"enabled": True, "destOverride": ["http", "tls"]},
+        })
+
+    return {
+        "log": {"loglevel": "warning"},
+        "inbounds": inbounds,
+        "outbounds": [
+            {"tag": "direct", "protocol": "freedom"},
+            {"tag": "block", "protocol": "blackhole"},
+        ],
+        "routing": {"domainStrategy": "AsIs", "rules": []},
+    }
+
+
+@app.post("/api/xray/sync")
+async def sync_xray_config(
+    request: Request,
+    admin: User = Depends(get_current_admin_cookie),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """Generate and apply the Xray server config from current settings."""
+    from .api.compat import _load_legacy_settings
+
+    panel_settings = await _load_legacy_settings(db)
+    config = _generate_xray_server_config(panel_settings)
+
+    # Write config to disk
+    config_path = settings.xray_config_path
+    try:
+        with open(config_path, "w") as f:
+            json.dump(config, f, indent=2)
+        # Restart Xray to apply
+        subprocess.run(["systemctl", "restart", "xray"], capture_output=True, timeout=10)
+        logger.info(f"Xray config synced to {config_path} ({len(config.get('inbounds', []))} inbounds)")
+        return {"ok": True, "message": f"Xray config applied with {len(config.get('inbounds', []))} inbounds"}
+    except Exception as e:
+        logger.error(f"Failed to sync Xray config: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to sync Xray config: {str(e)}")
+
 
 if __name__ == "__main__":
     import uvicorn

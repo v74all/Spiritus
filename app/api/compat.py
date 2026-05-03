@@ -34,6 +34,7 @@ from ..auth import (
     User,
     create_access_token,
     get_current_admin_cookie,
+    get_optional_user_cookie,
     get_password_hash,
     verify_password,
 )
@@ -1192,7 +1193,7 @@ async def legacy_live(admin: User = Depends(get_current_admin_cookie)):
 
 @router.get("/server-info")
 async def legacy_server_info(
-    admin: User = Depends(get_current_admin_cookie),
+    admin: Optional[User] = Depends(get_optional_user_cookie),
     db: AsyncSession = Depends(get_async_db),
 ):
     s = await _load_legacy_settings(db)
@@ -1553,6 +1554,279 @@ async def legacy_get_settings(
     return merged
 
 
+def _generate_xray_server_config() -> dict:
+    """Generate the server-side Xray config with inbounds for all enabled protocols."""
+    s = _settings_state
+    inbounds = []
+    sni = s.get("vmess_sni") or "www.aparat.com"
+    fp = s.get("fingerprint") or "chrome"
+    reality_pk = s.get("reality_private_key") or settings.reality_private_key
+    reality_pub = s.get("reality_public_key") or settings.reality_public_key
+    reality_sid = s.get("reality_short_id") or ""
+
+    cert_file = "/etc/ssl/certs/fullchain.pem"
+    key_file = "/etc/ssl/private/privkey.pem"
+
+    # VMess WS+TLS (always-on)
+    inbounds.append({
+        "tag": "in-vmess-ws",
+        "port": int(s.get("vmess_port") or 443),
+        "listen": "0.0.0.0",
+        "protocol": "vmess",
+        "settings": {"clients": []},
+        "streamSettings": {
+            "network": "ws",
+            "security": "tls",
+            "wsSettings": {"path": s.get("vmess_ws_path") or "/api/v1/stream"},
+            "tlsSettings": {
+                "serverName": sni,
+                "certificates": [{"certificateFile": cert_file, "keyFile": key_file}],
+                "minVersion": "1.2",
+            },
+        },
+        "sniffing": {"enabled": True, "destOverride": ["http", "tls", "quic"]},
+    })
+
+    # VLESS REALITY (Vision)
+    if s.get("reality_public_key"):
+        inbounds.append({
+            "tag": "in-vless-reality",
+            "port": int(s.get("vless_port") or 2053),
+            "listen": "0.0.0.0",
+            "protocol": "vless",
+            "settings": {"clients": [], "decryption": "none"},
+            "streamSettings": {
+                "network": "tcp",
+                "security": "reality",
+                "realitySettings": {
+                    "serverName": s.get("reality_sni") or "chat.deepseek.com",
+                    "dest": s.get("reality_dest") or "chat.deepseek.com:443",
+                    "privateKey": reality_pk,
+                    "shortIds": [reality_sid] if reality_sid else [""],
+                    "fingerprint": fp,
+                },
+            },
+            "sniffing": {"enabled": True, "destOverride": ["http", "tls"]},
+        })
+
+    # VLESS XHTTP REALITY
+    if _as_bool(s.get("vless_xhttp_enabled")):
+        xhttp_sni = s.get("vless_xhttp_reality_sni") or "digikala.com"
+        xhttp_dest = s.get("vless_xhttp_reality_dest") or "digikala.com:443"
+        xhttp_pk = s.get("vless_xhttp_reality_private_key") or reality_pk
+        xhttp_sid = s.get("vless_xhttp_reality_short_id") or ""
+        # Use distinct port from standard VLESS Reality
+        xhttp_port = int(s.get("vless_xhttp_port") or 8449)
+        inbounds.append({
+            "tag": "in-vless-xhttp",
+            "port": xhttp_port,
+            "listen": "0.0.0.0",
+            "protocol": "vless",
+            "settings": {"clients": [], "decryption": "none"},
+            "streamSettings": {
+                "network": "xhttp",
+                "security": "reality",
+                "xhttpSettings": {
+                    "mode": s.get("vless_xhttp_mode") or "auto",
+                    "path": s.get("vless_xhttp_path") or "/xhttp",
+                    "host": xhttp_sni,
+                },
+                "realitySettings": {
+                    "serverName": xhttp_sni,
+                    "dest": xhttp_dest,
+                    "privateKey": xhttp_pk,
+                    "shortIds": [xhttp_sid] if xhttp_sid else [""],
+                    "fingerprint": fp,
+                },
+            },
+            "sniffing": {"enabled": True, "destOverride": ["http", "tls"]},
+        })
+
+    # VLESS Vision REALITY
+    if _as_bool(s.get("vless_vision_enabled")):
+        vision_sni = s.get("vless_vision_reality_sni") or "objects.githubusercontent.com"
+        vision_dest = s.get("vless_vision_reality_dest") or "objects.githubusercontent.com:443"
+        inbounds.append({
+            "tag": "in-vless-vision",
+            "port": int(s.get("vless_vision_port") or 2058),
+            "listen": "0.0.0.0",
+            "protocol": "vless",
+            "settings": {"clients": [], "decryption": "none"},
+            "streamSettings": {
+                "network": "tcp",
+                "security": "reality",
+                "realitySettings": {
+                    "serverName": vision_sni,
+                    "dest": vision_dest,
+                    "privateKey": reality_pk,
+                    "shortIds": [s.get("vless_vision_reality_short_id") or ""],
+                    "fingerprint": fp,
+                },
+            },
+            "sniffing": {"enabled": True, "destOverride": ["http", "tls"]},
+        })
+
+    # Trojan TCP+TLS
+    if _as_bool(s.get("trojan_enabled")):
+        inbounds.append({
+            "tag": "in-trojan",
+            "port": int(s.get("trojan_port") or 2083),
+            "listen": "0.0.0.0",
+            "protocol": "trojan",
+            "settings": {"clients": []},
+            "streamSettings": {
+                "network": "tcp",
+                "security": "tls",
+                "tlsSettings": {
+                    "serverName": sni,
+                    "certificates": [{"certificateFile": cert_file, "keyFile": key_file}],
+                },
+            },
+            "sniffing": {"enabled": True, "destOverride": ["http", "tls"]},
+        })
+
+    # gRPC
+    if _as_bool(s.get("grpc_enabled")):
+        inbounds.append({
+            "tag": "in-grpc",
+            "port": int(s.get("grpc_port") or 2054),
+            "listen": "0.0.0.0",
+            "protocol": "vmess",
+            "settings": {"clients": []},
+            "streamSettings": {
+                "network": "grpc",
+                "security": "tls",
+                "grpcSettings": {"serviceName": s.get("grpc_service_name") or "GunService"},
+                "tlsSettings": {
+                    "serverName": sni,
+                    "certificates": [{"certificateFile": cert_file, "keyFile": key_file}],
+                },
+            },
+            "sniffing": {"enabled": True, "destOverride": ["http", "tls"]},
+        })
+
+    # HTTPUpgrade
+    if _as_bool(s.get("httpupgrade_enabled")):
+        inbounds.append({
+            "tag": "in-httpupgrade",
+            "port": int(s.get("httpupgrade_port") or 2055),
+            "listen": "0.0.0.0",
+            "protocol": "vmess",
+            "settings": {"clients": []},
+            "streamSettings": {
+                "network": "httpupgrade",
+                "security": "tls",
+                "httpupgradeSettings": {"path": s.get("httpupgrade_path") or "/httpupgrade"},
+                "tlsSettings": {
+                    "serverName": sni,
+                    "certificates": [{"certificateFile": cert_file, "keyFile": key_file}],
+                },
+            },
+            "sniffing": {"enabled": True, "destOverride": ["http", "tls"]},
+        })
+
+    # VLESS WS+TLS
+    if _as_bool(s.get("vless_ws_enabled")):
+        inbounds.append({
+            "tag": "in-vless-ws",
+            "port": int(s.get("vless_ws_port") or 2057),
+            "listen": "0.0.0.0",
+            "protocol": "vless",
+            "settings": {"clients": [], "decryption": "none"},
+            "streamSettings": {
+                "network": "ws",
+                "security": "tls",
+                "wsSettings": {"path": s.get("vless_ws_path") or "/vless-ws"},
+                "tlsSettings": {
+                    "serverName": sni,
+                    "certificates": [{"certificateFile": cert_file, "keyFile": key_file}],
+                },
+            },
+            "sniffing": {"enabled": True, "destOverride": ["http", "tls"]},
+        })
+
+    # ShadowSocks 2022
+    if _as_bool(s.get("ss2022_enabled")) and s.get("ss2022_server_key"):
+        inbounds.append({
+            "tag": "in-ss2022",
+            "port": int(s.get("ss2022_port") or 2056),
+            "listen": "0.0.0.0",
+            "protocol": "shadowsocks",
+            "settings": {
+                "method": s.get("ss2022_method") or "2022-blake3-aes-128-gcm",
+                "password": s.get("ss2022_server_key"),
+            },
+            "streamSettings": {
+                "network": "tcp",
+                "security": "tls",
+                "tlsSettings": {
+                    "serverName": sni,
+                    "certificates": [{"certificateFile": cert_file, "keyFile": key_file}],
+                },
+            },
+            "sniffing": {"enabled": True, "destOverride": ["http", "tls"]},
+        })
+
+    # CDN WS+TLS
+    if _as_bool(s.get("cdn_enabled")) and s.get("cdn_domain"):
+        cdn_domain = s.get("cdn_domain")
+        inbounds.append({
+            "tag": "in-cdn-ws",
+            "port": int(s.get("cdn_port") or 2082),
+            "listen": "0.0.0.0",
+            "protocol": "vmess",
+            "settings": {"clients": []},
+            "streamSettings": {
+                "network": "ws",
+                "security": "tls",
+                "wsSettings": {"path": s.get("cdn_ws_path") or "/cdn-ws"},
+                "tlsSettings": {
+                    "serverName": cdn_domain,
+                    "certificates": [{"certificateFile": cert_file, "keyFile": key_file}],
+                },
+            },
+            "sniffing": {"enabled": True, "destOverride": ["http", "tls"]},
+        })
+
+    return {
+        "log": {"loglevel": "warning"},
+        "inbounds": inbounds,
+        "outbounds": [
+            {"tag": "direct", "protocol": "freedom"},
+            {"tag": "block", "protocol": "blackhole"},
+        ],
+        "routing": {"domainStrategy": "AsIs", "rules": []},
+    }
+
+
+def _schedule_xray_sync():
+    """Schedule a background Xray config sync after settings change."""
+    try:
+        import threading
+        t = threading.Thread(target=_sync_xray_config_now, daemon=True)
+        t.start()
+    except Exception:
+        pass
+
+
+def _sync_xray_config_now():
+    """Generate and write the Xray server config, then restart Xray."""
+    try:
+        import time
+        time.sleep(0.5)  # Small delay to let settings settle
+
+        config = _generate_xray_server_config()
+        config_path = settings.xray_config_path
+
+        with open(config_path, "w") as f:
+            json.dump(config, f, indent=2)
+
+        subprocess.run(["systemctl", "restart", "xray"], capture_output=True, timeout=10)
+        logger.info(f"Xray config auto-synced ({len(config.get('inbounds', []))} inbounds)")
+    except Exception as e:
+        logger.warning(f"Background Xray sync failed: {e}")
+
+
 @router.post("/settings")
 async def legacy_save_settings(
     data: Dict[str, Any],
@@ -1560,6 +1834,8 @@ async def legacy_save_settings(
     db: AsyncSession = Depends(get_async_db),
 ):
     await _save_legacy_settings(db, data)
+    # Auto-sync Xray config in background after settings change
+    _schedule_xray_sync()
     return {"ok": True, "rebuild": False}
 
 

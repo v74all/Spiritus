@@ -163,6 +163,24 @@ async def get_current_admin_cookie(
     return current_user
 
 
+async def get_optional_user_cookie(
+    request: Request,
+    db: AsyncSession = Depends(get_async_db),
+) -> Optional[User]:
+    """Get the current user from cookie/header, or None if not authenticated."""
+    try:
+        token = request.cookies.get("access_token")
+        if not token:
+            auth = request.headers.get("Authorization", "")
+            if auth.lower().startswith("bearer "):
+                token = auth.split(" ", 1)[1].strip()
+        if not token:
+            return None
+        return await _decode_token_to_user(token, db)
+    except Exception:
+        return None
+
+
 async def get_current_admin(
     current_user: User = Depends(get_current_user)
 ) -> User:

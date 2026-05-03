@@ -48,6 +48,9 @@ class Settings(BaseSettings):
     lockout_seconds: int = 1800
     
     # Xray
+    vpn_server_ip: str = Field("", env="VPN_SERVER_IP")
+    vpn_server_port: int = Field(443, env="VPN_SERVER_PORT")
+    vpn_sni_host: str = Field("www.google.com", env="VPN_SNI_HOST")
     xray_config_path: str = "/usr/local/etc/xray/config.json"
     xray_bin_path: str = "/usr/local/bin/xray"
     

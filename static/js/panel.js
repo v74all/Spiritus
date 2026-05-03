@@ -1279,6 +1279,8 @@ async function forceSync() {
     toast('Sync complete' + (d.disabled > 0 ? ' — '+d.disabled+' user(s) disabled' : ''));
     fetchUsers();
   }
+  // Also sync Xray server config
+  try { await fetch(API+'/xray/sync', {method:'POST'}); } catch(e) {}
 }
 
 /* ── Activity Monitor ── */
