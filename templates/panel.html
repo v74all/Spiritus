@@ -1117,6 +1117,40 @@
       </div>
     </div>
 
+    <!-- ═══ Emergency Relay / رله اضطراری ═══ -->
+    <div class="settings-section" style="border: 2px solid var(--red);border-radius:var(--radius-lg);padding:20px;margin-bottom:20px;background:linear-gradient(135deg,rgba(255,180,171,.06),transparent)">
+      <div class="sec-header" style="margin-bottom:14px">
+        <span style="font-size:20px;margin-right:8px">🆘</span>
+        <div>
+          <div class="settings-title" style="color:var(--red)">Emergency Relay / رله اضطراری</div>
+          <div class="settings-desc" style="color:var(--red);opacity:0.8">Bypass IP blocking by routing through a clean relay server / عبور از مسدودی IP با هدایت از طریق یک سرور رله تمیز</div>
+        </div>
+      </div>
+      <div class="help-en" style="background:var(--red-bg);padding:10px 14px;border-radius:8px;margin-bottom:14px;font-size:12px;color:var(--red);border-inline-start:3px solid var(--red)">
+        <b>How it works:</b> When enabled, ALL configs point to your relay server instead of the main VPN server.
+        The relay blindly forwards TCP traffic to <b>91.107.131.44</b>.<br>
+        DPI sees only a connection to your clean relay IP — the real VPN server stays hidden.<br>
+        <b>Deploy the relay script on any VPS:</b> <code style="background:var(--bg0);padding:2px 6px;border-radius:4px">python3 scripts/tcp-relay.py --target 91.107.131.44</code>
+      </div>
+      <div class="help-fa" style="background:var(--red-bg);padding:10px 14px;border-radius:8px;margin-bottom:14px;font-size:12px;color:var(--red);border-inline-start:3px solid var(--red)">
+        <b>نحوه کار:</b> وقتی فعال باشه، همه کانفیگ‌ها به جای سرور اصلی به سرور رله متصل میشن.
+        رله TCP رو کور به <b>91.107.131.44</b> فوروارد میکنه.<br>
+        DPI فقط یه اتصال به IP تمیز رله میبینه — سرور واقعی مخفی میمونه.<br>
+        <b>اسکریپت رله رو روی هر VPS اجرا کن:</b> <code style="background:var(--bg0);padding:2px 6px;border-radius:4px">python3 scripts/tcp-relay.py --target 91.107.131.44</code>
+      </div>
+
+      <div class="settings-row">
+        <div><div class="settings-label" style="color:var(--red)">Enable Emergency Relay / فعال‌سازی رله اضطراری</div>
+          <div class="settings-desc">Route ALL traffic through emergency relay / هدایت تمام ترافیک از طریق رله اضطراری</div></div>
+        <label class="toggle"><input type="checkbox" id="set-emergency-relay"><span class="toggle-slider" style="--accent:var(--red);--accent2:#ff8a80"></span></label>
+      </div>
+      <div class="settings-row">
+        <div><div class="settings-label">Relay Server Address / آدرس سرور رله</div>
+          <div class="settings-desc">IP or domain of your relay server (must run tcp-relay.py) / IP یا دامنه سرور رله (باید tcp-relay.py اجرا شده باشه)</div></div>
+        <input type="text" id="set-emergency-relay-address" placeholder="e.g. 5.42.106.42 or relay.example.com" style="width:280px">
+      </div>
+    </div>
+
     <!-- ═══ Tunneling Techniques ═══ -->
     <div class="settings-section">
       <div class="sec-header">

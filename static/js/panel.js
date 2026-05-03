@@ -307,6 +307,15 @@ function updateProtoBar() {
       ftEl.textContent = 'Front: ' + fronts.join('+');
     }
   }
+  // Emergency Relay
+  const emEl = document.getElementById('pb-dpi-emergency');
+  if (emEl) {
+    const emActive = serverInfo.emergency_relay_enabled && serverInfo.emergency_relay_address;
+    emEl.style.display = emActive ? '' : 'none';
+    if (emActive) {
+      emEl.textContent = 'EMERGENCY RELAY: ' + serverInfo.emergency_relay_address;
+    }
+  }
   const killSwitchOn = asBool(serverInfo.kill_switch);
   ks.textContent = 'Kill Switch: ' + (killSwitchOn ? 'ON' : 'OFF');
   ks.className = 'proto-badge proto-ks' + (killSwitchOn ? '' : ' off');
@@ -1231,6 +1240,9 @@ function renderConfigTab() {
   if (serverInfo.dpi_cdn_front_enabled) {
     info += `\n<span class="ck" style="color:var(--orange)">CDN Front</span><span class="cv" style="color:var(--orange)">Active — Cloudflare/CDN fronting</span>`;
   }
+  if (serverInfo.emergency_relay_enabled && serverInfo.emergency_relay_address) {
+    info += `\n<span class="ck" style="color:var(--red)">EMERGENCY RELAY</span><span class="cv" style="color:var(--red)">ACTIVE → ${serverInfo.emergency_relay_address}</span>`;
+  }
 
   document.getElementById('config-link-label').textContent = label;
   document.getElementById('config-vmess').value = link;
@@ -1806,6 +1818,8 @@ async function loadSettings() {
     document.getElementById('set-dpi-protocol-hop').checked = s.dpi_protocol_hop || false;
     var aggEl = document.getElementById('set-dpi-aggression-level');
     if (aggEl) aggEl.value = s.dpi_aggression_level || 'medium';
+    document.getElementById('set-emergency-relay').checked = s.emergency_relay_enabled || false;
+    document.getElementById('set-emergency-relay-address').value = s.emergency_relay_address || '';
     loadBackups();
     updateSettingsStatus();
     _settingsLoaded = true;
@@ -1853,7 +1867,7 @@ function resetSettingsToDefault() {
     'set-tg-disabled': true, 'set-tg-expired': true, 'set-tg-killswitch': true, 'set-tg-traffic': true, 'set-tg-created': false, 'set-tg-deleted': false,
     'set-dpi-tcp-fragment': false, 'set-dpi-tls-fragment': false, 'set-dpi-ip-fragment': false, 'set-dpi-tcp-keepalive': false,
     'set-dpi-dns-tunnel': false, 'set-dpi-icmp-tunnel': false, 'set-dpi-domain-front': false, 'set-dpi-cdn-front-enabled': false,
-    'set-dpi-http-host-spoof': false, 'set-dpi-ws-host-front': false, 'set-dpi-cdn-host-front': false, 'set-dpi-bug-host': false,
+    'set-emergency-relay': false, 'set-dpi-http-host-spoof': false, 'set-dpi-ws-host-front': false, 'set-dpi-cdn-host-front': false, 'set-dpi-bug-host': false,
     'set-dpi-packet-reorder': false, 'set-dpi-dynamic-port': false, 'set-dpi-fake-http': false,
     'set-dpi-traffic-shape': false, 'set-dpi-multi-path': false, 'set-dpi-protocol-hop': false,
     'set-dpi-aggression-level': 'medium',
@@ -2058,6 +2072,9 @@ async function saveSettings() {
     dpi_multi_path: document.getElementById('set-dpi-multi-path')?.checked || false,
     dpi_protocol_hop: document.getElementById('set-dpi-protocol-hop')?.checked || false,
     dpi_aggression_level: document.getElementById('set-dpi-aggression-level')?.value || 'medium',
+    // Emergency Relay
+    emergency_relay_enabled: document.getElementById('set-emergency-relay').checked,
+    emergency_relay_address: document.getElementById('set-emergency-relay-address').value.trim(),
   };
   const r = await fetch(API+'/settings', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data)});
   const d = await r.json();

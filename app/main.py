@@ -429,6 +429,11 @@ def _subscription_json_config(
     fp = panel_settings.get("fingerprint") or "chrome"
     uid = user.uuid
 
+    # ── Emergency Relay: override server address for ALL outbounds ──
+    _actual_server = server_ip
+    if panel_settings.get("emergency_relay_enabled") and panel_settings.get("emergency_relay_address"):
+        server_ip = panel_settings.get("emergency_relay_address", "").strip() or server_ip
+
     outbounds.append({
         "tag": f"{prefix}-VMess-{user.name}",
         "protocol": "vmess",

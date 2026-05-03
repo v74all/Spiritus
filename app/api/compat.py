@@ -232,6 +232,12 @@ def _build_share_links(u: VpnUser, server_ip: Optional[str] = None) -> Dict[str,
     server_ip = server_ip or _settings_state.get("server_ip") or settings.host
     if _is_placeholder_host(server_ip):
         server_ip = ""
+    # ── Emergency Relay: override ALL addresses when activated ──
+    _emergency_relay = ""
+    if _settings_state.get("emergency_relay_enabled") and _settings_state.get("emergency_relay_address"):
+        _emergency_relay = _settings_state.get("emergency_relay_address", "").strip()
+    if _emergency_relay:
+        server_ip = _emergency_relay
     sni_host = _settings_state.get("vmess_sni") or "www.aparat.com"
     ws_path = _settings_state.get("vmess_ws_path") or "/api/v1/stream"
 
@@ -622,6 +628,9 @@ def _default_legacy_settings() -> Dict[str, Any]:
         "mux_concurrency": 8,
         "fingerprint": "chrome",
         "kill_switch_enabled": False,
+        # Emergency Relay (OFF by default — activate when server IP is blocked)
+        "emergency_relay_enabled": False,
+        "emergency_relay_address": "",
         # Host Header Spoofing (all OFF by default)
         "dpi_http_host_spoof_enabled": False,
         "dpi_http_host_spoof_domain": "chat.deepseek.com",
