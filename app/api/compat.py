@@ -109,6 +109,16 @@ _BOOLEAN_SETTING_KEYS = {
     "dpi_domain_front",
     "dpi_cdn_front_enabled",
     "noise_enabled",
+    "dpi_http_host_spoof_enabled",
+    "dpi_ws_host_front_enabled",
+    "dpi_cdn_host_front_enabled",
+    "dpi_bug_host_enabled",
+    "dpi_packet_reorder",
+    "dpi_dynamic_port",
+    "dpi_fake_http",
+    "dpi_traffic_shape",
+    "dpi_multi_path",
+    "dpi_protocol_hop",
     *_PROTOCOL_ENABLE_KEYS,
 }
 
@@ -549,6 +559,15 @@ def _default_legacy_settings() -> Dict[str, Any]:
         "mux_concurrency": 8,
         "fingerprint": "chrome",
         "kill_switch_enabled": False,
+        # Host Header Spoofing (all OFF by default)
+        "dpi_http_host_spoof_enabled": False,
+        "dpi_http_host_spoof_domain": "chat.deepseek.com",
+        "dpi_ws_host_front_enabled": False,
+        "dpi_ws_host_front_domain": "rubika.ir",
+        "dpi_cdn_host_front_enabled": False,
+        "dpi_cdn_host_front_domain": "web.splus.ir",
+        "dpi_bug_host_enabled": False,
+        "dpi_bug_host_domain": "chat.deepseek.com",
         "cdn_enabled": False,
         "cdn_domain": "",
         "cdn_ws_path": "/cdn-ws",
@@ -1280,6 +1299,30 @@ async def legacy_server_info(
         "mux_enabled": _as_bool(s.get("mux_enabled", False)),
         "kill_switch": _as_bool(s.get("kill_switch_enabled", False)),
         "telegram_enabled": _as_bool(s.get("telegram_enabled", False)),
+        # Host Header Spoofing
+        "dpi_http_host_spoof_enabled": _as_bool(s.get("dpi_http_host_spoof_enabled", False)),
+        "dpi_http_host_spoof_domain": s.get("dpi_http_host_spoof_domain", "chat.deepseek.com"),
+        "dpi_ws_host_front_enabled": _as_bool(s.get("dpi_ws_host_front_enabled", False)),
+        "dpi_ws_host_front_domain": s.get("dpi_ws_host_front_domain", "rubika.ir"),
+        "dpi_cdn_host_front_enabled": _as_bool(s.get("dpi_cdn_host_front_enabled", False)),
+        "dpi_cdn_host_front_domain": s.get("dpi_cdn_host_front_domain", "web.splus.ir"),
+        "dpi_bug_host_enabled": _as_bool(s.get("dpi_bug_host_enabled", False)),
+        "dpi_bug_host_domain": s.get("dpi_bug_host_domain", "chat.deepseek.com"),
+        # Tunneling
+        "dpi_dns_tunnel": _as_bool(s.get("dpi_dns_tunnel", False)),
+        "dpi_icmp_tunnel": _as_bool(s.get("dpi_icmp_tunnel", False)),
+        # Domain / CDN Fronting
+        "dpi_domain_front": _as_bool(s.get("dpi_domain_front", False)),
+        "dpi_cdn_front_enabled": _as_bool(s.get("dpi_cdn_front_enabled", False)),
+        "dpi_cdn_front": s.get("dpi_cdn_front", ""),
+        # Advanced Network Resilience
+        "dpi_packet_reorder": _as_bool(s.get("dpi_packet_reorder", False)),
+        "dpi_dynamic_port": _as_bool(s.get("dpi_dynamic_port", False)),
+        "dpi_fake_http": _as_bool(s.get("dpi_fake_http", False)),
+        "dpi_traffic_shape": _as_bool(s.get("dpi_traffic_shape", False)),
+        "dpi_multi_path": _as_bool(s.get("dpi_multi_path", False)),
+        "dpi_protocol_hop": _as_bool(s.get("dpi_protocol_hop", False)),
+        "dpi_aggression_level": s.get("dpi_aggression_level", "medium"),
     }
 
 
@@ -1445,6 +1488,23 @@ async def legacy_get_settings(
         "dpi_domain_front": False,
         "dpi_cdn_front_enabled": False,
         "dpi_cdn_front": "",
+        # Host Header Spoofing
+        "dpi_http_host_spoof_enabled": False,
+        "dpi_http_host_spoof_domain": "chat.deepseek.com",
+        "dpi_ws_host_front_enabled": False,
+        "dpi_ws_host_front_domain": "rubika.ir",
+        "dpi_cdn_host_front_enabled": False,
+        "dpi_cdn_host_front_domain": "web.splus.ir",
+        "dpi_bug_host_enabled": False,
+        "dpi_bug_host_domain": "chat.deepseek.com",
+        # Advanced Network Resilience
+        "dpi_packet_reorder": False,
+        "dpi_dynamic_port": False,
+        "dpi_fake_http": False,
+        "dpi_traffic_shape": False,
+        "dpi_multi_path": False,
+        "dpi_protocol_hop": False,
+        "dpi_aggression_level": "medium",
         # VLESS XHTTP REALITY
         "vless_xhttp_enabled": True,
         "vless_xhttp_port": 2053,

@@ -90,6 +90,17 @@ async function doLogin() {
   }
 }
 
+async function toggleDirection() {
+  var cur = document.documentElement.dir || 'ltr';
+  var nxt = cur === 'rtl' ? 'ltr' : 'rtl';
+  document.documentElement.dir = nxt;
+  try {
+    var r = await fetch('/api/direction', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({dir:nxt}), credentials:'same-origin'});
+    if (r.ok) { setTimeout(function(){ location.reload(); }, 100); return; }
+  } catch(e) {}
+  location.reload();
+}
+
 async function doLogout() {
   await fetch(API+'/logout', {method:'POST'});
   location.reload();
@@ -258,6 +269,44 @@ function updateProtoBar() {
   });
   fr.style.display = serverInfo.fragment_enabled ? '' : 'none';
   mx.style.display = serverInfo.mux_enabled ? '' : 'none';
+  // Host Header Spoofing
+  const hsEl = document.getElementById('pb-host-spoof');
+  if (hsEl) {
+    const hostSpoofActive = serverInfo.dpi_http_host_spoof_enabled || serverInfo.dpi_ws_host_front_enabled || serverInfo.dpi_cdn_host_front_enabled || serverInfo.dpi_bug_host_enabled;
+    hsEl.style.display = hostSpoofActive ? '' : 'none';
+    if (hostSpoofActive) {
+      const spoofHosts = [];
+      if (serverInfo.dpi_http_host_spoof_enabled) spoofHosts.push('HTTP: ' + (serverInfo.dpi_http_host_spoof_domain || '?'));
+      if (serverInfo.dpi_ws_host_front_enabled) spoofHosts.push('WS: ' + (serverInfo.dpi_ws_host_front_domain || '?'));
+      if (serverInfo.dpi_cdn_host_front_enabled) spoofHosts.push('CDN: ' + (serverInfo.dpi_cdn_host_front_domain || '?'));
+      if (serverInfo.dpi_bug_host_enabled) spoofHosts.push('Bug: ' + (serverInfo.dpi_bug_host_domain || '?'));
+      hsEl.textContent = 'Host Spoof: ' + spoofHosts.join(' | ');
+    }
+  }
+  // DNS/ICMP Tunneling
+  const tnEl = document.getElementById('pb-dpi-tunnel');
+  if (tnEl) {
+    const tunnelActive = serverInfo.dpi_dns_tunnel || serverInfo.dpi_icmp_tunnel;
+    tnEl.style.display = tunnelActive ? '' : 'none';
+    if (tunnelActive) {
+      const tunnels = [];
+      if (serverInfo.dpi_dns_tunnel) tunnels.push('DNS');
+      if (serverInfo.dpi_icmp_tunnel) tunnels.push('ICMP');
+      tnEl.textContent = 'Tunnel: ' + tunnels.join('+');
+    }
+  }
+  // Domain/CDN Fronting
+  const ftEl = document.getElementById('pb-dpi-front');
+  if (ftEl) {
+    const frontActive = serverInfo.dpi_domain_front || serverInfo.dpi_cdn_front_enabled;
+    ftEl.style.display = frontActive ? '' : 'none';
+    if (frontActive) {
+      const fronts = [];
+      if (serverInfo.dpi_domain_front) fronts.push('Domain');
+      if (serverInfo.dpi_cdn_front_enabled) fronts.push('CDN');
+      ftEl.textContent = 'Front: ' + fronts.join('+');
+    }
+  }
   const killSwitchOn = asBool(serverInfo.kill_switch);
   ks.textContent = 'Kill Switch: ' + (killSwitchOn ? 'ON' : 'OFF');
   ks.className = 'proto-badge proto-ks' + (killSwitchOn ? '' : ' off');
@@ -1155,6 +1204,34 @@ function renderConfigTab() {
       <span class="ck">Proto</span><span class="cv">${serverInfo.openvpn_proto || 'UDP'}</span>`;
   }
 
+  // Append host header spoofing info if active
+  if (serverInfo.dpi_http_host_spoof_enabled) {
+    info += `\n<span class="ck" style="color:var(--purple)">Host Spoof</span><span class="cv" style="color:var(--purple)">HTTP → ${serverInfo.dpi_http_host_spoof_domain || '?'}</span>`;
+  }
+  if (serverInfo.dpi_ws_host_front_enabled) {
+    info += `\n<span class="ck" style="color:var(--purple)">WS Front</span><span class="cv" style="color:var(--purple)">→ ${serverInfo.dpi_ws_host_front_domain || '?'}</span>`;
+  }
+  if (serverInfo.dpi_cdn_host_front_enabled) {
+    info += `\n<span class="ck" style="color:var(--purple)">CDN Front</span><span class="cv" style="color:var(--purple)">→ ${serverInfo.dpi_cdn_host_front_domain || '?'}</span>`;
+  }
+  if (serverInfo.dpi_bug_host_enabled) {
+    info += `\n<span class="ck" style="color:var(--purple)">Bug Host</span><span class="cv" style="color:var(--purple)">→ ${serverInfo.dpi_bug_host_domain || '?'}</span>`;
+  }
+  // Tunneling
+  if (serverInfo.dpi_dns_tunnel) {
+    info += `\n<span class="ck" style="color:var(--accent)">DNS Tunnel</span><span class="cv" style="color:var(--accent)">Active — traffic wrapped in DNS queries</span>`;
+  }
+  if (serverInfo.dpi_icmp_tunnel) {
+    info += `\n<span class="ck" style="color:var(--accent)">ICMP Tunnel</span><span class="cv" style="color:var(--accent)">Active — traffic wrapped in ICMP packets</span>`;
+  }
+  // Domain / CDN Fronting
+  if (serverInfo.dpi_domain_front) {
+    info += `\n<span class="ck" style="color:var(--orange)">Domain Front</span><span class="cv" style="color:var(--orange)">Active — CDN hides real destination</span>`;
+  }
+  if (serverInfo.dpi_cdn_front_enabled) {
+    info += `\n<span class="ck" style="color:var(--orange)">CDN Front</span><span class="cv" style="color:var(--orange)">Active — Cloudflare/CDN fronting</span>`;
+  }
+
   document.getElementById('config-link-label').textContent = label;
   document.getElementById('config-vmess').value = link;
   document.getElementById('config-info').innerHTML = info;
@@ -1511,6 +1588,18 @@ function updateSettingsStatus() {
   set('si-ks', killSwitchOn, killSwitchOn ? 'ON' : 'OFF');
   set('si-fragment', si.fragment_enabled, si.fragment_enabled ? 'ON (client)' : 'OFF');
   set('si-mux', si.mux_enabled, si.mux_enabled ? 'ON (client)' : 'OFF');
+  // DPI Evasion (server-side)
+  const dpiRealOn = si.dpi_tcp_fragment || si.dpi_tls_fragment || si.dpi_ip_fragment || si.dpi_tcp_keepalive;
+  set('si-dpi-real', dpiRealOn, dpiRealOn ? 'Active' : 'OFF');
+  // Host Spoofing
+  const hostSpoofOn = si.dpi_http_host_spoof_enabled || si.dpi_ws_host_front_enabled || si.dpi_cdn_host_front_enabled || si.dpi_bug_host_enabled;
+  set('si-host-spoof', hostSpoofOn, hostSpoofOn ? 'Active' : 'OFF');
+  // Tunneling (DNS/ICMP)
+  const tunnelOn = si.dpi_dns_tunnel || si.dpi_icmp_tunnel;
+  set('si-dpi-tunnel', tunnelOn, tunnelOn ? 'Active' : 'OFF');
+  // Obfuscation (Domain/CDN Front)
+  const obfuscateOn = si.dpi_domain_front || si.dpi_cdn_front_enabled;
+  set('si-dpi-obfuscate', obfuscateOn, obfuscateOn ? 'Active' : 'OFF');
   // Network resilience is always info
   const aEl = document.getElementById('si-anti');
   if (aEl) { aEl.className = 's-indicator info'; }
@@ -1706,6 +1795,15 @@ async function loadSettings() {
     document.getElementById('set-dpi-cdn-host-front-domain').value = s.dpi_cdn_host_front_domain || 'web.splus.ir';
     document.getElementById('set-dpi-bug-host').checked = s.dpi_bug_host_enabled || false;
     document.getElementById('set-dpi-bug-host-domain').value = s.dpi_bug_host_domain || 'chat.deepseek.com';
+    // Advanced Network Resilience
+    document.getElementById('set-dpi-packet-reorder').checked = s.dpi_packet_reorder || false;
+    document.getElementById('set-dpi-dynamic-port').checked = s.dpi_dynamic_port || false;
+    document.getElementById('set-dpi-fake-http').checked = s.dpi_fake_http || false;
+    document.getElementById('set-dpi-traffic-shape').checked = s.dpi_traffic_shape || false;
+    document.getElementById('set-dpi-multi-path').checked = s.dpi_multi_path || false;
+    document.getElementById('set-dpi-protocol-hop').checked = s.dpi_protocol_hop || false;
+    var aggEl = document.getElementById('set-dpi-aggression-level');
+    if (aggEl) aggEl.value = s.dpi_aggression_level || 'medium';
     loadBackups();
     updateSettingsStatus();
     _settingsLoaded = true;
@@ -1719,6 +1817,55 @@ async function loadSettings() {
   } finally {
     _settingsLoading = null;
   }
+}
+
+function resetSettingsToDefault() {
+  if (!confirm('Reset ALL settings to default values?\\n\\nاین کار تمام تنظیمات را به حالت پیش‌فرض برمی‌گرداند. ادامه می‌دهید؟')) return;
+  // Reset all form fields in settings modal
+  var defaults = {
+    'set-config-prefix': 'Proxy', 'set-vmess-port': '443', 'set-vmess-sni': 'www.aparat.com', 'set-vmess-ws-path': '/api/v1/stream',
+    'set-ks': false, 'set-security-ks': false,
+    'set-reality-sni': 'chat.deepseek.com', 'set-vless-port': '2053',
+    'set-trojan': false, 'set-trojan-port': '2083',
+    'set-grpc': false, 'set-grpc-port': '2054', 'set-grpc-service': 'GunService',
+    'set-httpupgrade': false, 'set-httpupgrade-port': '2055', 'set-httpupgrade-path': '/httpupgrade',
+    'set-fragment': false, 'set-fragment-packets': 'tlshello', 'set-fragment-length': '100-200', 'set-fragment-interval': '10-20',
+    'set-mux': false, 'set-mux-concurrency': '8',
+    'set-ss2022': false, 'set-ss2022-port': '2056', 'set-ss2022-method': '2022-blake3-aes-128-gcm',
+    'set-vless-ws': false, 'set-vless-ws-port': '2057', 'set-vless-ws-path': '/vless-ws',
+    'set-vless-xhttp': false, 'set-vless-xhttp-port': '2053', 'set-vless-xhttp-reality-sni': 'digikala.com', 'set-vless-xhttp-path': '/xhttp-stream', 'set-vless-xhttp-mode': 'auto',
+    'set-vless-vision': false, 'set-vless-vision-port': '2058', 'set-vless-vision-reality-sni': 'objects.githubusercontent.com', 'set-vless-vision-flow': 'xtls-rprx-vision',
+    'set-vless-reverse': false, 'set-vless-reverse-port': '2059', 'set-vless-reverse-reality-sni': 'digikala.com', 'set-vless-reverse-backhaul-mode': 'rathole',
+    'set-trojan-cdn': false, 'set-trojan-cdn-port': '2083', 'set-trojan-cdn-ws-path': '/trojan-ws', 'set-trojan-cdn-grpc': false, 'set-trojan-cdn-grpc-port': '2060', 'set-trojan-cdn-grpc-service': 'TrojanService',
+    'set-hysteria2': false, 'set-hysteria2-port': '8443', 'set-hysteria2-bandwidth-up': '100 mbps', 'set-hysteria2-bandwidth-down': '200 mbps', 'set-hysteria2-salamander': false, 'set-hysteria2-port-hop': false, 'set-hysteria2-port-hop-ports': '20000-50000',
+    'set-tuic': false, 'set-tuic-port': '8444', 'set-tuic-congestion': 'cubic', 'set-tuic-zero-rtt': false,
+    'set-amneziawg': false, 'set-amneziawg-port': '51820', 'set-amneziawg-address': '10.8.0.1/24', 'set-amneziawg-dns': '1.1.1.1', 'set-amneziawg-mtu': '1280', 'set-amneziawg-jc': '4', 'set-amneziawg-jmin': '50', 'set-amneziawg-jmax': '1000', 'set-amneziawg-s1': '0', 'set-amneziawg-s2': '0', 'set-amneziawg-h1': '1', 'set-amneziawg-h2': '2', 'set-amneziawg-h3': '3', 'set-amneziawg-h4': '4',
+    'set-shadowtls': false, 'set-shadowtls-port': '8445', 'set-shadowtls-sni': 'rubika.ir',
+    'set-mieru': false, 'set-mieru-port': '8446', 'set-mieru-encryption': 'aes-256-gcm', 'set-mieru-transport': 'tcp', 'set-mieru-mux-concurrency': '8',
+    'set-naiveproxy': false, 'set-naiveproxy-port': '8447', 'set-naiveproxy-concurrency': '4',
+    'set-wireguard': false, 'set-wireguard-port': '51821', 'set-wireguard-address': '10.9.0.1/24', 'set-wireguard-dns': '1.1.1.1', 'set-wireguard-mtu': '1280',
+    'set-openvpn': false, 'set-openvpn-port': '1194', 'set-openvpn-proto': 'udp', 'set-openvpn-network': '10.10.0.0/24', 'set-openvpn-dns': '1.1.1.1',
+    'set-fingerprint': 'chrome', 'set-noise': false, 'set-noise-packet': 'rand:50-100', 'set-noise-delay': '10-20',
+    'set-cdn': false, 'set-cdn-domain': '', 'set-cdn-path': '/cdn-ws', 'set-cdn-port': '2082',
+    'set-telegram': false, 'set-telegram-token': '', 'set-telegram-chat': '',
+    'set-tg-disabled': true, 'set-tg-expired': true, 'set-tg-killswitch': true, 'set-tg-traffic': true, 'set-tg-created': false, 'set-tg-deleted': false,
+    'set-dpi-tcp-fragment': false, 'set-dpi-tls-fragment': false, 'set-dpi-ip-fragment': false, 'set-dpi-tcp-keepalive': false,
+    'set-dpi-dns-tunnel': false, 'set-dpi-icmp-tunnel': false, 'set-dpi-domain-front': false, 'set-dpi-cdn-front-enabled': false,
+    'set-dpi-http-host-spoof': false, 'set-dpi-ws-host-front': false, 'set-dpi-cdn-host-front': false, 'set-dpi-bug-host': false,
+    'set-dpi-packet-reorder': false, 'set-dpi-dynamic-port': false, 'set-dpi-fake-http': false,
+    'set-dpi-traffic-shape': false, 'set-dpi-multi-path': false, 'set-dpi-protocol-hop': false,
+    'set-dpi-aggression-level': 'medium',
+    'set-security-blocked-countries': 'IL', 'set-security-block-adult': false, 'set-security-block-hack': true,
+    'set-security-session-timeout': '1', 'set-security-login-limit': '3',
+    'set-system-agents': true, 'set-system-auto-sync': true
+  };
+  Object.keys(defaults).forEach(function(id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    if (el.type === 'checkbox') el.checked = defaults[id];
+    else el.value = defaults[id];
+  });
+  toast('Settings reset to defaults. Save to apply. / تنظیمات به حالت پیش‌فرض برگشت. ذخیره کنید.');
 }
 
 async function saveSettings() {
@@ -1901,6 +2048,14 @@ async function saveSettings() {
     dpi_cdn_host_front_domain: document.getElementById('set-dpi-cdn-host-front-domain').value.trim(),
     dpi_bug_host_enabled: document.getElementById('set-dpi-bug-host').checked,
     dpi_bug_host_domain: document.getElementById('set-dpi-bug-host-domain').value.trim(),
+    // Advanced Network Resilience
+    dpi_packet_reorder: document.getElementById('set-dpi-packet-reorder')?.checked || false,
+    dpi_dynamic_port: document.getElementById('set-dpi-dynamic-port')?.checked || false,
+    dpi_fake_http: document.getElementById('set-dpi-fake-http')?.checked || false,
+    dpi_traffic_shape: document.getElementById('set-dpi-traffic-shape')?.checked || false,
+    dpi_multi_path: document.getElementById('set-dpi-multi-path')?.checked || false,
+    dpi_protocol_hop: document.getElementById('set-dpi-protocol-hop')?.checked || false,
+    dpi_aggression_level: document.getElementById('set-dpi-aggression-level')?.value || 'medium',
   };
   const r = await fetch(API+'/settings', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data)});
   const d = await r.json();
@@ -2037,12 +2192,12 @@ function switchSettingsTab(tabName) {
   // Hide all tab contents
   document.querySelectorAll('.settings-tab-content').forEach(el => el.classList.remove('active'));
   // Remove active from all tab buttons
-  document.querySelectorAll('.config-tabs .config-tab').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.settings-tabs .settings-tab-btn').forEach(el => el.classList.remove('active'));
   // Show selected tab content
   const content = document.getElementById('settings-' + tabName);
   if (content) content.classList.add('active');
   // Activate corresponding button
-  const btn = document.querySelector('.config-tabs .config-tab[onclick*="'+tabName+'"]');
+  const btn = document.querySelector('.settings-tabs .settings-tab-btn[onclick*="'+tabName+'"]');
   if (btn) btn.classList.add('active');
 }
 

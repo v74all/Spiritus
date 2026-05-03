@@ -118,7 +118,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # Will be restricted in production
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -142,7 +142,7 @@ async def generic_exception_handler(request: Request, exc: Exception):
     logger.error(f"Unhandled error: {exc}", exc_info=True)
     return JSONResponse(
         status_code=500,
-        content={"message": "Internal server error", "detail": str(exc)},
+        content={"message": "Internal server error"},
     )
 
 # Mount static files
@@ -207,6 +207,17 @@ def _url_for_static(filename: str) -> str:
 
 _jinja_env.globals["url_for"] = lambda endpoint, **kw: _url_for_static(kw.get("filename", ""))
 
+def _detect_direction(request: Request) -> str:
+    """Auto-detect page direction: cookie override > Accept-Language (fa/ar → rtl)."""
+    dir_cookie = request.cookies.get("vpn_dir")
+    if dir_cookie in ("ltr", "rtl"):
+        return dir_cookie
+    lang = request.headers.get("Accept-Language", "")
+    primary = lang.split(",")[0].split(";")[0].strip().lower() if lang else ""
+    if primary.startswith("fa") or primary.startswith("ar"):
+        return "rtl"
+    return "ltr"
+
 @app.get("/", response_class=HTMLResponse)
 async def serve_panel(request: Request):
     """Serve the main panel HTML."""
@@ -216,6 +227,7 @@ async def serve_panel(request: Request):
 
     template = _jinja_env.get_template("panel.html")
     html = template.render(
+        dir=_detect_direction(request),
         server_ip=settings.host if settings.host != "0.0.0.0" else "",
         server_port=settings.web_port,
         sni_host=settings.vless_ws_host,
@@ -234,6 +246,7 @@ async def serve_agent_panel(request: Request):
     template = _jinja_env.get_template("agent-panel.html")
     apk_path = os.path.join(os.getcwd(), "static", "downloads", "app-release.apk")
     html = template.render(
+        dir=_detect_direction(request),
         server_ip=settings.host if settings.host != "0.0.0.0" else "",
         server_port=settings.web_port,
         sni_host=settings.vless_ws_host,
@@ -260,6 +273,22 @@ async def download_app_windows():
             detail="Windows build not uploaded on this server yet.",
         )
     return FileResponse(win_path, filename="vpn-windows.zip")
+
+
+@app.post("/api/direction")
+async def set_direction(request: Request):
+    """Persist direction preference to cookie."""
+    data = await request.json()
+    new_dir = data.get("dir", "ltr")
+    if new_dir not in ("ltr", "rtl"):
+        new_dir = "ltr"
+    resp = JSONResponse({"dir": new_dir})
+    resp.set_cookie(
+        key="vpn_dir", value=new_dir,
+        max_age=365 * 24 * 3600, path="/",
+        samesite="lax", secure=False, httponly=False,
+    )
+    return resp
 
 
 def _public_server_ip(request: Request) -> str:
@@ -338,6 +367,7 @@ async def subscription_page(
     links = await _subscription_links(user, request, db)
     template = _jinja_env.get_template("sub.html")
     html = template.render(
+        dir=_detect_direction(request),
         request={"url_root": str(request.base_url)},
         user=_subscription_user_dict(user),
         links=links,
@@ -559,6 +589,93 @@ def _subscription_json_config(
                 "enabled": True,
                 "concurrency": int(panel_settings.get("mux_concurrency") or 8),
             }
+
+    # ── DPI Evasion: Host Header Spoofing ──
+    # Replaces HTTP Host header with a whitelisted domain while keeping real SNI in TLS
+    host_spoof_domain = None
+    if panel_settings.get("dpi_http_host_spoof_enabled"):
+        host_spoof_domain = panel_settings.get("dpi_http_host_spoof_domain") or "chat.deepseek.com"
+    ws_front_domain = None
+    if panel_settings.get("dpi_ws_host_front_enabled"):
+        ws_front_domain = panel_settings.get("dpi_ws_host_front_domain") or "rubika.ir"
+    cdn_front_domain = None
+    if panel_settings.get("dpi_cdn_host_front_enabled"):
+        cdn_front_domain = panel_settings.get("dpi_cdn_host_front_domain") or "web.splus.ir"
+
+    for outbound in outbounds:
+        ss = outbound.get("streamSettings", {})
+        network = ss.get("network", "tcp")
+
+        # TCP Keepalive
+        if panel_settings.get("dpi_tcp_keepalive"):
+            sockopt = ss.setdefault("sockopt", {})
+            sockopt["tcpKeepAlive"] = True
+
+        # HTTP Host Spoofing: replace Host header on WS/HTTPUpgrade
+        if host_spoof_domain:
+            if network == "ws" and "wsSettings" in ss:
+                ss["wsSettings"]["headers"] = {"Host": host_spoof_domain}
+            elif network == "httpupgrade" and "httpupgradeSettings" in ss:
+                ss["httpupgradeSettings"]["host"] = host_spoof_domain
+
+        # WS Host Fronting: different Host for WS upgrade than TLS SNI
+        elif ws_front_domain:
+            if network == "ws" and "wsSettings" in ss:
+                ss["wsSettings"]["headers"] = {"Host": ws_front_domain}
+            elif network == "httpupgrade" and "httpupgradeSettings" in ss:
+                ss["httpupgradeSettings"]["host"] = ws_front_domain
+
+        # CDN Host Fronting: apply to outbounds going through CDN
+        if cdn_front_domain and outbound.get("tag", "").startswith(prefix + "-CDN"):
+            if network == "ws" and "wsSettings" in ss:
+                ss["wsSettings"]["headers"] = {"Host": cdn_front_domain}
+            if "tlsSettings" in ss:
+                ss["tlsSettings"]["serverName"] = cdn_front_domain
+
+        # Bug Host: inject additional obfuscation headers
+        if panel_settings.get("dpi_bug_host_enabled"):
+            bug_domain = panel_settings.get("dpi_bug_host_domain") or "chat.deepseek.com"
+            if network == "ws" and "wsSettings" in ss:
+                # Add X-Forwarded-Host and other misleading headers
+                existing_headers = ss["wsSettings"].get("headers", {})
+                existing_headers["X-Forwarded-Host"] = bug_domain
+                existing_headers["X-Host"] = bug_domain
+                ss["wsSettings"]["headers"] = existing_headers
+            elif network == "httpupgrade" and "httpupgradeSettings" in ss:
+                ss["httpupgradeSettings"]["host"] = bug_domain
+
+        # Domain Fronting: use CDN domain as SNI while connecting to real server
+        if panel_settings.get("dpi_domain_front") and panel_settings.get("dpi_cdn_front"):
+            front_domain = panel_settings.get("dpi_cdn_front")
+            if "tlsSettings" in ss and outbound.get("tag", "").startswith(prefix + "-CDN"):
+                ss["tlsSettings"]["serverName"] = front_domain
+                ss["tlsSettings"]["allowInsecure"] = True
+
+    # ── DNS / ICMP Tunneling (server-assisted) ──
+    # These require agent-side tunnel binaries (dnstt, icmptunnel).
+    # When enabled, add a loopback outbound that the local tunnel routes into.
+    _tunnel_active = panel_settings.get("dpi_dns_tunnel") or panel_settings.get("dpi_icmp_tunnel")
+    if _tunnel_active:
+        tunnel_outbounds = []
+        _tunnel_types = []
+        if panel_settings.get("dpi_dns_tunnel"):
+            _tunnel_types.append("dns")
+            tunnel_outbounds.append({
+                "tag": f"tunnel-dns-{user.name}",
+                "protocol": "freedom",
+                "settings": {"domainStrategy": "UseIP", "redirect": "127.0.0.1:5353"},
+            })
+        if panel_settings.get("dpi_icmp_tunnel"):
+            _tunnel_types.append("icmp")
+            tunnel_outbounds.append({
+                "tag": f"tunnel-icmp-{user.name}",
+                "protocol": "freedom",
+                "settings": {"domainStrategy": "UseIP", "redirect": "127.0.0.1:9999"},
+            })
+        # Insert tunnel outbounds before direct
+        direct_idx = next((i for i, o in enumerate(outbounds) if o.get("tag") == "direct"), len(outbounds))
+        for t in reversed(tunnel_outbounds):
+            outbounds.insert(direct_idx, t)
 
     outbounds.append({"tag": "direct", "protocol": "freedom"})
     outbounds.append({"tag": "block", "protocol": "blackhole"})

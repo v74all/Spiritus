@@ -111,6 +111,7 @@ async def create_payment(
 @router.post("/verify")
 async def verify_payment(
     data: VerifyPaymentRequest,
+    admin: User = Depends(get_current_admin),
     db: AsyncSession = Depends(get_async_db),
 ):
     """Verify a payment (called by gateway callback or manually)."""

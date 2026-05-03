@@ -1,10 +1,12 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ 'fa' if dir == 'rtl' else 'en' }}" dir="{{ dir }}">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Spiritus | VPN Management Panel</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<title>V7LTHRONYX | VPN Panel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Azeret+Mono:wght@400;500;600;700&family=Fira+Sans:wght@300;400;500;600;700;800&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/panel.css') }}">
 </head>
 <body>
@@ -12,12 +14,11 @@
 <!-- ── Login ── -->
 <div id="login-screen">
   <div class="login-card">
-    <img src="{{ url_for('static', filename='logo.png') }}" alt="Spiritus Logo" style="width:220px;height:auto;margin:0 auto 20px;display:block;filter:drop-shadow(0 0 30px rgba(255,215,0,.6))">
     <div class="login-logo">SPIRITUS</div>
-    <div class="login-sub">Premium VPN Management</div>
-    <input type="password" id="login-pass" class="login-input" placeholder="Password"
+    <div class="login-sub">Digital Bastion</div>
+    <input type="password" id="login-pass" class="login-input" placeholder="Access Key"
            onkeydown="if(event.key==='Enter')doLogin()">
-    <button type="button" class="login-btn" id="login-submit" onclick="doLogin()">Sign In</button>
+    <button type="button" class="login-btn" id="login-submit" onclick="doLogin()">Authenticate</button>
     <div class="login-error" id="login-error"></div>
     <a href="/agent" style="display:inline-block;margin-top:18px;color:var(--t3);font-size:13px;text-decoration:none;transition:color .2s" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--t3)'">Agent Panel →</a>
   </div>
@@ -27,11 +28,11 @@
 <div id="panel">
   <header class="top-bar">
     <div class="brand">
-      <img src="{{ url_for('static', filename='logo.png') }}" alt="Spiritus" style="width:42px;height:auto;background:transparent">
       <span class="brand-logo">SPIRITUS</span>
-      <span class="brand-text">VPN Management Panel</span>
+      <span class="brand-text">Digital Bastion</span>
     </div>
     <div class="header-actions">
+      <button class="btn btn-ghost btn-sm dir-toggle" onclick="toggleDirection()" title="Toggle RTL/LTR">{{ 'RTL' if dir == 'ltr' else 'LTR' }}</button>
       <button class="btn btn-outline btn-sm" onclick="forceSync()">Sync</button>
       <button class="btn btn-primary btn-sm" onclick="showModal('add-modal')">+ Add User</button>
       <button class="btn btn-outline btn-sm" onclick="showModal('bulk-modal')">Bulk Configs</button>
@@ -93,6 +94,9 @@
     <span class="proto-badge" id="pb-openvpn" style="display:none;background:#fab1a022;color:#e17055">OVPN</span>
     <span class="proto-badge" id="pb-fragment" style="display:none;background:#f39c1222;color:#f39c12">Fragment</span>
     <span class="proto-badge" id="pb-mux" style="display:none;background:#9b59b622;color:#9b59b6">MUX</span>
+    <span class="proto-badge" id="pb-host-spoof" style="display:none;background:#e056fd22;color:#e056fd">Host Spoof</span>
+    <span class="proto-badge" id="pb-dpi-tunnel" style="display:none;background:#00cec922;color:#00cec9">Tunnel</span>
+    <span class="proto-badge" id="pb-dpi-front" style="display:none;background:#e1705522;color:#e17055">Front</span>
     <span class="proto-badge proto-ks" id="pb-ks">Kill Switch: ON</span>
   </div>
 
@@ -205,7 +209,7 @@
     <div style="margin-top:14px;border-top:1px solid var(--border);padding-top:14px">
       <div class="settings-title">Results</div>
       <div id="bulk-tabs" class="bulk-tabs" style="display:none"></div>
-      <textarea id="bulk-output" rows="10" readonly style="width:100%;padding:12px;background:var(--bg1);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--t1);font-size:11px;font-family:monospace;resize:vertical;direction:ltr;text-align:left;word-break:break-all"></textarea>
+      <textarea id="bulk-output" rows="10" readonly class="code-ltr" style="width:100%;padding:12px;background:var(--bg1);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--t1);font-size:11px;font-family:var(--font-mono);resize:vertical;word-break:break-all"></textarea>
       <div class="bulk-qr-section">
         <div class="settings-title">QR codes (all in this group)</div>
         <div id="bulk-qr-wrap" class="bulk-qr-wrap" style="display:none"></div>
@@ -307,21 +311,26 @@
 
 <!-- ── Settings Modal ── -->
 <div id="settings-modal" class="modal-overlay" onclick="if(event.target===this)closeModal(this.id)">
-  <div class="modal modal-xxl" style="max-height:calc(100vh - 40px);overflow-y:auto;-webkit-overflow-scrolling:touch">
-    <h3>Settings / تنظیمات</h3>
+  <div class="modal modal-xxl" style="display:flex;flex-direction:column;max-height:calc(100vh - 40px)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <h3 style="margin:0">Settings / تنظیمات</h3>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-outline btn-sm" onclick="resetSettingsToDefault()" title="Reset all settings to default">↺ Reset Default</button>
+        <button class="btn btn-primary btn-sm" onclick="saveSettings()">💾 Save / ذخیره</button>
+      </div>
+    </div>
 
     <!-- ═══ Settings Tabs ═══ -->
-    <div class="config-tabs" style="margin-bottom:20px;flex-wrap:wrap">
-      <button class="config-tab tab-vmess active" onclick="switchSettingsTab('protocols')">🌐 Protocols</button>
-      <button class="config-tab tab-cdn" onclick="switchSettingsTab('dpi-evasion')">🛡️ DPI Evasion</button>
-      <button class="config-tab tab-trojan" onclick="switchSettingsTab('network')">☁️ Network</button>
-      <button class="config-tab tab-grpc" onclick="switchSettingsTab('security')">🔒 Security</button>
-      <button class="config-tab tab-httpupgrade" onclick="switchSettingsTab('notifications')">📨 Notifications</button>
-      <button class="config-tab tab-grpc2" onclick="switchSettingsTab('system')">💾 System</button>
-      <button class="config-tab tab-firewall" onclick="switchSettingsTab('network-resilience')">🛡️ Network Resilience</button>
+    <div class="settings-tabs" style="flex-shrink:0">
+      <button class="settings-tab-btn active" onclick="switchSettingsTab('protocols')">🌐 Protocols / پروتکل‌ها</button>
+      <button class="settings-tab-btn" onclick="switchSettingsTab('dpi-security')">🛡️ DPI & Security / امنیت</button>
+      <button class="settings-tab-btn" onclick="switchSettingsTab('network-cdn')">☁️ Network & CDN / شبکه</button>
+      <button class="settings-tab-btn" onclick="switchSettingsTab('notifications-backup')">📨 Notifications & Backup / اعلان‌ها</button>
+      <button class="settings-tab-btn" onclick="switchSettingsTab('system')">💻 System / سیستم</button>
     </div>
 
     <!-- ═══ Protocols Tab ═══ -->
+    <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch">
     <div id="settings-protocols" class="settings-tab-content active">
     <!-- ═══ 1. Config Customization ═══ -->
     <div class="settings-section">
@@ -346,29 +355,8 @@
         <div class="settings-desc">WebSocket URL path — change if default is blocked / مسیر وب‌سوکت — اگه فیلتر شده عوض کنید</div></div>
     </div>
 
-    <!-- ═══ 2. Security ═══ -->
-    <div class="settings-section">
-      <div class="sec-header">
-        <div class="settings-title">🔒 Security / امنیت</div>
-        <span class="s-indicator off" id="si-ks"><span class="dot"></span> Kill Switch</span>
-      </div>
-      <div class="help-box">
-        <div class="help-en">🛡️ <b>Kill Switch</b> automatically disables users who connect to suspicious or restricted destinations. Protects your server from being flagged.</div>
-        <div class="help-fa">🛡️ <b>کیل سوییچ</b> کاربرانی که به مقاصد مشکوک یا محدود وصل می‌شوند را خودکار غیرفعال می‌کند. از سرور شما محافظت می‌کند.</div>
-      </div>
-      <div class="settings-row">
-        <div><div class="settings-label">Kill Switch / کیل سوییچ</div>
-          <div class="settings-desc">Auto-disable suspicious connections / غیرفعال‌سازی خودکار اتصالات مشکوک</div></div>
-        <label class="toggle"><input type="checkbox" id="set-ks" onchange="toggleKillSwitch()"><span class="toggle-slider"></span></label>
-      </div>
-      <div class="settings-row">
-        <div><div class="settings-label">Change Password / تغییر رمز</div>
-          <div class="settings-desc">Update panel login password / رمز ورود پنل رو تغییر بدید</div></div>
-        <button class="btn btn-outline btn-sm" onclick="closeModal('settings-modal');showModal('pw-modal')">Change</button>
-      </div>
-    </div>
-
-    <!-- ═══ 3. VLESS / Reality ═══ -->
+    <!-- ═══ Core Protocols ═══ -->
+    <!-- ═══ 2. VLESS / Reality ═══ -->
     <div class="settings-section">
       <div class="sec-header">
         <div class="settings-title">🌐 VLESS / Reality</div>
@@ -990,137 +978,9 @@
         <input type="text" id="set-openvpn-dns" value="1.1.1.1" placeholder="1.1.1.1"></div>
     </div>
 
-    <!-- ═══ 11. Advanced Anti-Censorship ═══ -->
-    <div class="settings-section">
-      <div class="sec-header">
-        <div class="settings-title">🛡️ Anti-Censorship / ضد سانسور</div>
-        <span class="s-indicator info" id="si-anti"><span class="dot"></span> <span class="si-text">Client-Side</span></span>
-      </div>
-      <div class="help-box">
-        <div class="help-en">🛡️ <b>uTLS Fingerprint</b> makes your VPN's TLS handshake look exactly like a real browser (Chrome, Firefox, etc.) so DPI can't detect it's a VPN. <b>Noise</b> adds random padding to packets so the traffic pattern doesn't match known VPN signatures. Both are <b>client-side</b> — delivered via JSON subscription.</div>
-        <div class="help-fa">🛡️ <b>فینگرپرینت uTLS</b> هند‌شیک TLS وی‌پی‌ان رو دقیقاً شبیه یک مرورگر واقعی (کروم، فایرفاکس و...) نشون میده تا DPI نتونه تشخیص بده وی‌پی‌ان هست. <b>نویز</b> پدینگ تصادفی به پکت‌ها اضافه می‌کنه تا الگوی ترافیک با امضاهای شناخته‌شده وی‌پی‌ان مطابقت نداشته باشه. هر دو <b>سمت کلاینت</b> اعمال میشن — از طریق سابسکریپشن JSON ارسال میشن.</div>
-      </div>
-      <div class="form-group" style="margin-top:12px"><label>uTLS Fingerprint / فینگرپرینت</label>
-        <select id="set-fingerprint" style="width:100%;padding:10px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--t1)">
-          <option value="chrome">Chrome (recommended / توصیه‌شده)</option>
-          <option value="firefox">Firefox</option>
-          <option value="safari">Safari</option>
-          <option value="ios">iOS</option>
-          <option value="android">Android</option>
-          <option value="edge">Edge</option>
-          <option value="random">Random / تصادفی</option>
-          <option value="randomized">Randomized / تصادفی‌سازی‌شده</option>
-        </select>
-        <div class="settings-desc">Mimics browser TLS fingerprint / تقلید فینگرپرینت TLS مرورگر</div></div>
-      <div class="settings-row" style="margin-top:12px">
-        <div><div class="settings-label">Noise / Padding — نویز</div>
-          <div class="settings-desc">Add random padding to disguise traffic / افزودن پدینگ تصادفی</div></div>
-        <label class="toggle"><input type="checkbox" id="set-noise"><span class="toggle-slider"></span></label>
-      </div>
-      <div class="form-group" style="margin-top:12px"><label>Noise Packet Pattern / الگوی نویز</label>
-        <input type="text" id="set-noise-packet" value="rand:50-100" placeholder="rand:50-100">
-        <div class="settings-desc">Pattern for random padding size / الگوی اندازه پدینگ تصادفی</div></div>
-      <div class="form-group"><label>Noise Delay (ms) / تأخیر نویز</label>
-        <input type="text" id="set-noise-delay" value="10-20" placeholder="10-20">
-        <div class="settings-desc">Delay between noise packets in ms / تأخیر بین پکت‌های نویز به میلی‌ثانیه</div></div>
     </div>
-
-    <!-- ═══ 12. Cloudflare CDN ═══ -->
-    <div class="settings-section">
-      <div class="sec-header">
-        <div class="settings-title">☁️ Cloudflare CDN</div>
-        <span class="s-indicator off" id="si-cdn"><span class="dot"></span> <span class="si-text">OFF</span></span>
-      </div>
-      <div class="help-box">
-        <div class="help-en">☁️ <b>CDN Mode</b> routes VPN traffic through Cloudflare's network so your real server IP is completely hidden. Even if the domain is blocked, you can use Cloudflare's clean IPs. <b>How:</b> 1) Add domain to Cloudflare 2) Create A record → <code>{{ server_ip }}</code> 3) Enable orange cloud proxy 4) SSL/TLS = "Full" 5) Enable CDN here and enter domain.</div>
-        <div class="help-fa">☁️ <b>حالت CDN</b> ترافیک VPN رو از شبکه کلادفلر رد می‌کنه تا IP واقعی سرور کاملاً مخفی بمونه. حتی اگه دامنه فیلتر بشه، میشه از IP‌های تمیز کلادفلر استفاده کرد. <b>روش کار:</b> ۱) دامنه رو به کلادفلر اضافه کنید ۲) رکورد A بسازید → <code>{{ server_ip }}</code> ۳) ابر نارنجی (پروکسی) رو فعال کنید ۴) SSL/TLS = "Full" ۵) CDN رو اینجا فعال و دامنه رو وارد کنید.</div>
-      </div>
-      <div class="settings-row">
-        <div><div class="settings-label">CDN Mode / حالت CDN</div>
-          <div class="settings-desc">Route through Cloudflare / مسیریابی از طریق کلادفلر</div></div>
-        <label class="toggle"><input type="checkbox" id="set-cdn" onchange="toggleCDN()"><span class="toggle-slider"></span></label>
-      </div>
-      <div class="form-group" style="margin-top:12px"><label>CDN Domain / دامنه CDN</label>
-        <input type="text" id="set-cdn-domain" placeholder="vpn.yourdomain.com">
-        <div class="settings-desc">Your Cloudflare-proxied domain / دامنه پروکسی‌شده کلادفلر</div></div>
-      <div class="form-group"><label>CDN WebSocket Path / مسیر وب‌سوکت</label>
-        <input type="text" id="set-cdn-path" value="/cdn-ws"></div>
-      <div class="form-group"><label>CDN Port (origin) / پورت مبدأ</label>
-        <input type="number" id="set-cdn-port" value="2082" min="1" max="65535">
-        <div class="settings-desc">Cloudflare connects to this port on your server / کلادفلر از این پورت به سرور وصل میشه</div></div>
-    </div>
-
-    <!-- ═══ 13. Telegram Notifications ═══ -->
-    <div class="settings-section">
-      <div class="sec-header">
-        <div class="settings-title">📨 Telegram Notifications</div>
-        <span class="s-indicator off" id="si-telegram"><span class="dot"></span> <span class="si-text">OFF</span></span>
-      </div>
-      <div class="help-box">
-        <div class="help-en">📨 <b>Telegram</b> sends real-time alerts about user events. Create a bot via <code>@BotFather</code>, get the token and chat ID (from <code>@userinfobot</code> or channel ID).</div>
-        <div class="help-fa">📨 <b>تلگرام</b> هشدارهای لحظه‌ای درباره رویدادهای کاربران ارسال می‌کنه. از <code>@BotFather</code> یک ربات بسازید و توکن و شناسه چت رو بگیرید.</div>
-      </div>
-      <div class="settings-row">
-        <div><div class="settings-label">Telegram Notifications / اعلان تلگرام</div>
-          <div class="settings-desc">Enable Telegram bot alerts / فعال‌سازی هشدارهای ربات تلگرام</div></div>
-        <label class="toggle"><input type="checkbox" id="set-telegram"><span class="toggle-slider"></span></label>
-      </div>
-      <div class="form-group" style="margin-top:12px"><label>Bot Token / توکن ربات</label>
-        <input type="text" id="set-telegram-token" placeholder="123456:ABC-DEF..." style="font-family:monospace;font-size:12px">
-        <div class="settings-desc">From @BotFather / از @BotFather دریافت کنید</div></div>
-      <div class="form-group"><label>Chat ID / شناسه چت</label>
-        <input type="text" id="set-telegram-chat" placeholder="-100123456789" style="font-family:monospace;font-size:12px">
-        <div class="settings-desc">Your user ID, group ID, or channel ID / شناسه کاربر، گروه یا کانال</div></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px">
-        <div class="settings-row" style="padding:6px 10px;background:var(--bg3);border-radius:var(--radius-sm)">
-          <div style="font-size:12px;color:var(--t1)">User Disabled</div>
-          <label class="toggle" style="transform:scale(.8)"><input type="checkbox" id="set-tg-disabled" checked><span class="toggle-slider"></span></label>
-        </div>
-        <div class="settings-row" style="padding:6px 10px;background:var(--bg3);border-radius:var(--radius-sm)">
-          <div style="font-size:12px;color:var(--t1)">User Expired</div>
-          <label class="toggle" style="transform:scale(.8)"><input type="checkbox" id="set-tg-expired" checked><span class="toggle-slider"></span></label>
-        </div>
-        <div class="settings-row" style="padding:6px 10px;background:var(--bg3);border-radius:var(--radius-sm)">
-          <div style="font-size:12px;color:var(--t1)">Kill Switch</div>
-          <label class="toggle" style="transform:scale(.8)"><input type="checkbox" id="set-tg-killswitch" checked><span class="toggle-slider"></span></label>
-        </div>
-        <div class="settings-row" style="padding:6px 10px;background:var(--bg3);border-radius:var(--radius-sm)">
-          <div style="font-size:12px;color:var(--t1)">Traffic Used Up</div>
-          <label class="toggle" style="transform:scale(.8)"><input type="checkbox" id="set-tg-traffic" checked><span class="toggle-slider"></span></label>
-        </div>
-        <div class="settings-row" style="padding:6px 10px;background:var(--bg3);border-radius:var(--radius-sm)">
-          <div style="font-size:12px;color:var(--t1)">User Created</div>
-          <label class="toggle" style="transform:scale(.8)"><input type="checkbox" id="set-tg-created"><span class="toggle-slider"></span></label>
-        </div>
-        <div class="settings-row" style="padding:6px 10px;background:var(--bg3);border-radius:var(--radius-sm)">
-          <div style="font-size:12px;color:var(--t1)">User Deleted</div>
-          <label class="toggle" style="transform:scale(.8)"><input type="checkbox" id="set-tg-deleted"><span class="toggle-slider"></span></label>
-        </div>
-      </div>
-      <button class="btn btn-outline btn-sm" onclick="testTelegram()" style="margin-top:12px;width:100%">🔔 Send Test Notification</button>
-    </div>
-
-    <!-- ═══ 14. Backup / پشتیبان‌گیری ═══ -->
-    <div class="settings-section">
-      <div class="sec-header">
-        <div class="settings-title">💾 Backup / پشتیبان‌گیری</div>
-        <span class="s-indicator info" id="si-backup"><span class="dot"></span> Auto</span>
-      </div>
-      <div class="help-box">
-        <div class="help-en">💾 <b>Backup</b> saves your database and settings. Automatic backup runs daily at 3 AM and keeps the last 7 days. You can also create manual backups anytime.</div>
-        <div class="help-fa">💾 <b>پشتیبان‌گیری</b> دیتابیس و تنظیمات رو ذخیره می‌کنه. بکاپ خودکار هر روز ساعت ۳ صبح اجرا میشه و ۷ روز آخر نگه‌داری میشه. همچنین هر زمان می‌تونید بکاپ دستی بگیرید.</div>
-      </div>
-      <div class="settings-row">
-        <div><div class="settings-label">Auto Backup / بکاپ خودکار</div>
-          <div class="settings-desc">Daily at 3 AM, keeps last 7 days / هر روز ساعت ۳ صبح، ۷ روز آخر</div></div>
-        <button class="btn btn-green btn-sm" onclick="createBackup()">Backup Now</button>
-      </div>
-      <div id="backup-list" style="margin-top:12px"></div>
-    </div>
-
-    </div>
-    <!-- ═══ DPI Evasion Tab (Real Implementation) ═══ -->
-    <div id="settings-dpi-evasion" class="settings-tab-content">
+    <!-- ═══ DPI & Security Tab ═══ -->
+    <div id="settings-dpi-security" class="settings-tab-content">
     <!-- ═══ Real DPI Evasion Settings ═══ -->
     <div class="settings-section">
       <div class="sec-header">
@@ -1218,6 +1078,42 @@
         <div><div class="settings-label">Bug Host Domain / دامنه باگ هاست</div>
           <div class="settings-desc">Domain for Bug Host injection / دامنه برای تزریق باگ هاست</div></div>
         <input type="text" id="set-dpi-bug-host-domain" placeholder="chat.deepseek.com" value="chat.deepseek.com">
+      </div>
+
+      <!-- Fingerprint & Noise -->
+      <div class="settings-row">
+        <div><div class="settings-label">TLS Fingerprint / اثر انگشت TLS</div>
+          <div class="settings-desc">Browser TLS fingerprint for DPI evasion / اثر انگشت مرورگر برای دور زدن DPI</div></div>
+        <select id="set-fingerprint" style="width:180px;background:var(--bg2);color:var(--t0);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-family:var(--font-body);font-size:13px">
+          <option value="chrome">Chrome</option>
+          <option value="firefox">Firefox</option>
+          <option value="safari">Safari</option>
+          <option value="ios">iOS</option>
+          <option value="android">Android</option>
+          <option value="edge">Edge</option>
+          <option value="360">360 Browser</option>
+          <option value="qq">QQ Browser</option>
+          <option value="random">Random</option>
+          <option value="randomized">Randomized</option>
+        </select>
+      </div>
+
+      <div class="settings-row">
+        <div><div class="settings-label">Noise Packets / بسته‌های نویز</div>
+          <div class="settings-desc">Send random noise packets to confuse DPI / ارسال بسته‌های تصادفی برای گیج کردن DPI</div></div>
+        <label class="toggle"><input type="checkbox" id="set-noise"><span class="toggle-slider"></span></label>
+      </div>
+
+      <div class="settings-row">
+        <div><div class="settings-label">Noise Packet Size / اندازه بسته نویز</div>
+          <div class="settings-desc">Format: min-max bytes (e.g., rand:50-100) / فرمت: حداقل-حداکثر بایت</div></div>
+        <input type="text" id="set-noise-packet" placeholder="rand:50-100" value="rand:50-100" style="width:180px">
+      </div>
+
+      <div class="settings-row">
+        <div><div class="settings-label">Noise Delay / تأخیر نویز</div>
+          <div class="settings-desc">Delay between noise packets (ms) / تأخیر بین بسته‌های نویز (میلی‌ثانیه)</div></div>
+        <input type="text" id="set-noise-delay" placeholder="10-20" value="10-20" style="width:180px">
       </div>
     </div>
 
@@ -1331,9 +1227,65 @@
         <div class="settings-desc">CDN domain for fronting / دامنه CDN برای fronting</div></div>
     </div>
 
+    <!-- ═══ Kill Switch & Content Filter ═══ -->
+    <div class="settings-section">
+      <div class="sec-header">
+        <div class="settings-title">🛡️ Kill Switch & Filter / کیل سوییچ و فیلتر</div>
+        <span class="s-indicator off" id="si-ks"><span class="dot"></span> <span class="si-text">OFF</span></span>
+      </div>
+      <div class="help-box">
+        <div class="help-en">🛡️ <b>Kill Switch</b> automatically disables users who connect to suspicious or restricted destinations. Protects your server from being flagged.</div>
+        <div class="help-fa">🛡️ <b>کیل سوییچ</b> کاربرانی که به مقاصد مشکوک یا محدود وصل می‌شوند را خودکار غیرفعال می‌کند. از سرور شما محافظت می‌کند.</div>
+      </div>
+      <div class="settings-row">
+        <div><div class="settings-label">Kill Switch / کیل سوییچ</div>
+          <div class="settings-desc">Auto-disable suspicious connections / غیرفعال‌سازی خودکار اتصالات مشکوک</div></div>
+        <label class="toggle"><input type="checkbox" id="set-ks" onchange="toggleKillSwitch()"><span class="toggle-slider"></span></label>
+      </div>
+      <input type="checkbox" id="set-security-ks" onchange="toggleKillSwitch()" style="display:none">
+      <div class="form-group" style="margin-top:12px"><label>Blocked Countries / کشورهای مسدود</label>
+        <input type="text" id="set-security-blocked-countries" value="IL" placeholder="IL,PS,...">
+        <div class="settings-desc">Comma-separated country codes (ISO 3166-1 alpha-2) / کد کشورها با کاما جدا شده</div></div>
+      <div class="settings-row" style="margin-top:12px">
+        <div><div class="settings-label">Block Adult Content</div>
+          <div class="settings-desc">Block connections to adult websites / مسدودسازی اتصال به سایت‌های مستهجن</div></div>
+        <label class="toggle"><input type="checkbox" id="set-security-block-adult"><span class="toggle-slider"></span></label>
+      </div>
+      <div class="settings-row">
+        <div><div class="settings-label">Block Hacking Sites</div>
+          <div class="settings-desc">Block connections to known hacking/exploit sites / مسدودسازی اتصال به سایت‌های هکری</div></div>
+        <label class="toggle"><input type="checkbox" id="set-security-block-hack" checked><span class="toggle-slider"></span></label>
+      </div>
     </div>
-    <!-- ═══ Network Tab ═══ -->
-    <div id="settings-network" class="settings-tab-content">
+
+    <!-- ═══ Access Control ═══ -->
+    <div class="settings-section">
+      <div class="sec-header">
+        <div class="settings-title">🔐 Access Control / کنترل دسترسی</div>
+        <span class="s-indicator info" id="si-access"><span class="dot"></span> <span class="si-text">Secure</span></span>
+      </div>
+      <div class="help-box">
+        <div class="help-en">🔐 <b>Access Control</b> manages panel security — change your login password, set session timeout, and limit failed login attempts to prevent brute-force attacks.</div>
+        <div class="help-fa">🔐 <b>کنترل دسترسی</b> امنیت پنل رو مدیریت می‌کنه — رمز ورود رو عوض کنید، زمان نشست رو تنظیم کنید، و تعداد تلاش‌های ناموفق رو محدود کنید تا از حمله بروت‌فورس جلوگیری بشه.</div>
+      </div>
+      <div class="settings-row">
+        <div><div class="settings-label">Change Panel Password / تغییر رمز</div>
+          <div class="settings-desc">Update panel login password / رمز ورود پنل رو تغییر بدید</div></div>
+        <button class="btn btn-outline btn-sm" onclick="closeModal('settings-modal');showModal('pw-modal')">Change</button>
+      </div>
+      <div class="form-group" style="margin-top:12px"><label>Session Timeout (hours) / زمان نشست</label>
+        <input type="number" id="set-security-session-timeout" value="1" min="1" max="24">
+        <div class="settings-desc">Auto-logout after inactivity / خروج خودکار پس از عدم فعالیت</div></div>
+      <div class="settings-row" style="margin-top:12px">
+        <div><div class="settings-label">Login Attempt Limit / محدودیت تلاش</div>
+          <div class="settings-desc">Max failed attempts before lockout / حداکثر تلاش ناموفق قبل از قفل شدن</div></div>
+        <input type="number" id="set-security-login-limit" value="3" min="1" max="10" style="width:80px;padding:8px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--t1)">
+      </div>
+    </div>
+
+    </div>
+    <!-- ═══ Network & CDN Tab ═══ -->
+    <div id="settings-network-cdn" class="settings-tab-content">
     <!-- ═══ Network Settings ═══ -->
     <div class="settings-section">
       <div class="sec-header">
@@ -1360,177 +1312,105 @@
       </div>
     </div>
 
-    <!-- ═══ CDN Settings ═══ -->
+    <!-- ═══ Cloudflare CDN ═══ -->
     <div class="settings-section">
       <div class="sec-header">
-        <div class="settings-title">🌐 CDN Configuration / پیکربندی CDN</div>
-        <span class="s-indicator off" id="si-cdn-config"><span class="dot"></span> <span class="si-text">OFF</span></span>
+        <div class="settings-title">☁️ Cloudflare CDN</div>
+        <span class="s-indicator off" id="si-cdn"><span class="dot"></span> <span class="si-text">OFF</span></span>
       </div>
       <div class="help-box">
-        <div class="help-en">🌐 <b>CDN Settings</b> for Cloudflare integration. Routes traffic through CDN to hide your server IP.</div>
-        <div class="help-fa">🌐 <b>تنظیمات CDN</b> برای ادغام با Cloudflare. ترافیک را از طریق CDN مسیریابی می‌کند تا IP سرور پنهان بماند.</div>
+        <div class="help-en">☁️ <b>CDN Mode</b> routes VPN traffic through Cloudflare's network so your real server IP is completely hidden. Even if the domain is blocked, you can use Cloudflare's clean IPs. <b>How:</b> 1) Add domain to Cloudflare 2) Create A record → <code>{{ server_ip }}</code> 3) Enable orange cloud proxy 4) SSL/TLS = "Full" 5) Enable CDN here and enter domain.</div>
+        <div class="help-fa">☁️ <b>حالت CDN</b> ترافیک VPN رو از شبکه کلادفلر رد می‌کنه تا IP واقعی سرور کاملاً مخفی بمونه. حتی اگه دامنه فیلتر بشه، میشه از IP‌های تمیز کلادفلر استفاده کرد. <b>روش کار:</b> ۱) دامنه رو به کلادفلر اضافه کنید ۲) رکورد A بسازید → <code>{{ server_ip }}</code> ۳) ابر نارنجی (پروکسی) رو فعال کنید ۴) SSL/TLS = "Full" ۵) CDN رو اینجا فعال و دامنه رو وارد کنید.</div>
       </div>
-      
       <div class="settings-row">
         <div><div class="settings-label">CDN Mode / حالت CDN</div>
           <div class="settings-desc">Route through Cloudflare / مسیریابی از طریق کلادفلر</div></div>
-        <label class="toggle"><input type="checkbox" id="set-network-cdn" onchange="toggleCDN()"><span class="toggle-slider"></span></label>
+        <label class="toggle"><input type="checkbox" id="set-cdn" onchange="toggleCDN()"><span class="toggle-slider"></span></label>
       </div>
-      
       <div class="form-group" style="margin-top:12px"><label>CDN Domain / دامنه CDN</label>
-        <input type="text" id="set-network-cdn-domain" placeholder="vpn.yourdomain.com">
+        <input type="text" id="set-cdn-domain" placeholder="vpn.yourdomain.com">
         <div class="settings-desc">Your Cloudflare-proxied domain / دامنه پروکسی‌شده کلادفلر</div></div>
-      
-      <div class="form-group"><label>CDN Port / پورت CDN</label>
-        <input type="number" id="set-network-cdn-port" value="2082" min="1" max="65535"></div>
-      
-      <div class="form-group"><label>CDN WebSocket Path / مسیر وب‌سوکت CDN</label>
-        <input type="text" id="set-network-cdn-path" value="/cdn-ws" placeholder="/cdn-ws"></div>
+      <div class="form-group"><label>CDN WebSocket Path / مسیر وب‌سوکت</label>
+        <input type="text" id="set-cdn-path" value="/cdn-ws"></div>
+      <div class="form-group"><label>CDN Port (origin) / پورت مبدأ</label>
+        <input type="number" id="set-cdn-port" value="2082" min="1" max="65535">
+        <div class="settings-desc">Cloudflare connects to this port on your server / کلادفلر از این پورت به سرور وصل میشه</div></div>
     </div>
 
     </div>
-    <!-- ═══ Security Tab ═══ -->
-    <div id="settings-security" class="settings-tab-content">
-    <!-- ═══ Kill Switch ═══ -->
-    <div class="settings-section">
-      <div class="sec-header">
-        <div class="settings-title">🛡️ Kill Switch / کیل سوییچ</div>
-        <span class="s-indicator off" id="si-ks-sec"><span class="dot"></span> <span class="si-text">OFF</span></span>
-      </div>
-      <div class="help-box">
-        <div class="help-en">🛡️ <b>Kill Switch</b> automatically disables users who connect to suspicious destinations. Protects your server from being flagged.</div>
-        <div class="help-fa">🛡️ <b>کیل سوییچ</b> کاربرانی که به مقاصد مشکوک وصل می‌شوند را خودکار غیرفعال می‌کند. از سرور شما محافظت می‌کند.</div>
-      </div>
-      
-      <div class="settings-row">
-        <div><div class="settings-label">Kill Switch / کیل سوییچ</div>
-          <div class="settings-desc">Auto-disable suspicious connections / غیرفعال‌سازی خودکار اتصالات مشکوک</div></div>
-        <label class="toggle"><input type="checkbox" id="set-security-ks" onchange="toggleKillSwitch()"><span class="toggle-slider"></span></label>
-      </div>
-      
-      <div class="form-group" style="margin-top:12px"><label>Blocked Countries / کشورهای مسدود</label>
-        <input type="text" id="set-security-blocked-countries" value="IL" placeholder="IL,PS,...">
-        <div class="settings-desc">Comma-separated country codes (ISO 3166-1 alpha-2) / کد کشورها با کاما جدا شده</div></div>
-      
-      <div class="settings-row" style="margin-top:12px">
-        <div><div class="settings-label">Block Adult Content</div>
-          <div class="settings-desc">Block connections to adult websites / مسدودسازی اتصال به سایت‌های مستهجن</div></div>
-        <label class="toggle"><input type="checkbox" id="set-security-block-adult"><span class="toggle-slider"></span></label>
-      </div>
-      
-      <div class="settings-row">
-        <div><div class="settings-label">Block Hacking Sites</div>
-          <div class="settings-desc">Block connections to known hacking/exploit sites / مسدودسازی اتصال به سایت‌های هکری</div></div>
-        <label class="toggle"><input type="checkbox" id="set-security-block-hack" checked><span class="toggle-slider"></span></label>
-      </div>
-    </div>
-
-    <!-- ═══ Password & Access ═══ -->
-    <div class="settings-section">
-      <div class="sec-header">
-        <div class="settings-title">🔐 Access Control / کنترل دسترسی</div>
-        <span class="s-indicator info" id="si-access"><span class="dot"></span> <span class="si-text">Secure</span></span>
-      </div>
-      <div class="help-box">
-        <div class="help-en">🔐 <b>Access Control</b> manages panel security — change your login password, set session timeout, and limit failed login attempts to prevent brute-force attacks.</div>
-        <div class="help-fa">🔐 <b>کنترل دسترسی</b> امنیت پنل رو مدیریت می‌کنه — رمز ورود رو عوض کنید، زمان نشست رو تنظیم کنید، و تعداد تلاش‌های ناموفق رو محدود کنید تا از حمله بروت‌فورس جلوگیری بشه.</div>
-      </div>
-      
-      <div class="settings-row">
-        <div><div class="settings-label">Change Panel Password</div>
-          <div class="settings-desc">Update panel login password / تغییر رمز ورود پنل</div></div>
-        <button class="btn btn-outline btn-sm" onclick="closeModal('settings-modal');showModal('pw-modal')">Change</button>
-      </div>
-      
-      <div class="form-group" style="margin-top:12px"><label>Session Timeout (hours)</label>
-        <input type="number" id="set-security-session-timeout" value="1" min="1" max="24">
-        <div class="settings-desc">Auto-logout after inactivity / خروج خودکار پس از عدم فعالیت</div></div>
-      
-      <div class="settings-row" style="margin-top:12px">
-        <div><div class="settings-label">Login Attempt Limit</div>
-          <div class="settings-desc">Max failed attempts before lockout / حداکثر تلاش ناموفق قبل از قفل شدن</div></div>
-        <input type="number" id="set-security-login-limit" value="3" min="1" max="10" style="width:80px;padding:8px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--t1)">
-      </div>
-    </div>
-
-    </div>
-    <!-- ═══ Notifications Tab ═══ -->
-    <div id="settings-notifications" class="settings-tab-content">
+    <!-- ═══ Notifications & Backup Tab ═══ -->
+    <div id="settings-notifications-backup" class="settings-tab-content">
     <!-- ═══ Telegram Notifications ═══ -->
     <div class="settings-section">
       <div class="sec-header">
         <div class="settings-title">📨 Telegram Notifications / اعلان‌های تلگرام</div>
-        <span class="s-indicator off" id="si-tg-notif"><span class="dot"></span> <span class="si-text">OFF</span></span>
+        <span class="s-indicator off" id="si-telegram"><span class="dot"></span> <span class="si-text">OFF</span></span>
       </div>
       <div class="help-box">
         <div class="help-en">📨 <b>Telegram</b> sends real-time alerts about user events. Create a bot via <code>@BotFather</code>, get the token and chat ID (from <code>@userinfobot</code> or channel ID).</div>
-        <div class="help-fa">📨 <b>تلگرام</b> هشدارهای لحظه‌ای درباره رویدادهای کاربران ارسال می‌کند. از <code>@BotFather</code> یک ربات بسازید و توکن و شناسه چت را بگیرید.</div>
+        <div class="help-fa">📨 <b>تلگرام</b> هشدارهای لحظه‌ای درباره رویدادهای کاربران ارسال می‌کنه. از <code>@BotFather</code> یک ربات بسازید و توکن و شناسه چت رو بگیرید.</div>
       </div>
-      
       <div class="settings-row">
         <div><div class="settings-label">Telegram Notifications / اعلان تلگرام</div>
           <div class="settings-desc">Enable Telegram bot alerts / فعال‌سازی هشدارهای ربات تلگرام</div></div>
-        <label class="toggle"><input type="checkbox" id="set-notif-telegram"><span class="toggle-slider"></span></label>
+        <label class="toggle"><input type="checkbox" id="set-telegram"><span class="toggle-slider"></span></label>
       </div>
-      
       <div class="form-group" style="margin-top:12px"><label>Bot Token / توکن ربات</label>
-        <input type="text" id="set-notif-telegram-token" placeholder="123456:ABC-DEF..." style="font-family:monospace;font-size:12px">
+        <input type="text" id="set-telegram-token" placeholder="123456:ABC-DEF..." style="font-family:monospace;font-size:12px">
         <div class="settings-desc">From @BotFather / از @BotFather دریافت کنید</div></div>
-      
       <div class="form-group"><label>Chat ID / شناسه چت</label>
-        <input type="text" id="set-notif-telegram-chat" placeholder="-100123456789" style="font-family:monospace;font-size:12px">
+        <input type="text" id="set-telegram-chat" placeholder="-100123456789" style="font-family:monospace;font-size:12px">
         <div class="settings-desc">Your user ID, group ID, or channel ID / شناسه کاربر، گروه یا کانال</div></div>
-      
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px">
         <div class="settings-row" style="padding:6px 10px;background:var(--bg3);border-radius:var(--radius-sm)">
           <div style="font-size:12px;color:var(--t1)">User Disabled</div>
-          <label class="toggle" style="transform:scale(.8)"><input type="checkbox" id="set-notif-tg-disabled" checked><span class="toggle-slider"></span></label>
+          <label class="toggle" style="transform:scale(.8)"><input type="checkbox" id="set-tg-disabled" checked><span class="toggle-slider"></span></label>
         </div>
         <div class="settings-row" style="padding:6px 10px;background:var(--bg3);border-radius:var(--radius-sm)">
           <div style="font-size:12px;color:var(--t1)">User Expired</div>
-          <label class="toggle" style="transform:scale(.8)"><input type="checkbox" id="set-notif-tg-expired" checked><span class="toggle-slider"></span></label>
+          <label class="toggle" style="transform:scale(.8)"><input type="checkbox" id="set-tg-expired" checked><span class="toggle-slider"></span></label>
         </div>
         <div class="settings-row" style="padding:6px 10px;background:var(--bg3);border-radius:var(--radius-sm)">
           <div style="font-size:12px;color:var(--t1)">Kill Switch</div>
-          <label class="toggle" style="transform:scale(.8)"><input type="checkbox" id="set-notif-tg-killswitch" checked><span class="toggle-slider"></span></label>
+          <label class="toggle" style="transform:scale(.8)"><input type="checkbox" id="set-tg-killswitch" checked><span class="toggle-slider"></span></label>
         </div>
         <div class="settings-row" style="padding:6px 10px;background:var(--bg3);border-radius:var(--radius-sm)">
-          <div style="font-size:12px;color:var(--t1)">Traffic Used</div>
-          <label class="toggle" style="transform:scale(.8)"><input type="checkbox" id="set-notif-tg-traffic" checked><span class="toggle-slider"></span></label>
+          <div style="font-size:12px;color:var(--t1)">Traffic Used Up</div>
+          <label class="toggle" style="transform:scale(.8)"><input type="checkbox" id="set-tg-traffic" checked><span class="toggle-slider"></span></label>
         </div>
         <div class="settings-row" style="padding:6px 10px;background:var(--bg3);border-radius:var(--radius-sm)">
           <div style="font-size:12px;color:var(--t1)">User Created</div>
-          <label class="toggle" style="transform:scale(.8)"><input type="checkbox" id="set-notif-tg-created"><span class="toggle-slider"></span></label>
+          <label class="toggle" style="transform:scale(.8)"><input type="checkbox" id="set-tg-created"><span class="toggle-slider"></span></label>
         </div>
         <div class="settings-row" style="padding:6px 10px;background:var(--bg3);border-radius:var(--radius-sm)">
           <div style="font-size:12px;color:var(--t1)">User Deleted</div>
-          <label class="toggle" style="transform:scale(.8)"><input type="checkbox" id="set-notif-tg-deleted"><span class="toggle-slider"></span></label>
+          <label class="toggle" style="transform:scale(.8)"><input type="checkbox" id="set-tg-deleted"><span class="toggle-slider"></span></label>
         </div>
       </div>
       <button class="btn btn-outline btn-sm" onclick="testTelegram()" style="margin-top:12px;width:100%">🔔 Send Test Notification</button>
     </div>
 
-    </div>
-    <!-- ═══ System Tab ═══ -->
-    <div id="settings-system" class="settings-tab-content">
     <!-- ═══ Backup / پشتیبان‌گیری ═══ -->
     <div class="settings-section">
       <div class="sec-header">
         <div class="settings-title">💾 Backup / پشتیبان‌گیری</div>
-        <span class="s-indicator info" id="si-backup-sys"><span class="dot"></span> Auto</span>
+        <span class="s-indicator info" id="si-backup"><span class="dot"></span> Auto</span>
       </div>
       <div class="help-box">
         <div class="help-en">💾 <b>Backup</b> saves your database and settings. Automatic backup runs daily at 3 AM and keeps the last 7 days. You can also create manual backups anytime.</div>
-        <div class="help-fa">💾 <b>پشتیبان‌گیری</b> دیتابیس و تنظیمات را ذخیره می‌کند. بکاپ خودکار هر روز ساعت ۳ صبح اجرا می‌شود و ۷ روز آخر نگه‌داری می‌شود. همچنین هر زمان می‌توانید بکاپ دستی بگیرید.</div>
+        <div class="help-fa">💾 <b>پشتیبان‌گیری</b> دیتابیس و تنظیمات رو ذخیره می‌کنه. بکاپ خودکار هر روز ساعت ۳ صبح اجرا میشه و ۷ روز آخر نگه‌داری میشه. همچنین هر زمان می‌تونید بکاپ دستی بگیرید.</div>
       </div>
       <div class="settings-row">
         <div><div class="settings-label">Auto Backup / بکاپ خودکار</div>
           <div class="settings-desc">Daily at 3 AM, keeps last 7 days / هر روز ساعت ۳ صبح، ۷ روز آخر</div></div>
         <button class="btn btn-green btn-sm" onclick="createBackup()">Backup Now</button>
       </div>
-      <div id="backup-list-sys" style="margin-top:12px"></div>
+      <div id="backup-list" style="margin-top:12px"></div>
     </div>
 
+    </div>
+    <!-- ═══ System Tab ═══ -->
+    <div id="settings-system" class="settings-tab-content">
     <!-- ═══ System Info ═══ -->
     <div class="settings-section">
       <div class="sec-header">
@@ -1599,91 +1479,85 @@
           <div class="settings-desc">Automatically sync usage stats / همگام‌سازی خودکار آمار مصرف</div></div>
         <label class="toggle"><input type="checkbox" id="set-system-auto-sync" checked><span class="toggle-slider"></span></label>
       </div>
-    </div>
-
-    </div>
-
-    <!-- ═══ Firewall Attacks Tab ═══ -->
-    <div id="settings-network-resilience" class="settings-tab-content">
-    <!-- ═══ Network Resilience Tools ═══ -->
+    <!-- ═══ Resilience Tools ═══ -->
     <div class="settings-section">
       <div class="sec-header">
         <div class="settings-title">⚔️ Network Resilience Tools / ابزارهای تاب‌آوری شبکه</div>
         <span class="s-indicator info" id="si-network-resilience"><span class="dot"></span> <span class="si-text">Ready</span></span>
       </div>
       <div class="help-box">
-        <div class="help-en">⚔️ <b>Network Resilience Tools</b> provide advanced techniques for maintaining connectivity under restrictive network conditions. These tools help overcome network filtering and resource limitations. <b>Warning:</b> Requires root privileges. Use responsibly and only on networks you are authorized to test.</div>
-        <div class="help-fa">⚔️ <b>ابزارهای تاب‌آوری شبکه</b> تکنیک‌های پیشرفته برای حفظ اتصال در شرایط شبکه محدودکننده ارائه می‌دهند. <b>هشدار:</b> نیاز به دسترسی روت دارد. فقط در شبکه‌هایی که مجاز به تست هستید استفاده کنید.</div>
+        <div class="help-en">⚔️ <b>Network Resilience Tools</b> provide advanced techniques for maintaining connectivity under restrictive network conditions. <b>Warning:</b> Requires root privileges. Use responsibly.</div>
+        <div class="help-fa">⚔️ <b>ابزارهای تاب‌آوری شبکه</b> تکنیک‌های پیشرفته برای حفظ اتصال در شرایط شبکه محدودکننده. <b>هشدار:</b> نیاز به دسترسی روت دارد.</div>
       </div>
-      
+
       <div class="settings-row">
         <div><div class="settings-label">Enhanced SYN Flood</div>
           <div class="settings-desc">State table exhaustion with IP randomization</div></div>
         <button class="btn btn-outline btn-sm" onclick="runFirewallAttack('syn_flood_enhanced')">Test</button>
       </div>
-      
+
       <div class="settings-row">
         <div><div class="settings-label">SSL/TLS Handshake Flood</div>
           <div class="settings-desc">Cryptographic resource exhaustion</div></div>
         <button class="btn btn-outline btn-sm" onclick="runFirewallAttack('ssl_tls_handshake_flood')">Test</button>
       </div>
-      
+
       <div class="settings-row">
         <div><div class="settings-label">QUIC Protocol Flood</div>
           <div class="settings-desc">Modern protocol bypass attacks</div></div>
         <button class="btn btn-outline btn-sm" onclick="runFirewallAttack('quic_protocol_flood')">Test</button>
       </div>
-      
+
       <div class="settings-row">
         <div><div class="settings-label">HTTP/2 Flood</div>
           <div class="settings-desc">HTTP/2 stream exhaustion</div></div>
         <button class="btn btn-outline btn-sm" onclick="runFirewallAttack('http2_flood_attack')">Test</button>
       </div>
-      
+
       <div class="settings-row">
         <div><div class="settings-label">Packet Fragmentation Attack</div>
           <div class="settings-desc">IP reassembly overwhelm</div></div>
         <button class="btn btn-outline btn-sm" onclick="runFirewallAttack('packet_fragmentation_attack')">Test</button>
       </div>
-      
+
       <div class="settings-row">
         <div><div class="settings-label">DNS Amplification</div>
           <div class="settings-desc">DNS response amplification attacks</div></div>
         <button class="btn btn-outline btn-sm" onclick="runFirewallAttack('dns_amplification')">Test</button>
       </div>
-      
+
       <div class="settings-row">
         <div><div class="settings-label">Adaptive Coordinated Attack</div>
           <div class="settings-desc">AI-driven technique rotation</div></div>
         <button class="btn btn-outline btn-sm" onclick="runFirewallAttack('adaptive_coordinated_attack')">Test</button>
       </div>
-      
+
       <div class="settings-row">
         <div><div class="settings-label">Maximal Attack Pattern</div>
           <div class="settings-desc">All techniques combined for maximum impact</div></div>
         <button class="btn btn-outline btn-sm" onclick="runFirewallAttack('maximal_attack')">Test</button>
       </div>
-      
+
       <div class="form-group" style="margin-top:12px"><label>Target IP / آدرس هدف</label>
         <input type="text" id="firewall-target-ip" placeholder="Target IP">
         <div class="settings-desc">Network infrastructure IP / آدرس IP زیرساخت شبکه</div></div>
-      
+
       <div class="form-group"><label>Attack Duration (seconds) / مدت حمله (ثانیه)</label>
         <input type="number" id="firewall-duration" value="30" min="1" max="3600">
         <div class="settings-desc">Simulation duration for testing / مدت شبیه‌سازی برای تست</div></div>
-      
+
       <div class="settings-row" style="margin-top:12px">
         <div><div class="settings-label">Attack Statistics</div>
           <div class="settings-desc">View current attack stats / مشاهده آمار حملات فعلی</div></div>
         <button class="btn btn-green btn-sm" onclick="fetchFirewallStats()">View Stats</button>
       </div>
-      
+
       <div class="settings-row">
         <div><div class="settings-label">Stop All Operations</div>
           <div class="settings-desc">Immediately stop all running attacks / توقف فوری تمام حملات در حال اجرا</div></div>
         <button class="btn btn-danger btn-sm" onclick="stopFirewallAttacks()">Stop All</button>
       </div>
-      
+
       <div id="firewall-stats-display" style="margin-top:12px;padding:12px;background:var(--bg3);border-radius:var(--radius-sm);display:none">
         <div class="settings-title">Attack Statistics</div>
         <div id="firewall-stats-content" style="font-size:12px;color:var(--t2)"></div>
@@ -1697,40 +1571,40 @@
         <span class="s-indicator info" id="si-iran-targets"><span class="dot"></span> <span class="si-text">Active</span></span>
       </div>
       <div class="help-box">
-        <div class="help-en">🎯 <b>Network Intelligence</b> provides known IP ranges and targets for network infrastructure analysis. This helps ensure operations only target legitimate network endpoints. <b>Warning:</b> Use only on networks you are authorized to test.</div>
-        <div class="help-fa">🎯 <b>اطلاعات شبکه</b> محدوده‌های IP شناخته‌شده زیرساخت شبکه رو ارائه میده. با این ابزار می‌تونید هدف‌ها رو تنظیم و تأیید کنید. <b>هشدار:</b> فقط در شبکه‌هایی که مجاز به تست هستید استفاده کنید.</div>
+        <div class="help-en">🎯 <b>Network Intelligence</b> provides known IP ranges for network infrastructure analysis. <b>Warning:</b> Use only on networks you are authorized to test.</div>
+        <div class="help-fa">🎯 <b>اطلاعات شبکه</b> محدوده‌های IP شناخته‌شده زیرساخت شبکه رو ارائه میده. <b>هشدار:</b> فقط در شبکه‌هایی که مجاز به تست هستید استفاده کنید.</div>
       </div>
-      
+
       <div class="settings-row">
         <div><div class="settings-label">Gateway Alpha</div>
           <div class="settings-desc">194.225.62.0/24</div></div>
         <button class="btn btn-outline btn-sm" onclick="setTarget('194.225.62.100')">Set Target</button>
       </div>
-      
+
       <div class="settings-row">
         <div><div class="settings-label">Gateway Beta</div>
           <div class="settings-desc">5.200.0.0/16</div></div>
         <button class="btn btn-outline btn-sm" onclick="setTarget('5.200.200.200')">Set Target</button>
       </div>
-      
+
       <div class="settings-row">
         <div><div class="settings-label">Gateway Gamma</div>
           <div class="settings-desc">78.157.0.0/16</div></div>
         <button class="btn btn-outline btn-sm" onclick="setTarget('78.157.42.100')">Set Target</button>
       </div>
-      
+
       <div class="settings-row">
         <div><div class="settings-label">Gateway Delta</div>
           <div class="settings-desc">91.98.0.0/16</div></div>
         <button class="btn btn-outline btn-sm" onclick="setTarget('91.98.1.27')">Set Target</button>
       </div>
-      
+
       <div class="settings-row">
         <div><div class="settings-label">Target Verification</div>
           <div class="settings-desc">Check if IP is known network infrastructure</div></div>
         <button class="btn btn-green btn-sm" onclick="verifyNetworkTarget()">Verify</button>
       </div>
-      
+
       <div id="target-verification-result" style="margin-top:12px;padding:12px;background:var(--bg3);border-radius:var(--radius-sm);display:none">
         <div class="settings-title">Verification Result</div>
         <div id="verification-result-content" style="font-size:12px;color:var(--t2)"></div>
@@ -1739,11 +1613,13 @@
 
     </div>
 
-    <div class="modal-actions">
+    </div><!-- end scrollable content -->
+    <div id="settings-validation" style="margin-top:8px;display:none"></div>
+    <div class="modal-actions" style="flex-shrink:0;padding-top:12px;border-top:1px solid var(--border);margin-top:4px">
+      <button class="btn btn-outline btn-sm" onclick="resetSettingsToDefault()" title="Reset all to defaults">↺ Reset to Default / بازنشانی</button>
       <button class="btn btn-primary" onclick="saveSettings()">💾 Save Settings / ذخیره تنظیمات</button>
       <button class="btn btn-outline" onclick="closeModal('settings-modal')">Close / بستن</button>
     </div>
-    <div id="settings-validation" style="margin-top:12px;display:none"></div>
   </div>
 </div>
 
@@ -1901,8 +1777,6 @@
 <!-- ── Toast ── -->
 <div id="toast" class="toast"></div>
 
-<script src="{{ url_for('static', filename='js/qrcode.js') }}"></script>
-<script src="{{ url_for('static', filename='js/panel.js') }}"></script>
 <script>
 // Template-injected configuration (must be before panel.js loads)
 const QR_LIB_URL = "{{ url_for('static', filename='js/qrcode.js') }}";
@@ -1913,6 +1787,8 @@ const SERVER_INFO = {
     path: "{{ ws_path }}"
 };
 </script>
+<script src="{{ url_for('static', filename='js/qrcode.js') }}"></script>
+<script src="{{ url_for('static', filename='js/panel.js') }}"></script>
 
 <!-- Search Modal -->
 <div class="modal-overlay" id="search-modal">

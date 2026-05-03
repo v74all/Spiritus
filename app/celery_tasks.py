@@ -146,7 +146,6 @@ def dpi_sni_validation():
         logger.error(f"DPI SNI validation failed: {e}")
         return {"status": "error", "message": str(e)}
 
-
 @celery_app.task(name="app.celery_tasks.dpi_flow_rate_check")
 def dpi_flow_rate_check():
     """Check per-user flow rates and enforce throttling.
@@ -198,9 +197,9 @@ def dpi_reality_key_rotation_check():
     active = reality_key_manager.get_active_keys()
     expiring = []
     for key in active:
-        from datetime import datetime
+        from datetime import datetime, timezone
         expires = datetime.fromisoformat(key["expires_at"])
-        days_left = (expires - datetime.utcnow()).days
+        days_left = (expires - datetime.now(timezone.utc)).days
         if days_left <= 7:
             expiring.append({
                 "key_id": key["key_id"],

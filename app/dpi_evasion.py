@@ -25,12 +25,12 @@ import logging
 import os
 import random
 import secrets
-import ssl
+
 import subprocess
 import time
 from collections import defaultdict
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
@@ -83,7 +83,6 @@ class IranDPIThreat:
         "digikala.com",      # Iranian e-commerce (largest in Iran)
         "snapp.ir",          # Iranian ride-hailing (like Uber)
         "divar.ir",          # Iranian classifieds marketplace
-        "web.splus.ir",     # SPlus Iranian platform
     ]
 
     # Tier 3: Same-ASN (Hetzner AS24940) — must be scanned
@@ -280,7 +279,7 @@ class SNIManager:
 
         try:
             start = time.time()
-            async with httpx.AsyncClient(timeout=10.0, verify=False) as client:
+            async with httpx.AsyncClient(timeout=10.0) as client:
                 # Check HTTPS with TLS 1.3
                 try:
                     resp = await client.get(
@@ -491,10 +490,10 @@ class RealityKeyManager:
         except Exception as e:
             logger.error(f"Failed to generate REALITY keys: {e}")
 
-        # Fallback: generate placeholder keys (for testing)
-        private_key = secrets.token_hex(32)
-        public_key = secrets.token_hex(32)
-        return {"private_key": private_key, "public_key": public_key}
+        raise RuntimeError(
+            "Failed to generate REALITY X25519 key pair. "
+            "Ensure xray binary is available at /usr/local/bin/xray"
+        )
 
     @staticmethod
     def generate_short_id(length: int = 8) -> str:
@@ -1004,15 +1003,9 @@ class DPISafeConfigGenerator:
                 },
             },
             # Fallback for active probing defense
-            "settings": {
-                "clients": [
-                    {
-                        "id": user_uuid,
-                        "flow": "",
-                    }
-                ],
-                "decryption": "none",
-            },
+            "fallbacks": [
+                {"dest": fallback_dest, "xver": 1},
+            ],
         }
 
     @staticmethod
@@ -1055,6 +1048,10 @@ class DPISafeConfigGenerator:
                     "fingerprint": "chrome",
                 },
             },
+            # Fallback for active probing defense
+            "fallbacks": [
+                {"dest": fallback_dest, "xver": 1},
+            ],
         }
 
     @staticmethod
@@ -1096,7 +1093,15 @@ class DPISafeConfigGenerator:
             reality_private_key=reality_private_key,
             reality_public_key=reality_public_key,
             sni=sni,
+            port=8443,  # Separate port to avoid conflict with XHTTP on 443
             fallback_dest=fallback_dest,
+        )
+
+        # Generate fallback server config for active probing defense
+        _apd = ActiveProbingDefense()
+        fallback_config = _apd.generate_xray_fallback_config(
+            dest=fallback_dest,
+            sni=sni,
         )
 
         return {
@@ -1153,6 +1158,8 @@ class DPISafeConfigGenerator:
                 # Fallback: VLESS + Vision + REALITY
                 vision_inbound,
             ],
+            # Fallback server for active probing defense
+            "fallback": fallback_config,
             "outbounds": [
                 {
                     "tag": "direct",
@@ -1265,7 +1272,11 @@ class IPReputationMonitor:
         self._reputation_data: Dict[str, Any] = {}
 
     async def check_ip_reputation(self, ip: str = "") -> Dict[str, Any]:
-        """Check IP reputation against known blacklists."""
+        """Check IP reputation against known blacklists.
+
+        Uses ip-api.com (free, no API key required) for basic reputation
+        and abuse contact information.
+        """
         if not ip:
             try:
                 async with httpx.AsyncClient(timeout=10.0) as client:
@@ -1279,23 +1290,29 @@ class IPReputationMonitor:
             "is_clean": True,
             "blacklists": {},
             "risk_score": 0,
-            "checked_at": datetime.utcnow().isoformat(),
+            "checked_at": datetime.now(timezone.utc).isoformat(),
         }
 
-        # Check common blacklists
-        blacklist_apis = [
-            f"https://api.abuseipdb.com/api/v2/check?ipAddress={ip}",
-        ]
-
-        for api_url in blacklist_apis:
-            try:
-                async with httpx.AsyncClient(timeout=10.0) as client:
-                    resp = await client.get(api_url)
-                    if resp.status_code == 200:
-                        data = resp.json()
-                        result["blacklists"][api_url.split("/")[2]] = data
-            except Exception:
-                pass
+        # Check via ip-api.com (free, no auth required)
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.get(
+                    f"http://ip-api.com/json/{ip}",
+                    params={"fields": "status,message,country,isp,org,as,asname,hosting,proxy,mobile"},
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    if data.get("status") == "success":
+                        result["isp"] = data.get("isp", "")
+                        result["org"] = data.get("org", "")
+                        result["asn"] = data.get("as", "")
+                        result["hosting"] = data.get("hosting", False)
+                        result["proxy"] = data.get("proxy", False)
+                        # Hosting/datacenter IPs may have higher risk in some regions
+                        if data.get("hosting"):
+                            result["risk_score"] = 10
+        except Exception:
+            pass
 
         self._reputation_data = result
         self._last_check = time.time()

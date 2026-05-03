@@ -1,24 +1,16 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ 'fa' if dir == 'rtl' else 'en' }}" dir="{{ dir }}">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>{{ user.name }} — VPN Subscription</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<title>{{ user.name }} — {{ 'اشتراک VPN' if dir == 'rtl' else 'VPN Subscription' }}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Azeret+Mono:wght@400;500;600;700&family=Fira+Sans:wght@300;400;500;600;700;800&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/panel.css') }}">
 <style>
-:root{
-  --bg0:#06080f;--bg1:#0d1117;--bg2:#161b22;--bg3:#1c2333;--bg4:#252d3a;
-  --border:#2d333b;--border2:#3d444d;
-  --t0:#f0f6fc;--t1:#c9d1d9;--t2:#8b949e;--t3:#636c76;
-  --accent:#58a6ff;--accent2:#388bfd;
-  --green:#3fb950;--green-bg:rgba(63,185,80,.12);
-  --yellow:#d29922;--yellow-bg:rgba(210,153,34,.12);
-  --red:#f85149;--red-bg:rgba(248,81,73,.12);
-  --purple:#bc8cff;--orange:#f0883e;
-  --radius:14px;--radius-sm:10px;
-}
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Inter',system-ui,sans-serif;background:var(--bg0);color:var(--t1);
+body{font-family:var(--font-body);background:var(--bg0);color:var(--t1);
   min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:20px;
   background:radial-gradient(ellipse at 50% 0%,#0d1a2e 0%,var(--bg0) 70%)}
 ::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:var(--bg1)}::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:3px}
@@ -67,7 +59,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg0);color:var(--
 .badge-cdn{background:rgba(240,136,62,.12);color:var(--orange)}
 .config-box{display:flex;gap:8px}
 .config-link{flex:1;padding:10px 12px;background:var(--bg1);border:1px solid var(--border);
-  border-radius:var(--radius-sm);color:var(--accent);font-size:10px;font-family:monospace;
+  border-radius:var(--radius-sm);color:var(--accent);font-size:10px;font-family:var(--font-mono);
   word-break:break-all;overflow:hidden;max-height:60px;line-height:1.4}
 .btn-copy{padding:10px 16px;background:var(--accent2);color:#fff;border:none;border-radius:var(--radius-sm);
   font-size:12px;font-weight:600;cursor:pointer;transition:all .2s;white-space:nowrap;flex-shrink:0}
@@ -87,7 +79,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg0);color:var(--
 .sub-section{margin-top:6px}
 .sub-box{display:flex;gap:8px;align-items:center}
 .sub-url{flex:1;padding:10px 12px;background:var(--bg1);border:1px solid var(--border);
-  border-radius:var(--radius-sm);color:var(--green);font-size:11px;font-family:monospace;
+  border-radius:var(--radius-sm);color:var(--green);font-size:11px;font-family:var(--font-mono);
   word-break:break-all;overflow:hidden}
 
 /* Apps */
@@ -129,8 +121,9 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg0);color:var(--
 <div class="container">
   <!-- Header -->
   <div class="header">
-    <div class="logo">VPN</div>
-    <div class="user-tag">Account: <b>{{ user.name }}</b></div>
+    <div class="logo">V7LTHRONYX</div>
+    <div class="user-tag">{{ 'کاربر:' if dir == 'rtl' else 'Account:' }} <b>{{ user.name }}</b></div>
+    <button class="btn btn-ghost btn-sm dir-toggle" onclick="toggleDirection()" style="margin-top:10px" title="Toggle RTL/LTR">{{ 'RTL' if dir == 'ltr' else 'LTR' }}</button>
   </div>
 
   <!-- Status & Traffic -->
@@ -233,7 +226,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg0);color:var(--
         <div class="config-label"><span class="config-badge badge-vmess">VMess</span> WS + TLS</div>
         <div class="config-box">
           <div class="config-link" id="link-vmess">{{ links.vmess }}</div>
-          <button class="btn-copy" onclick="copyLink('vmess')">Copy</button>
+          <button class="btn-copy" onclick="copyLink(event, 'vmess')">Copy</button>
         </div>
       </div>
       {% endif %}
@@ -242,7 +235,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg0);color:var(--
         <div class="config-label"><span class="config-badge badge-vless">VLESS</span> Reality</div>
         <div class="config-box">
           <div class="config-link" id="link-vless">{{ links.vless }}</div>
-          <button class="btn-copy" onclick="copyLink('vless')">Copy</button>
+          <button class="btn-copy" onclick="copyLink(event, 'vless')">Copy</button>
         </div>
       </div>
       {% endif %}
@@ -251,7 +244,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg0);color:var(--
         <div class="config-label"><span class="config-badge badge-cdn">CDN</span> VMess + WS</div>
         <div class="config-box">
           <div class="config-link" id="link-cdn_vmess">{{ links.cdn_vmess }}</div>
-          <button class="btn-copy" onclick="copyLink('cdn_vmess')">Copy</button>
+          <button class="btn-copy" onclick="copyLink(event, 'cdn_vmess')">Copy</button>
         </div>
       </div>
       {% endif %}
@@ -260,7 +253,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg0);color:var(--
         <div class="config-label"><span class="config-badge" style="background:#e74c3c22;color:#e74c3c">Trojan</span> TLS</div>
         <div class="config-box">
           <div class="config-link" id="link-trojan">{{ links.trojan }}</div>
-          <button class="btn-copy" onclick="copyLink('trojan')">Copy</button>
+          <button class="btn-copy" onclick="copyLink(event, 'trojan')">Copy</button>
         </div>
       </div>
       {% endif %}
@@ -269,7 +262,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg0);color:var(--
         <div class="config-label"><span class="config-badge" style="background:#2ecc7122;color:#2ecc71">gRPC</span> VMess + TLS</div>
         <div class="config-box">
           <div class="config-link" id="link-grpc_vmess">{{ links.grpc_vmess }}</div>
-          <button class="btn-copy" onclick="copyLink('grpc_vmess')">Copy</button>
+          <button class="btn-copy" onclick="copyLink(event, 'grpc_vmess')">Copy</button>
         </div>
       </div>
       {% endif %}
@@ -278,7 +271,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg0);color:var(--
         <div class="config-label"><span class="config-badge" style="background:#3498db22;color:#3498db">HU</span> VMess + TLS</div>
         <div class="config-box">
           <div class="config-link" id="link-httpupgrade_vmess">{{ links.httpupgrade_vmess }}</div>
-          <button class="btn-copy" onclick="copyLink('httpupgrade_vmess')">Copy</button>
+          <button class="btn-copy" onclick="copyLink(event, 'httpupgrade_vmess')">Copy</button>
         </div>
       </div>
       {% endif %}
@@ -287,7 +280,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg0);color:var(--
         <div class="config-label"><span class="config-badge" style="background:#e67e2222;color:#e67e22">SS2022</span> ShadowSocks 2022</div>
         <div class="config-box">
           <div class="config-link" id="link-ss2022">{{ links.ss2022 }}</div>
-          <button class="btn-copy" onclick="copyLink('ss2022')">Copy</button>
+          <button class="btn-copy" onclick="copyLink(event, 'ss2022')">Copy</button>
         </div>
       </div>
       {% endif %}
@@ -296,7 +289,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg0);color:var(--
         <div class="config-label"><span class="config-badge" style="background:#1abc9c22;color:#1abc9c">VLESS-WS</span> WS + TLS</div>
         <div class="config-box">
           <div class="config-link" id="link-vless_ws">{{ links.vless_ws }}</div>
-          <button class="btn-copy" onclick="copyLink('vless_ws')">Copy</button>
+          <button class="btn-copy" onclick="copyLink(event, 'vless_ws')">Copy</button>
         </div>
       </div>
       {% endif %}
@@ -305,7 +298,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg0);color:var(--
         <div class="config-label"><span class="config-badge" style="background:#9b59b622;color:#9b59b6">VLESS-XHTTP</span> XHTTP + Reality</div>
         <div class="config-box">
           <div class="config-link" id="link-vless_xhttp">{{ links.vless_xhttp }}</div>
-          <button class="btn-copy" onclick="copyLink('vless_xhttp')">Copy</button>
+          <button class="btn-copy" onclick="copyLink(event, 'vless_xhttp')">Copy</button>
         </div>
       </div>
       {% endif %}
@@ -314,7 +307,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg0);color:var(--
         <div class="config-label"><span class="config-badge" style="background:#8e44ad22;color:#8e44ad">VLESS-Vision</span> Vision + Reality</div>
         <div class="config-box">
           <div class="config-link" id="link-vless_vision">{{ links.vless_vision }}</div>
-          <button class="btn-copy" onclick="copyLink('vless_vision')">Copy</button>
+          <button class="btn-copy" onclick="copyLink(event, 'vless_vision')">Copy</button>
         </div>
       </div>
       {% endif %}
@@ -323,7 +316,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg0);color:var(--
         <div class="config-label"><span class="config-badge" style="background:#34495e22;color:#34495e">VLESS-Reverse</span> Reverse Tunnel</div>
         <div class="config-box">
           <div class="config-link" id="link-vless_reverse">{{ links.vless_reverse }}</div>
-          <button class="btn-copy" onclick="copyLink('vless_reverse')">Copy</button>
+          <button class="btn-copy" onclick="copyLink(event, 'vless_reverse')">Copy</button>
         </div>
       </div>
       {% endif %}
@@ -332,7 +325,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg0);color:var(--
         <div class="config-label"><span class="config-badge" style="background:#c0392b22;color:#c0392b">Trojan-CDN</span> WS + CDN</div>
         <div class="config-box">
           <div class="config-link" id="link-trojan_cdn">{{ links.trojan_cdn }}</div>
-          <button class="btn-copy" onclick="copyLink('trojan_cdn')">Copy</button>
+          <button class="btn-copy" onclick="copyLink(event, 'trojan_cdn')">Copy</button>
         </div>
       </div>
       {% endif %}
@@ -341,7 +334,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg0);color:var(--
         <div class="config-label"><span class="config-badge" style="background:#f1c40f22;color:#f39c12">Hysteria2</span> UDP Proxy</div>
         <div class="config-box">
           <div class="config-link" id="link-hysteria2">{{ links.hysteria2 }}</div>
-          <button class="btn-copy" onclick="copyLink('hysteria2')">Copy</button>
+          <button class="btn-copy" onclick="copyLink(event, 'hysteria2')">Copy</button>
         </div>
       </div>
       {% endif %}
@@ -350,7 +343,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg0);color:var(--
         <div class="config-label"><span class="config-badge" style="background:#16a08522;color:#16a085">TUIC</span> QUIC Proxy</div>
         <div class="config-box">
           <div class="config-link" id="link-tuic">{{ links.tuic }}</div>
-          <button class="btn-copy" onclick="copyLink('tuic')">Copy</button>
+          <button class="btn-copy" onclick="copyLink(event, 'tuic')">Copy</button>
         </div>
       </div>
       {% endif %}
@@ -359,7 +352,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg0);color:var(--
         <div class="config-label"><span class="config-badge" style="background:#27ae6022;color:#27ae60">AmneziaWG</span> AWG</div>
         <div class="config-box">
           <div class="config-link" id="link-amneziawg">{{ links.amneziawg }}</div>
-          <button class="btn-copy" onclick="copyLink('amneziawg')">Copy</button>
+          <button class="btn-copy" onclick="copyLink(event, 'amneziawg')">Copy</button>
         </div>
       </div>
       {% endif %}
@@ -368,7 +361,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg0);color:var(--
         <div class="config-label"><span class="config-badge" style="background:#2c3e5022;color:#2c3e50">ShadowTLS</span> TLS Obfuscation</div>
         <div class="config-box">
           <div class="config-link" id="link-shadowtls">{{ links.shadowtls }}</div>
-          <button class="btn-copy" onclick="copyLink('shadowtls')">Copy</button>
+          <button class="btn-copy" onclick="copyLink(event, 'shadowtls')">Copy</button>
         </div>
       </div>
       {% endif %}
@@ -377,7 +370,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg0);color:var(--
         <div class="config-label"><span class="config-badge" style="background:#d3540022;color:#d35400">Mieru</span> TCP Proxy</div>
         <div class="config-box">
           <div class="config-link" id="link-mieru">{{ links.mieru }}</div>
-          <button class="btn-copy" onclick="copyLink('mieru')">Copy</button>
+          <button class="btn-copy" onclick="copyLink(event, 'mieru')">Copy</button>
         </div>
       </div>
       {% endif %}
@@ -386,7 +379,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg0);color:var(--
         <div class="config-label"><span class="config-badge" style="background:#7f8c8d22;color:#7f8c8d">NaiveProxy</span> HTTP/2</div>
         <div class="config-box">
           <div class="config-link" id="link-naiveproxy">{{ links.naiveproxy }}</div>
-          <button class="btn-copy" onclick="copyLink('naiveproxy')">Copy</button>
+          <button class="btn-copy" onclick="copyLink(event, 'naiveproxy')">Copy</button>
         </div>
       </div>
       {% endif %}
@@ -395,7 +388,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg0);color:var(--
         <div class="config-label"><span class="config-badge" style="background:#2980b922;color:#2980b9">WireGuard</span> UDP Tunnel</div>
         <div class="config-box">
           <div class="config-link" id="link-wireguard">{{ links.wireguard }}</div>
-          <button class="btn-copy" onclick="copyLink('wireguard')">Copy</button>
+          <button class="btn-copy" onclick="copyLink(event, 'wireguard')">Copy</button>
         </div>
       </div>
       {% endif %}
@@ -404,7 +397,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg0);color:var(--
         <div class="config-label"><span class="config-badge" style="background:#e8439322;color:#e84393">OpenVPN</span> Classic VPN</div>
         <div class="config-box">
           <div class="config-link" id="link-openvpn">{{ links.openvpn }}</div>
-          <button class="btn-copy" onclick="copyLink('openvpn')">Copy</button>
+          <button class="btn-copy" onclick="copyLink(event, 'openvpn')">Copy</button>
         </div>
       </div>
       {% endif %}
@@ -419,7 +412,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg0);color:var(--
     </p>
     <div class="sub-box">
       <div class="sub-url" id="sub-url">{{ request.url_root }}sub-api/{{ user.uuid }}</div>
-      <button class="btn-copy" onclick="copyLink('sub')">Copy</button>
+      <button class="btn-copy" onclick="copyLink(event, 'sub')">Copy</button>
     </div>
     <div style="margin-top:12px">
       <p style="font-size:12px;color:var(--t3);margin-bottom:8px">
@@ -427,7 +420,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg0);color:var(--
       </p>
       <div class="sub-box">
         <div class="sub-url" id="sub-json-url">{{ request.url_root }}sub-json/{{ user.uuid }}</div>
-        <button class="btn-copy" onclick="copyLink('sub_json')">Copy</button>
+        <button class="btn-copy" onclick="copyLink(event, 'sub_json')">Copy</button>
       </div>
     </div>
   </div>
@@ -444,7 +437,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg0);color:var(--
           اپلیکیشن اختصاصی
           <span style="padding:2px 8px;border-radius:10px;font-size:9px;font-weight:700;background:var(--green-bg);color:var(--green)">پیشنهادی</span>
         </div>
-        <div class="app-platform" style="color:var(--t2);font-size:12px;margin-top:4px;direction:rtl">سرعت بالاتر • کیفیت بهتر • اتصال پایدار</div>
+        <div class="app-platform" style="color:var(--t2);font-size:12px;margin-top:4px" lang="fa">سرعت بالاتر • کیفیت بهتر • اتصال پایدار</div>
         <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">
           <span style="padding:2px 8px;border-radius:8px;font-size:9px;font-weight:600;background:rgba(88,166,255,.12);color:var(--accent)">Android</span>
           <span style="padding:2px 8px;border-radius:8px;font-size:9px;font-weight:600;background:rgba(63,185,80,.12);color:var(--green)">Fragment + MUX</span>
@@ -461,7 +454,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg0);color:var(--
           نسخه ویندوز
           <span style="padding:2px 8px;border-radius:10px;font-size:9px;font-weight:700;background:rgba(188,140,255,.12);color:var(--purple)">جدید</span>
         </div>
-        <div class="app-platform" style="color:var(--t2);font-size:12px;margin-top:4px;direction:rtl">سرعت بالاتر • MUX • پروکسی سیستم خودکار</div>
+        <div class="app-platform" style="color:var(--t2);font-size:12px;margin-top:4px" lang="fa">سرعت بالاتر • MUX • پروکسی سیستم خودکار</div>
         <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">
           <span style="padding:2px 8px;border-radius:8px;font-size:9px;font-weight:600;background:rgba(188,140,255,.12);color:var(--purple)">Windows</span>
           <span style="padding:2px 8px;border-radius:8px;font-size:9px;font-weight:600;background:rgba(63,185,80,.12);color:var(--green)">Fragment + MUX</span>
@@ -470,7 +463,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg0);color:var(--
       <span style="color:var(--purple);font-size:20px;flex-shrink:0">⬇</span>
     </a>
 
-    <div style="font-size:11px;color:var(--t3);margin-bottom:14px;direction:rtl;text-align:center;line-height:1.6">
+    <div style="font-size:11px;color:var(--t3);margin-bottom:14px;text-align:center;line-height:1.6" lang="fa">
       سایر اپلیکیشن‌ های پشتیبانی شده:
     </div>
 
@@ -524,6 +517,16 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg0);color:var(--
 </script>
 <script src="{{ url_for('static', filename='js/qrcode.js') }}"></script>
 <script>
+async function toggleDirection() {
+  var cur = document.documentElement.dir || 'ltr';
+  var nxt = cur === 'rtl' ? 'ltr' : 'rtl';
+  document.documentElement.dir = nxt;
+  try { await fetch('/api/direction', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({dir:nxt}), credentials:'same-origin'}); } catch(e) {}
+  var t = document.querySelector('.dir-toggle');
+  if (t) t.textContent = nxt === 'rtl' ? 'LTR' : 'RTL';
+  location.reload();
+}
+
 const LINKS = JSON.parse(document.getElementById('data-links').textContent);
 const EXPIRE = "{{ user.expire_at or '' }}";
 let activeQr = 'vmess';
@@ -584,7 +587,7 @@ function _copyText(text) {
   return Promise.resolve();
 }
 
-function copyLink(type) {
+function copyLink(ev, type) {
   let text = '';
   if (type === 'sub') {
     text = document.getElementById('sub-url').textContent.trim();
@@ -598,9 +601,10 @@ function copyLink(type) {
     toast('Copied!');
     const btns = document.querySelectorAll('.btn-copy');
     btns.forEach(b => { if (b.classList.contains('copied')) b.classList.remove('copied'); });
-    event.target.classList.add('copied');
-    event.target.textContent = '✓';
-    setTimeout(() => { event.target.classList.remove('copied'); event.target.textContent = 'Copy'; }, 2000);
+    const btn = ev.currentTarget;
+    btn.classList.add('copied');
+    btn.textContent = '\u2713';
+    setTimeout(() => { btn.classList.remove('copied'); btn.textContent = 'Copy'; }, 2000);
   });
 }
 

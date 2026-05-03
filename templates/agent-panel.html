@@ -1,25 +1,16 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ 'fa' if dir == 'rtl' else 'en' }}" dir="{{ dir }}">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>VIP Agent Panel</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<title>{{ 'پنل نماینده' if dir == 'rtl' else 'VIP Agent Panel' }}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Azeret+Mono:wght@400;500;600;700&family=Fira+Sans:wght@300;400;500;600;700;800&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/panel.css') }}">
 <style>
-:root{
-  --bg0:#06080f;--bg1:#0d1117;--bg2:#161b22;--bg3:#1c2333;--bg4:#252d3a;
-  --border:#2d333b;--border2:#3d444d;
-  --t0:#f0f6fc;--t1:#c9d1d9;--t2:#8b949e;--t3:#636c76;
-  --accent:#58a6ff;--accent2:#388bfd;
-  --green:#3fb950;--green-bg:rgba(63,185,80,.12);
-  --yellow:#d29922;--yellow-bg:rgba(210,153,34,.12);
-  --red:#f85149;--red-bg:rgba(248,81,73,.12);
-  --purple:#bc8cff;--orange:#f0883e;
-  --radius:14px;--radius-sm:10px;
-  --shadow:0 8px 32px rgba(0,0,0,.4);
-}
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Inter',system-ui,sans-serif;background:var(--bg0);color:var(--t1);min-height:100vh;overflow-x:hidden}
+body{font-family:var(--font-body);background:var(--bg0);color:var(--t1);min-height:100vh;overflow-x:hidden}
 ::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:var(--bg1)}::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:3px}
 input,button,textarea,select{font-family:inherit;font-size:inherit}
 
@@ -27,7 +18,7 @@ input,button,textarea,select{font-family:inherit;font-size:inherit}
   background:radial-gradient(ellipse at 50% 0%,#0d1a2e 0%,var(--bg0) 70%)}
 .login-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);
   padding:48px 40px;width:380px;text-align:center;box-shadow:var(--shadow)}
-.login-logo{font-size:42px;font-weight:800;letter-spacing:4px;
+.login-logo{font-family:var(--font-display);font-size:42px;font-weight:700;letter-spacing:3px;
   background:linear-gradient(135deg,var(--accent),var(--purple));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent;
   margin-bottom:8px}
 .login-sub{color:var(--t2);margin-bottom:32px;font-size:14px}
@@ -35,7 +26,7 @@ input,button,textarea,select{font-family:inherit;font-size:inherit}
   border-radius:var(--radius-sm);color:var(--t0);font-size:15px;margin-bottom:16px;
   text-align:center;letter-spacing:2px;transition:border .2s}
 .login-input:focus{outline:none;border-color:var(--accent)}
-.login-btn{width:100%;padding:14px;background:var(--accent2);color:#fff;border:none;
+.login-btn{width:100%;padding:14px;background:var(--accent2);color:var(--bg0);border:none;
   border-radius:var(--radius-sm);font-size:15px;font-weight:600;cursor:pointer;transition:all .2s}
 .login-btn:hover{background:var(--accent);transform:translateY(-1px)}
 .login-error{color:var(--red);margin-top:12px;font-size:13px;min-height:20px}
@@ -45,14 +36,14 @@ input,button,textarea,select{font-family:inherit;font-size:inherit}
   background:var(--bg1);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100;
   backdrop-filter:blur(12px)}
 .brand{display:flex;align-items:center;gap:12px}
-.brand-logo{font-size:22px;font-weight:800;letter-spacing:3px;
+.brand-logo{font-family:var(--font-display);font-size:22px;font-weight:700;letter-spacing:2px;
   background:linear-gradient(135deg,var(--accent),var(--purple));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent}
 .brand-text{color:var(--t2);font-size:13px;font-weight:400}
 .header-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 
 .btn{padding:10px 20px;border:none;border-radius:var(--radius-sm);font-size:13px;font-weight:500;
   cursor:pointer;transition:all .2s;display:inline-flex;align-items:center;gap:6px}
-.btn-primary{background:var(--accent2);color:#fff}.btn-primary:hover{background:var(--accent);transform:translateY(-1px)}
+.btn-primary{background:var(--accent2);color:var(--bg0)}.btn-primary:hover{background:var(--accent);transform:translateY(-1px)}
 .btn-outline{background:transparent;border:1px solid var(--border2);color:var(--t1)}
 .btn-outline:hover{border-color:var(--accent);color:var(--accent)}
 .btn-ghost{background:transparent;border:none;color:var(--t2);padding:10px 14px}.btn-ghost:hover{color:var(--t0)}
@@ -149,7 +140,7 @@ input,button,textarea,select{font-family:inherit;font-size:inherit}
 .config-center{text-align:center}
 .vmess-box{margin-top:16px}
 .vmess-box textarea{width:100%;padding:12px;background:var(--bg1);border:1px solid var(--border);
-  border-radius:var(--radius-sm);color:var(--accent);font-size:11px;font-family:monospace;
+  border-radius:var(--radius-sm);color:var(--accent);font-size:11px;font-family:var(--font-mono);
   resize:none;direction:ltr;text-align:left;word-break:break-all}
 .config-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:16px;
   padding:14px;background:var(--bg3);border-radius:var(--radius-sm);font-size:12px}
@@ -274,6 +265,7 @@ input,button,textarea,select{font-family:inherit;font-size:inherit}
       <span class="brand-text">Agent Panel — <span id="agent-name-top" style="color:var(--accent)"></span></span>
     </div>
     <div class="header-actions">
+      <button class="btn btn-ghost btn-sm dir-toggle" onclick="toggleDirection()" title="Toggle RTL/LTR">{{ 'RTL' if dir == 'ltr' else 'LTR' }}</button>
       <button class="btn btn-outline btn-sm" onclick="forceSync()">Sync</button>
       <button class="btn btn-primary btn-sm" onclick="showModal('add-modal')">+ Add User</button>
       <button class="btn btn-outline btn-sm" onclick="showModal('bulk-modal')">Bulk Configs</button>
@@ -299,10 +291,10 @@ input,button,textarea,select{font-family:inherit;font-size:inherit}
     <div style="display:flex;align-items:center;gap:12px;flex:1">
       <span style="font-size:28px">&#9888;&#65039;</span>
       <div>
-        <div style="color:#fbbf24;font-weight:700;font-size:15px;margin-bottom:4px;direction:rtl;text-align:right">
+        <div style="color:#fbbf24;font-weight:700;font-size:15px;margin-bottom:4px" lang="fa">
           &#8252;&#65039; &#1575;&#1591;&#1604;&#1575;&#1593;&#1740;&#1607; &#1605;&#1607;&#1605; &mdash; &#1587;&#1585;&#1608;&#1585; &#1578;&#1594;&#1740;&#1740;&#1585; &#1705;&#1585;&#1583;&#1607; &#1575;&#1587;&#1578;
         </div>
-        <div style="color:#fcd34d;font-size:13px;direction:rtl;text-align:right;line-height:1.7">
+        <div style="color:#fcd34d;font-size:13px;line-height:1.7" lang="fa">
           &#1604;&#1591;&#1601;&#1575;&#1611; &#1576;&#1607; &#1578;&#1605;&#1575;&#1605; &#1705;&#1575;&#1585;&#1576;&#1585;&#1575;&#1606; &#1582;&#1608;&#1583; &#1575;&#1591;&#1604;&#1575;&#1593; &#1583;&#1607;&#1740;&#1583; &#1705;&#1607; &#1581;&#1578;&#1605;&#1575;&#1611; <b style="color:#fff">Subscription Update</b> &#1585;&#1575; &#1575;&#1606;&#1580;&#1575;&#1605; &#1583;&#1607;&#1606;&#1583;.<br>
           &#1587;&#1585;&#1608;&#1585; &#1605;&#1575; &#1578;&#1594;&#1740;&#1740;&#1585; &#1705;&#1585;&#1583;&#1607; &#1608; &#1576;&#1583;&#1608;&#1606; &#1570;&#1662;&#1583;&#1740;&#1578; &#1587;&#1575;&#1576;&#8204;&#1575;&#1587;&#1705;&#1585;&#1740;&#1662;&#1588;&#1606;&#1548; &#1575;&#1578;&#1589;&#1575;&#1604; &#1705;&#1575;&#1585;&#1576;&#1585;&#1575;&#1606; &#1602;&#1591;&#1593; &#1582;&#1608;&#1575;&#1607;&#1583; &#1588;&#1583;.
         </div>
@@ -442,7 +434,7 @@ input,button,textarea,select{font-family:inherit;font-size:inherit}
     <div style="margin-top:14px;border-top:1px solid var(--border);padding-top:14px">
       <div class="settings-title">Results</div>
       <div id="bulk-tabs" class="bulk-tabs" style="display:none"></div>
-      <textarea id="bulk-output" rows="10" readonly style="width:100%;padding:12px;background:var(--bg1);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--t1);font-size:11px;font-family:monospace;resize:vertical;direction:ltr;text-align:left;word-break:break-all"></textarea>
+      <textarea id="bulk-output" rows="10" readonly style="width:100%;padding:12px;background:var(--bg1);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--t1);font-size:11px;font-family:var(--font-mono);resize:vertical;word-break:break-all" class="code-ltr"></textarea>
       <div class="bulk-qr-section">
         <div class="settings-title">QR codes (all in this group)</div>
         <div id="bulk-qr-wrap" class="bulk-qr-wrap" style="display:none"></div>
@@ -498,7 +490,7 @@ input,button,textarea,select{font-family:inherit;font-size:inherit}
     <div class="config-grid" id="config-info"></div>
     <div style="margin-top:14px;padding:12px;background:var(--bg3);border-radius:var(--radius-sm);display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       <span style="font-size:12px;color:var(--t3);flex-shrink:0">📄 Sub Page:</span>
-      <input type="text" id="config-sub-url" readonly style="flex:1;min-width:120px;padding:8px 10px;background:var(--bg1);border:1px solid var(--border);border-radius:8px;color:var(--green);font-size:11px;font-family:monospace">
+      <input type="text" id="config-sub-url" readonly style="flex:1;min-width:120px;padding:8px 10px;background:var(--bg1);border:1px solid var(--border);border-radius:8px;color:var(--green);font-size:11px;font-family:var(--font-mono)">
       <button class="btn btn-primary btn-sm" onclick="copySubUrl()" style="flex-shrink:0">Copy</button>
       <a id="config-sub-open" href="#" target="_blank" class="btn btn-outline btn-sm" style="flex-shrink:0;text-decoration:none">Open</a>
     </div>
@@ -510,7 +502,7 @@ input,button,textarea,select{font-family:inherit;font-size:inherit}
           اپلیکیشن اختصاصی
           <span style="padding:2px 8px;border-radius:10px;font-size:9px;font-weight:700;background:var(--green-bg);color:var(--green)">پیشنهادی</span>
         </div>
-        <div style="font-size:11px;color:var(--t2);margin-top:3px;direction:rtl">سرعت بالاتر • کیفیت بهتر • اتصال پایدار</div>
+        <div style="font-size:11px;color:var(--t2);margin-top:3px" lang="fa">سرعت بالاتر • کیفیت بهتر • اتصال پایدار</div>
         <div style="margin-top:5px;display:flex;gap:6px;flex-wrap:wrap">
           <span style="padding:2px 8px;border-radius:8px;font-size:9px;font-weight:600;background:rgba(88,166,255,.12);color:var(--accent)">Android</span>
           <span style="padding:2px 8px;border-radius:8px;font-size:9px;font-weight:600;background:rgba(63,185,80,.12);color:var(--green)">Fragment + MUX</span>
@@ -526,7 +518,7 @@ input,button,textarea,select{font-family:inherit;font-size:inherit}
           نسخه ویندوز
           <span style="padding:2px 8px;border-radius:10px;font-size:9px;font-weight:700;background:rgba(188,140,255,.12);color:var(--purple)">جدید</span>
         </div>
-        <div style="font-size:11px;color:var(--t2);margin-top:3px;direction:rtl">سرعت بالاتر • MUX • پروکسی سیستم خودکار</div>
+        <div style="font-size:11px;color:var(--t2);margin-top:3px" lang="fa">سرعت بالاتر • MUX • پروکسی سیستم خودکار</div>
         <div style="margin-top:5px;display:flex;gap:6px;flex-wrap:wrap">
           <span style="padding:2px 8px;border-radius:8px;font-size:9px;font-weight:600;background:rgba(188,140,255,.12);color:var(--purple)">Windows</span>
           <span style="padding:2px 8px;border-radius:8px;font-size:9px;font-weight:600;background:rgba(63,185,80,.12);color:var(--green)">Fragment + MUX</span>
@@ -628,6 +620,16 @@ async function doLogin() {
   }
 }
 
+async function toggleDirection() {
+  var cur = document.documentElement.dir || 'ltr';
+  var nxt = cur === 'rtl' ? 'ltr' : 'rtl';
+  document.documentElement.dir = nxt;
+  try { await fetch('/api/direction', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({dir:nxt}), credentials:'same-origin'}); } catch(e) {}
+  var t = document.querySelector('.dir-toggle');
+  if (t) t.textContent = nxt === 'rtl' ? 'LTR' : 'RTL';
+  location.reload();
+}
+
 async function doLogout() {
   await fetch(API+'/logout', {method:'POST'});
   location.reload();
@@ -636,7 +638,7 @@ async function doLogout() {
 /* ── Data ── */
 async function fetchMe() {
   try {
-    const r = await fetch(API+'/me');
+    const r = await fetch(API+'/me', {credentials: 'same-origin'});
     if (r.status === 401) { location.reload(); return; }
     agentInfo = await r.json();
     document.getElementById('agent-name-top').textContent = agentInfo.name || '';
@@ -690,7 +692,7 @@ function updateQuotaBar() {
 
 async function fetchUsers() {
   try {
-    const r = await fetch(API+'/users');
+    const r = await fetch(API+'/users', {credentials: 'same-origin'});
     if (r.status === 401) { location.reload(); return; }
     users = await r.json();
     if (mainView === 'users') renderUsers();
@@ -700,7 +702,7 @@ async function fetchUsers() {
 
 async function fetchGroups() {
   try {
-    const r = await fetch(API+'/groups');
+    const r = await fetch(API+'/groups', {credentials: 'same-origin'});
     if (r.status === 401) { location.reload(); return; }
     groups = await r.json();
     if (mainView === 'groups') renderGroups();
@@ -709,7 +711,7 @@ async function fetchGroups() {
 
 async function fetchLive() {
   try {
-    const r = await fetch(API+'/live');
+    const r = await fetch(API+'/live', {credentials: 'same-origin'});
     if (r.status === 401) return;
     const data = await r.json();
     const now = Date.now();
@@ -1332,7 +1334,7 @@ async function doRenewUser() {
   const traffic = parseFloat(document.getElementById('renew-traffic').value);
   const days = parseInt(document.getElementById('renew-days').value);
   const r = await fetch(API+'/users/'+encodeURIComponent(renewTarget)+'/renew',
-    {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({traffic, days})});
+    {method:'POST', credentials: 'same-origin', headers:{'Content-Type':'application/json'}, body: JSON.stringify({traffic, days})});
   const d = await r.json();
   if (d.ok) { closeModal('renew-modal'); toast(renewTarget+' renewed'); fetchUsers(); fetchMe(); }
   else toast(d.error||'Error','error');
@@ -1507,7 +1509,7 @@ function copySubUrl() {
 }
 
 async function forceSync() {
-  const r = await fetch(API+'/sync', {method:'POST'});
+  const r = await fetch(API+'/sync', {method:'POST', credentials: 'same-origin'});
   const d = await r.json();
   if (d.ok) {
     toast('Sync complete' + (d.disabled > 0 ? ' — '+d.disabled+' user(s) disabled' : ''));
