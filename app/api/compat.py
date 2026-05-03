@@ -1948,6 +1948,16 @@ def _generate_xray_server_config() -> dict:
             "sniffing": {"enabled": True, "destOverride": ["http", "tls"]},
         })
 
+    # ── Google Apps Script Relay HTTP Proxy (emergency — always on) ──
+    inbounds.append({
+        "tag": "in-http-relay",
+        "port": 8080,
+        "listen": "0.0.0.0",
+        "protocol": "http",
+        "settings": {"auth": "noauth"},
+        "sniffing": {"enabled": True, "destOverride": ["http"]},
+    })
+
     # CDN WS+TLS
     if _as_bool(s.get("cdn_enabled")) and s.get("cdn_domain"):
         cdn_domain = s.get("cdn_domain")

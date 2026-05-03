@@ -199,6 +199,60 @@ async def liveness_check():
     """Liveness probe for Kubernetes."""
     return {"status": "alive"}
 
+@app.api_route("/api/google-relay", methods=["GET", "POST"], tags=["system"])
+async def google_relay_proxy(request: Request):
+    """
+    Google Apps Script Relay — HTTP proxy endpoint.
+    Accepts JSON payloads forwarded from Google Apps Script and fetches the target URL.
+    Used as emergency relay exit node when server IP is blocked in Iran.
+
+    Request body (JSON):
+      {"method": "GET", "url": "https://example.com", "headers": {...}, "body": "..."}
+
+    Response:
+      {"status": 200, "body": "...response text..."}
+    """
+    import httpx
+
+    try:
+        if request.method == "POST":
+            payload = await request.json()
+        else:
+            payload = {"method": "GET", "url": str(request.query_params.get("url", ""))}
+    except Exception:
+        return JSONResponse({"error": "Invalid payload"}, status_code=400)
+
+    method = (payload.get("method") or "GET").upper()
+    url = payload.get("url") or ""
+    headers = payload.get("headers") or {}
+    body = payload.get("body")
+    if payload.get("body_b64"):
+        import base64
+        body = base64.b64decode(payload["body_b64"]).decode("utf-8", errors="replace")
+
+    if not url:
+        return JSONResponse({"error": "url is required"}, status_code=400)
+
+    # Basic security: only allow HTTP/HTTPS URLs
+    if not url.startswith(("http://", "https://")):
+        return JSONResponse({"error": "only http/https URLs allowed"}, status_code=400)
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+            if method == "POST" and body:
+                r = await client.request(method, url, headers=headers, content=body)
+            else:
+                r = await client.request(method, url, headers=headers)
+
+            return JSONResponse({
+                "status": r.status_code,
+                "body": r.text,
+            })
+    except httpx.TimeoutException:
+        return JSONResponse({"status": 504, "body": "Gateway Timeout"})
+    except Exception as e:
+        return JSONResponse({"status": 502, "body": f"Proxy error: {str(e)[:200]}"})
+
 # ── Panel HTML (serves the frontend) ───────────────────
 
 _templates_dir = os.path.join(os.getcwd(), "templates")
