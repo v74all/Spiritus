@@ -10,6 +10,7 @@ the frontend.
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from ..timeutil import utcnow as _utcnow
 from typing import Any, Dict, List, Optional
 import asyncio
 import base64
@@ -220,7 +221,7 @@ def _write_password_file(new_password: str) -> bool:
 def _days_left(expire_at: Optional[datetime]) -> int:
     if not expire_at:
         return 9999
-    delta = expire_at - datetime.now(timezone.utc)
+    delta = expire_at - _utcnow()
     return max(0, delta.days)
 
 
@@ -1105,7 +1106,7 @@ async def legacy_create_user(
     admin: User = Depends(get_current_admin_cookie),
     db: AsyncSession = Depends(get_async_db),
 ):
-    expire_at = datetime.now(timezone.utc) + timedelta(days=body.days) if body.days else None
+    expire_at = _utcnow() + timedelta(days=body.days) if body.days else None
     db_user = VpnUser(
         uuid=str(uuid_lib.uuid4()),
         name=body.name,
@@ -1183,7 +1184,7 @@ async def legacy_renew_user(
         return {"ok": False, "error": "User not found"}
     user.traffic_limit = int(body.traffic * (1024**3))
     user.traffic_used = 0
-    user.expire_at = datetime.now(timezone.utc) + timedelta(days=body.days)
+    user.expire_at = _utcnow() + timedelta(days=body.days)
     user.active = 1
     await db.commit()
     return {"ok": True}
@@ -1314,7 +1315,7 @@ async def legacy_bulk_users(
     admin: User = Depends(get_current_admin_cookie),
     db: AsyncSession = Depends(get_async_db),
 ):
-    expire_at = datetime.now(timezone.utc) + timedelta(days=body.days) if body.days else None
+    expire_at = _utcnow() + timedelta(days=body.days) if body.days else None
     created_users: List[VpnUser] = []
     for i in range(body.count):
         if body.numbered:
@@ -1640,7 +1641,7 @@ async def legacy_sync(
     admin: User = Depends(get_current_admin_cookie),
     db: AsyncSession = Depends(get_async_db),
 ):
-    now = datetime.now(timezone.utc)
+    now = _utcnow()
     result = await db.execute(
         select(VpnUser).where(VpnUser.expire_at != None, VpnUser.active == 1)
     )
@@ -2497,7 +2498,7 @@ async def legacy_report(
         select(func.coalesce(func.sum(VpnUser.traffic_limit), 0))
     )).scalar() or 0
 
-    week_ahead = datetime.now(timezone.utc) + timedelta(days=7)
+    week_ahead = _utcnow() + timedelta(days=7)
     expiring = (await db.execute(
         select(func.count(VpnUser.id)).where(
             VpnUser.active == 1,
@@ -2598,7 +2599,7 @@ async def legacy_resilience_run(
     technique = body.get("technique", "unknown")
     _resilience_state["active_attacks"] += 1
     _resilience_state["stats"][technique] = {
-        "started_at": datetime.now(timezone.utc).isoformat(),
+        "started_at": _utcnow().isoformat(),
         "target": body.get("target"),
         "duration": body.get("duration"),
     }
@@ -2978,7 +2979,7 @@ async def legacy_agent_create_user(
     if quota_error:
         return {"ok": False, "error": quota_error}
 
-    expire_at = datetime.now(timezone.utc) + timedelta(days=body.days) if body.days else None
+    expire_at = _utcnow() + timedelta(days=body.days) if body.days else None
     default_speed = int(_agent_meta(agent).get("speed_limit_default") or 0)
     db_user = VpnUser(
         uuid=str(uuid_lib.uuid4()),
@@ -3015,7 +3016,7 @@ async def legacy_agent_bulk_users(
     if quota_error:
         return {"ok": False, "error": quota_error}
 
-    expire_at = datetime.now(timezone.utc) + timedelta(days=body.days) if body.days else None
+    expire_at = _utcnow() + timedelta(days=body.days) if body.days else None
     created_users: List[VpnUser] = []
     default_speed = int(_agent_meta(agent).get("speed_limit_default") or 0)
     for i in range(body.count):
@@ -3144,7 +3145,7 @@ async def legacy_agent_renew_user(
         return {"ok": False, "error": quota_error}
     user.traffic_limit = int(body.traffic * (1024**3))
     user.traffic_used = 0
-    user.expire_at = datetime.now(timezone.utc) + timedelta(days=body.days)
+    user.expire_at = _utcnow() + timedelta(days=body.days)
     user.active = 1
     await db.commit()
     return {"ok": True}
@@ -3189,7 +3190,7 @@ async def legacy_agent_sync(
     agent: Agent = Depends(_get_current_agent_cookie),
     db: AsyncSession = Depends(get_async_db),
 ):
-    now = datetime.now(timezone.utc)
+    now = _utcnow()
     result = await db.execute(
         select(VpnUser).where(
             VpnUser.agent_id == agent.id,

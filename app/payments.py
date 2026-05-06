@@ -20,6 +20,7 @@ import secrets
 import logging
 from typing import Dict, Any, Optional, List
 from datetime import datetime, timedelta, timezone
+from .timeutil import utcnow as _utcnow
 from dataclasses import dataclass
 from enum import Enum
 
@@ -486,7 +487,7 @@ class PaymentManager:
 
         if verify_result.get("success"):
             payment.status = PaymentStatus.paid
-            payment.paid_at = datetime.now(timezone.utc)
+            payment.paid_at = _utcnow()
             payment.gateway_ref_id = str(verify_result.get("ref_id") or verify_result.get("track_id") or verify_result.get("tx_hash", ""))
 
             # Extend user
@@ -501,10 +502,10 @@ class PaymentManager:
                         user.traffic_limit += int(payment.plan_traffic_gb * 1024 * 1024 * 1024)
                     # Extend expiry
                     if payment.plan_days > 0:
-                        if user.expire_at and user.expire_at > datetime.now(timezone.utc):
+                        if user.expire_at and user.expire_at > _utcnow():
                             user.expire_at += timedelta(days=payment.plan_days)
                         else:
-                            user.expire_at = datetime.now(timezone.utc) + timedelta(days=payment.plan_days)
+                            user.expire_at = _utcnow() + timedelta(days=payment.plan_days)
                     user.active = 1
 
             # Process reseller commission

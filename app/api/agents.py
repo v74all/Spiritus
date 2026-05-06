@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 from datetime import datetime
+from ..timeutil import utcnow as _utcnow
 import logging
 
 from ..auth import get_current_admin, User
@@ -267,7 +268,7 @@ async def check_agent_health(
 
     healthy = await orchestrator._get_backend(agent).conn.health_check()
     agent.status = AgentStatus.online if healthy else AgentStatus.offline
-    agent.last_heartbeat = datetime.now(timezone.utc) if healthy else agent.last_heartbeat
+    agent.last_heartbeat = _utcnow() if healthy else agent.last_heartbeat
     await db.commit()
 
     return {

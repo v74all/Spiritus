@@ -129,7 +129,7 @@ def check_expirations():
         from .models import VpnUser, Agent
         from .orchestrator import orchestrator
         from sqlalchemy import select, and_
-        from datetime import datetime, timezone
+        from .timeutil import utcnow as _utcnow
 
         async with AsyncSessionLocal() as db:
             agents = (await db.execute(select(Agent))).scalars().all()
@@ -138,7 +138,7 @@ def check_expirations():
                     and_(
                         VpnUser.active == 1,
                         VpnUser.expire_at != None,
-                        VpnUser.expire_at < datetime.now(timezone.utc),
+                        VpnUser.expire_at < _utcnow(),
                     )
                 )
             )).scalars().all()
