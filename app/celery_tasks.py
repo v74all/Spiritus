@@ -79,26 +79,30 @@ def monitor_traffic():
 
     async def _sync():
         from .database import AsyncSessionLocal
-        from .models import VpnUser
+        from .models import VpnUser, Agent, AgentStatus
         from .orchestrator import orchestrator
         from sqlalchemy import select
 
         async with AsyncSessionLocal() as db:
-            result = await db.execute(
+            agents = (await db.execute(
+                select(Agent).where(Agent.status == AgentStatus.online)
+            )).scalars().all()
+            users = (await db.execute(
                 select(VpnUser).where(VpnUser.active == 1)
-            )
-            users = result.scalars().all()
+            )).scalars().all()
             updated = 0
             for user in users:
-                for agent in orchestrator.agents.values():
-                    if hasattr(agent, 'xray') and agent.xray:
-                        traffic = await agent.xray.get_user_traffic(user.uuid)
-                        if traffic and (traffic["upload"] or traffic["download"]):
-                            user.traffic_upload = (user.traffic_upload or 0) + traffic["upload"]
-                            user.traffic_download = (user.traffic_download or 0) + traffic["download"]
-                            user.traffic_used = user.traffic_upload + user.traffic_download
-                            updated += 1
-                            break
+                for agent in agents:
+                    try:
+                        traffic = await orchestrator.get_user_traffic(user, agent)
+                    except Exception:
+                        continue
+                    if traffic and (traffic.get("upload") or traffic.get("download")):
+                        user.traffic_upload = (user.traffic_upload or 0) + traffic["upload"]
+                        user.traffic_download = (user.traffic_download or 0) + traffic["download"]
+                        user.traffic_used = user.traffic_upload + user.traffic_download
+                        updated += 1
+                        break
             await db.commit()
             return {"updated": updated, "total_users": len(users)}
 
@@ -122,13 +126,14 @@ def check_expirations():
 
     async def _expire():
         from .database import AsyncSessionLocal
-        from .models import VpnUser
+        from .models import VpnUser, Agent
         from .orchestrator import orchestrator
         from sqlalchemy import select, and_
         from datetime import datetime, timezone
 
         async with AsyncSessionLocal() as db:
-            result = await db.execute(
+            agents = (await db.execute(select(Agent))).scalars().all()
+            expired_users = (await db.execute(
                 select(VpnUser).where(
                     and_(
                         VpnUser.active == 1,
@@ -136,16 +141,17 @@ def check_expirations():
                         VpnUser.expire_at < datetime.now(timezone.utc),
                     )
                 )
-            )
-            expired_users = result.scalars().all()
+            )).scalars().all()
             count = 0
             for user in expired_users:
                 user.active = -1  # Mark as expired
-                # Remove from Xray backend
-                try:
-                    await orchestrator.remove_user_from_all(user.uuid)
-                except Exception as e:
-                    logger.warning(f"Failed to remove expired user {user.name} from backend: {e}")
+                for agent in agents:
+                    try:
+                        await orchestrator.remove_user_from_agent(user, agent)
+                    except Exception as e:
+                        logger.warning(
+                            f"Failed to remove expired user {user.name} from agent {agent.name}: {e}"
+                        )
                 count += 1
             await db.commit()
             return {"expired_count": count}
