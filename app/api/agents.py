@@ -267,7 +267,7 @@ async def check_agent_health(
 
     healthy = await orchestrator._get_backend(agent).conn.health_check()
     agent.status = AgentStatus.online if healthy else AgentStatus.offline
-    agent.last_heartbeat = datetime.utcnow() if healthy else agent.last_heartbeat
+    agent.last_heartbeat = datetime.now(timezone.utc) if healthy else agent.last_heartbeat
     await db.commit()
 
     return {

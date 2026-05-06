@@ -1,25 +1,47 @@
+# ═══ Stage 1: Builder ═══
+FROM python:3.11-slim AS builder
+
+WORKDIR /build
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+
+# ═══ Stage 2: Runtime ═══
 FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    gcc \
+# Install runtime dependencies only
+RUN apt-get update && apt-get install -y --no-install-recommends \
     postgresql-client \
-    libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
+    curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd -r appuser && useradd -r -g appuser -d /app -s /sbin/nologin appuser
 
-# Copy requirements
-COPY requirements.txt .
+# Copy installed Python packages from builder
+COPY --from=builder /install /usr/local
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Copy application
+# Copy application code
 COPY . .
 
-# Create logs directory
-RUN mkdir -p logs
+# Create necessary directories with proper permissions
+RUN mkdir -p logs config static/downloads backups \
+    && chown -R appuser:appuser /app
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:38471/api/health || exit 1
+
+# Run as non-root user
+USER appuser
+
+EXPOSE 38471 10085
 
 # Run migrations and start app
-CMD ["sh", "-c", "alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port 38471"]
+CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 38471"]

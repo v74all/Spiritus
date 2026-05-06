@@ -5,8 +5,6 @@ Uses SQLAlchemy 2.0 with async support and PostgreSQL.
 """
 
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy.orm import declarative_base, sessionmaker
-from sqlalchemy.ext.declarative import declared_attr
 from typing import AsyncGenerator
 import logging
 
@@ -18,15 +16,14 @@ logger = logging.getLogger(__name__)
 # SQLAlchemy base class
 Base = declarative_base()
 
-class CustomBase:
-    """Custom base class with common attributes."""
-    
-    @declared_attr
-    def __tablename__(cls):
-        return cls.__name__.lower()
-
 # Build engine URL - support both PostgreSQL and SQLite for testing
 _db_url = str(settings.database_url)
+if not _db_url:
+    raise ValueError(
+        "DATABASE_URL environment variable is required. "
+        "Set it in .env or as an environment variable. "
+        "Example: DATABASE_URL=postgresql://user:pass@localhost:5432/vpnpanel"
+    )
 if _db_url.startswith("postgresql://"):
     _db_url = _db_url.replace("postgresql://", "postgresql+asyncpg://")
 

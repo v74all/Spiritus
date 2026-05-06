@@ -1346,30 +1346,30 @@
       </div>
     </div>
 
-    <!-- ═══ VLESS WS Plain Domain Fronting ═══ -->
+    <!-- ═══ VLESS WS+TLS Domain Fronting ═══ -->
     <div class="settings-section">
       <div class="sec-header">
-        <div class="settings-title">🔄 VLESS WS Plain (Domain Fronting)</div>
+        <div class="settings-title">🔄 VLESS WS+TLS Domain Fronting</div>
         <span class="s-indicator off" id="si-vless-ws-plain"><span class="dot"></span> <span class="si-text">OFF</span></span>
       </div>
       <div class="help-box">
-        <div class="help-en">🔄 <b>VLESS WS Plain Domain Fronting</b> uses a trusted Iranian domain (e.g., snapp.ir) as the front address with plain WebSocket (no TLS). The DPI sees a connection to snapp.ir — a trusted domestic site — while the Host header points to your real VPN server. <b>How:</b> 1) Enable 2) Set a trusted .ir domain as the front address 3) Set your real server IP/domain as the Host header. Port 2052 avoids common DPI port triggers.</div>
-        <div class="help-fa">🔄 <b>VLESS WS Plain Domain Fronting</b> از یک دامنه معتبر ایرانی (مثلاً snapp.ir) به عنوان آدرس ظاهری با وب‌سوکت ساده (بدون TLS) استفاده می‌کنه. DPI یک اتصال به snapp.ir می‌بینه — یک سایت داخلی معتبر — در حالی که هدر Host به سرور واقعی VPN شما اشاره می‌کنه. <b>روش کار:</b> ۱) فعال کنید ۲) دامنه .ir معتبر به عنوان آدرس ظاهری تنظیم کنید ۳) IP/دامنه واقعی سرور رو به عنوان Host تنظیم کنید. پورت ۲۰۵۲ از تریگرهای رایج DPI دوری می‌کنه.</div>
+        <div class="help-en">🔄 <b>VLESS WS+TLS Domain Fronting</b> connects directly to your server with TLS, but spoofs the SNI to a trusted domain (e.g., chat.deepseek.com). DPI sees a TLS connection to a trusted site, while the actual traffic goes to your VPN server. <b>How:</b> 1) Enable 2) Set a trusted domain as SNI (the domain DPI will see) 3) Server uses its own TLS cert. Port 2052 avoids common DPI port triggers. <b>Note:</b> requires <code>allow_insecure=true</code> on the client (the spoofed SNI won't match your server cert). Strict clients (sing-box with <code>insecure=false</code>, some iOS apps) may refuse the connection.</div>
+        <div class="help-fa">🔄 <b>VLESS WS+TLS Domain Fronting</b> مستقیم به سرور شما با TLS وصل میشه، اما SNI رو به یک دامنه معتبر (مثلاً chat.deepseek.com) جعل می‌کنه. DPI یک اتصال TLS به یک سایت معتبر می‌بینه، در حالی که ترافیک واقعی به سرور VPN شما میره. <b>روش کار:</b> ۱) فعال کنید ۲) دامنه معتبر به عنوان SNI تنظیم کنید (دامنه‌ای که DPI می‌بینه) ۳) سرور از گواهی TLS خودش استفاده می‌کنه. پورت ۲۰۵۲ از تریگرهای رایج DPI دوری می‌کنه. <b>توجه:</b> روی کلاینت باید <code>allow_insecure=true</code> فعال باشه (چون SNI جعلی با گواهی سرور مطابقت نداره). کلاینت‌های سختگیر (sing-box با <code>insecure=false</code>، بعضی اپ‌های iOS) ممکنه اتصال رو رد کنن.</div>
       </div>
       <div class="settings-row">
-        <div><div class="settings-label">VLESS WS Plain / ویلس وب‌سوکت ساده</div>
-          <div class="settings-desc">Enable domain fronting via trusted .ir domains / فعال‌سازی Domain Fronting با دامنه‌های معتبر .ir</div></div>
+        <div><div class="settings-label">VLESS WS+TLS Front / ویلس وب‌سوکت+تی‌ال‌اس فرانت</div>
+          <div class="settings-desc">Enable TLS domain fronting with spoofed SNI / فعال‌سازی Domain Fronting با SNI جعلی</div></div>
         <label class="toggle"><input type="checkbox" id="set-vless-ws-plain-front"><span class="toggle-slider"></span></label>
       </div>
-      <div class="form-group" style="margin-top:12px"><label>Front Domain / دامنه ظاهری</label>
-        <input type="text" id="set-vless-ws-plain-front-domain" value="snapp.ir" placeholder="snapp.ir">
-        <div class="settings-desc">Trusted .ir domain as the visible address / دامنه معتبر .ir به عنوان آدرس قابل مشاهده</div></div>
+      <div class="form-group" style="margin-top:12px"><label>SNI Domain / دامنه SNI</label>
+        <input type="text" id="set-vless-ws-plain-front-domain" value="chat.deepseek.com" placeholder="chat.deepseek.com">
+        <div class="settings-desc">Trusted domain shown as SNI to DPI / دامنه معتبر که به عنوان SNI به DPI نمایش داده میشه</div></div>
       <div class="form-group"><label>Port / پورت</label>
         <input type="number" id="set-vless-ws-plain-front-port" value="2052" min="1" max="65535">
-        <div class="settings-desc">Plain WS port (no trigger ports like 443, 80) / پورت WS ساده (پورت‌های حساس مثل ۴۴۳ و ۸۰ نباشه)</div></div>
+        <div class="settings-desc">TLS+WS port (avoid trigger ports like 443, 80) / پورت TLS+WS (پورت‌های حساس مثل ۴۴۳ و ۸۰ نباشه)</div></div>
       <div class="form-group"><label>WS Path / مسیر وب‌سوکت</label>
         <input type="text" id="set-vless-ws-plain-front-path" value="/" placeholder="/">
-        <div class="settings-desc">WebSocket path on the front domain / مسیر وب‌سوکت روی دامنه ظاهری</div></div>
+        <div class="settings-desc">WebSocket path / مسیر وب‌سوکت</div></div>
     </div>
 
     <!-- ═══ Cloudflare CDN ═══ -->

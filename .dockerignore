@@ -1,0 +1,55 @@
+.git
+.github
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+venv
+.venv
+env
+*.egg-info
+dist
+build
+.eggs
+.pytest_cache
+htmlcov
+.coverage
+
+# Secrets
+vpn-panel-password
+vpn-panel-password-hash
+vpn-settings.json
+.env
+.env.production
+*.key
+*.pem
+
+# IDE
+.vscode
+.idea
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Backups
+backups/
+
+# Downloads
+static/downloads/*.apk
+static/downloads/*.zip
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# Tests
+test_*
+pytest.ini

@@ -258,7 +258,7 @@ class SNIManager:
         """Mark an SNI as blocked by DPI."""
         if domain in self._sni_pool:
             self._sni_pool[domain].blocked = True
-            self._sni_pool[domain].last_verified = datetime.utcnow()
+            self._sni_pool[domain].last_verified = datetime.now(timezone.utc)
             logger.warning(f"SNI marked as blocked: {domain}")
 
         # If current SNI is blocked, force rotation
@@ -314,7 +314,7 @@ class SNIManager:
             self._sni_pool[domain].tls13_supported = result["tls13"]
             self._sni_pool[domain].h2_supported = result["h2"]
             self._sni_pool[domain].latency_ms = result["latency_ms"]
-            self._sni_pool[domain].last_verified = datetime.utcnow()
+            self._sni_pool[domain].last_verified = datetime.now(timezone.utc)
             self._sni_pool[domain].verification_count += 1
 
         return result
@@ -522,8 +522,8 @@ class RealityKeyManager:
             "agent_id": agent_id,
             "private_key": new_keys["private_key"],
             "public_key": new_keys["public_key"],
-            "created_at": datetime.utcnow().isoformat(),
-            "expires_at": (datetime.utcnow() + timedelta(days=self._rotation_days)).isoformat(),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "expires_at": (datetime.now(timezone.utc) + timedelta(days=self._rotation_days)).isoformat(),
         }
 
         self._keys[key_id] = key_data
@@ -532,7 +532,7 @@ class RealityKeyManager:
 
     def get_active_keys(self) -> List[Dict[str, Any]]:
         """Get all active (non-expired) key pairs."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         active = []
         for key_id, data in self._keys.items():
             expires = datetime.fromisoformat(data["expires_at"])
@@ -546,7 +546,7 @@ class RealityKeyManager:
         if not data:
             return True
         expires = datetime.fromisoformat(data["expires_at"])
-        return datetime.utcnow() > expires
+        return datetime.now(timezone.utc) > expires
 
 
 # ═══════════════════════════════════════════════════════════════

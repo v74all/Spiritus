@@ -21,6 +21,9 @@ function asBool(v) {
   return false;
 }
 
+function setVal(id, val) { const el = document.getElementById(id); if (el) el.value = val; }
+function setChk(id, val) { const el = document.getElementById(id); if (el) el.checked = !!val; }
+
 function setKillSwitchCheckboxes(on) {
   ['set-ks', 'set-security-ks'].forEach(id => {
     const el = document.getElementById(id);
@@ -1823,11 +1826,11 @@ async function loadSettings() {
     document.getElementById('set-network-ipv6').checked = s.ipv6_enabled || false;
     var v6el = document.getElementById('detected-ipv6');
     if (v6el && s.server_ipv6) v6el.textContent = 'IPv6: ' + s.server_ipv6;
-    // VLESS WS Plain Domain Fronting
-    document.getElementById('set-vless-ws-plain-front').checked = s.vless_ws_plain_front_enabled || false;
-    document.getElementById('set-vless-ws-plain-front-domain').value = s.vless_ws_plain_front_domain || 'snapp.ir';
-    document.getElementById('set-vless-ws-plain-front-port').value = s.vless_ws_plain_front_port || 2052;
-    document.getElementById('set-vless-ws-plain-front-path').value = s.vless_ws_plain_front_path || '/';
+    // VLESS WS+TLS Domain Fronting
+    setChk('set-vless-ws-plain-front', s.vless_ws_plain_front_enabled || false);
+    setVal('set-vless-ws-plain-front-domain', s.vless_ws_plain_front_domain || 'chat.deepseek.com');
+    setVal('set-vless-ws-plain-front-port', s.vless_ws_plain_front_port || 2052);
+    setVal('set-vless-ws-plain-front-path', s.vless_ws_plain_front_path || '/');
     loadBackups();
     updateSettingsStatus();
     _settingsLoaded = true;

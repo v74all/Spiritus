@@ -12,7 +12,7 @@ from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer, HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
 import pyotp
 import logging
@@ -67,9 +67,9 @@ def create_access_token(
     """Create a JWT access token."""
     to_encode = data.copy()
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = datetime.now(timezone.utc) + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(hours=settings.session_lifetime_hours)
+        expire = datetime.now(timezone.utc) + timedelta(hours=settings.session_lifetime_hours)
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(
         to_encode, settings.secret_key, algorithm="HS256"
@@ -194,11 +194,25 @@ async def get_current_admin(
 
 async def rate_limit_dependency(
     request: Request,
-    db: AsyncSession = Depends(get_async_db)
+    max_requests: int = 30,
+    window_seconds: int = 60,
 ):
-    """Rate limiting dependency."""
-    # In a real implementation, this would use Redis
-    client_ip = request.client.host
-    # Check rate limits in database/Redis
-    # Raise HTTPException if rate limit exceeded
+    """Redis-based sliding-window rate limiting dependency."""
+    from .redis_client import get_redis
+    client_ip = request.client.host if request.client else "unknown"
+    try:
+        redis = await get_redis()
+        key = f"ratelimit:{client_ip}:{request.url.path}"
+        current = await redis.incr(key)
+        if current == 1:
+            await redis.expire(key, window_seconds)
+        if current > max_requests:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"Rate limit exceeded. Max {max_requests} requests per {window_seconds}s.",
+            )
+    except HTTPException:
+        raise
+    except Exception:
+        pass  # If Redis is down, allow request through
     return client_ip

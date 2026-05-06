@@ -19,7 +19,7 @@ import json
 import secrets
 import logging
 from typing import Dict, Any, Optional, List
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select, and_, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -187,7 +187,7 @@ class ResellerManager:
         # Create user
         import uuid
         user_uuid = str(uuid.uuid4())
-        expire_at = datetime.utcnow() + timedelta(days=days) if days > 0 else None
+        expire_at = datetime.now(timezone.utc) + timedelta(days=days) if days > 0 else None
 
         user = VpnUser(
             uuid=user_uuid,
@@ -245,7 +245,7 @@ class SelfServicePortal:
         traffic_remaining_gb = max(0, traffic_limit_gb - traffic_used_gb) if user.traffic_limit else -1  # -1 = unlimited
 
         is_expired = False
-        if user.expire_at and user.expire_at < datetime.utcnow():
+        if user.expire_at and user.expire_at < datetime.now(timezone.utc):
             is_expired = True
 
         return {
@@ -258,7 +258,7 @@ class SelfServicePortal:
             "traffic_remaining_gb": round(traffic_remaining_gb, 2) if traffic_remaining_gb >= 0 else "unlimited",
             "expire_at": user.expire_at.isoformat() if user.expire_at else None,
             "is_expired": is_expired,
-            "days_remaining": (user.expire_at - datetime.utcnow()).days if user.expire_at and not is_expired else 0,
+            "days_remaining": (user.expire_at - datetime.now(timezone.utc)).days if user.expire_at and not is_expired else 0,
             "speed_limit_up": user.speed_limit_up,
             "speed_limit_down": user.speed_limit_down,
         }

@@ -26,7 +26,7 @@ import subprocess
 import time
 import logging
 from typing import Dict, Any, Optional, List, Tuple
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -148,7 +148,7 @@ class WebAuthnManager:
             "public_key": attestation_object,  # Simplified - should extract actual public key
             "transports": ["internal", "hybrid"],
             "sign_count": 0,
-            "registered_at": datetime.utcnow().isoformat(),
+            "registered_at": datetime.now(timezone.utc).isoformat(),
             "aaguid": "",  # Authenticator Attestation GUID
         }
 
@@ -561,7 +561,7 @@ action = iptables-multiport[name=v7lthronyx-{service}, port="{jail['port']}", pr
             ban.ban_count += 1
             ban.reason = reason
             if ban.ban_count >= self.max_retries:
-                ban.banned_until = datetime.utcnow() + timedelta(seconds=self.ban_time)
+                ban.banned_until = datetime.now(timezone.utc) + timedelta(seconds=self.ban_time)
         else:
             ban = Fail2banBan(
                 ip_address=ip_address,
@@ -588,7 +588,7 @@ action = iptables-multiport[name=v7lthronyx-{service}, port="{jail['port']}", pr
         if not ban:
             return False
 
-        if ban.banned_until and ban.banned_until > datetime.utcnow():
+        if ban.banned_until and ban.banned_until > datetime.now(timezone.utc):
             return True
 
         return False

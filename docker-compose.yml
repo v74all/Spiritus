@@ -6,16 +6,16 @@ services:
     image: postgres:16-alpine
     container_name: spiritus-db
     environment:
-      POSTGRES_USER: spiritus
-      POSTGRES_PASSWORD: spiritus
-      POSTGRES_DB: spiritus
+      POSTGRES_USER: ${POSTGRES_USER:-spiritus}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-spiritus}
       POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
     ports:
       - "5432:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U spiritus"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-spiritus}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -28,11 +28,11 @@ services:
     container_name: spiritus-redis
     ports:
       - "6379:6379"
-    command: redis-server --appendonly yes --requirepass ""
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD must be set in .env}
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -46,9 +46,11 @@ services:
       dockerfile: Dockerfile
     container_name: spiritus-app
     environment:
-      DATABASE_URL: postgresql://spiritus:spiritus@db:5432/spiritus
-      REDIS_URL: redis://redis:6379/0
-      LOG_LEVEL: INFO
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-spiritus}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-spiritus}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set in .env}
+      CORS_ORIGINS: ${CORS_ORIGINS:-*}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
     ports:
       - "38471:38471"
       - "10085:10085"
@@ -63,6 +65,12 @@ services:
     networks:
       - spiritus-net
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:38471/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
 
   # Prometheus for Monitoring
   prometheus:
@@ -86,7 +94,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD must be set in .env}
       GF_SECURITY_ALLOW_EMBED_INITIATION: "true"
     volumes:
       - grafana_data:/var/lib/grafana

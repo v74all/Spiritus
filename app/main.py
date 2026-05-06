@@ -96,7 +96,21 @@ async def lifespan(app: FastAPI):
             f.write(pw)
         os.chmod(pw_file, 0o600)
         logger.info(f"Panel password generated: {pw_file}")
-    
+
+    # TLS cert precondition: any TLS-bearing inbound will fail to start in Xray
+    # if these files don't exist. Surface a clear log line at boot rather than
+    # a cryptic Xray crash later. Defaults are /etc/ssl/certs/fullchain.pem and
+    # /etc/ssl/private/privkey.pem; override via TLS_CERT_FILE / TLS_KEY_FILE.
+    for _label, _p in (("tls_cert_file", settings.tls_cert_file),
+                       ("tls_key_file", settings.tls_key_file)):
+        if not os.path.exists(_p):
+            logger.error(
+                "TLS path missing: %s=%s. TLS-bearing inbounds (VLESS-WS, "
+                "Trojan, Hysteria2, WS+TLS Domain Fronting, ...) will fail to "
+                "start in Xray. Set %s in your env to point at a valid file.",
+                _label, _p, _label.upper(),
+            )
+
     yield
     
     # Shutdown
@@ -116,11 +130,12 @@ app = FastAPI(
     openapi_url="/api/openapi.json"
 )
 
-# Configure CORS
+# Configure CORS — restrict to configured origins
+_allowed_origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Will be restricted in production
-    allow_credentials=False,
+    allow_origins=_allowed_origins,
+    allow_credentials=True if _allowed_origins != ["*"] else False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -200,9 +215,12 @@ async def liveness_check():
     return {"status": "alive"}
 
 @app.api_route("/api/google-relay", methods=["GET", "POST"], tags=["system"])
-async def google_relay_proxy(request: Request):
+async def google_relay_proxy(
+    request: Request,
+    admin: User = Depends(get_current_admin_cookie),
+):
     """
-    Google Apps Script Relay — HTTP proxy endpoint.
+    Google Apps Script Relay — HTTP proxy endpoint (admin-only).
     Accepts JSON payloads forwarded from Google Apps Script and fetches the target URL.
     Used as emergency relay exit node when server IP is blocked in Iran.
 
@@ -213,6 +231,7 @@ async def google_relay_proxy(request: Request):
       {"status": 200, "body": "...response text..."}
     """
     import httpx
+    import ipaddress
 
     try:
         if request.method == "POST":
@@ -233,9 +252,31 @@ async def google_relay_proxy(request: Request):
     if not url:
         return JSONResponse({"error": "url is required"}, status_code=400)
 
-    # Basic security: only allow HTTP/HTTPS URLs
+    # Security: only allow HTTP/HTTPS URLs
     if not url.startswith(("http://", "https://")):
         return JSONResponse({"error": "only http/https URLs allowed"}, status_code=400)
+
+    # SSRF protection: block private/internal IPs and cloud metadata endpoints
+    try:
+        from urllib.parse import urlparse
+        parsed = urlparse(url)
+        hostname = parsed.hostname
+        if hostname:
+            resolved_ip = None
+            import socket
+            try:
+                resolved_ip = socket.gethostbyname(hostname)
+            except socket.gaierror:
+                pass
+            if resolved_ip:
+                ip = ipaddress.ip_address(resolved_ip)
+                if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+                    return JSONResponse({"error": "private/internal IPs not allowed"}, status_code=400)
+                # Block cloud metadata endpoints (AWS, GCP, Azure)
+                if str(ip) in ("169.254.169.254", "fd00:ec2::254"):
+                    return JSONResponse({"error": "metadata endpoint not allowed"}, status_code=400)
+    except Exception:
+        pass  # If we can't parse, let httpx handle it
 
     try:
         async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
@@ -342,7 +383,7 @@ async def set_direction(request: Request):
     resp.set_cookie(
         key="vpn_dir", value=new_dir,
         max_age=365 * 24 * 3600, path="/",
-        samesite="lax", secure=False, httponly=False,
+        samesite="lax", secure=True, httponly=True,
     )
     return resp
 
@@ -941,7 +982,14 @@ async def subscription_json(
     )
 
 def _generate_xray_server_config(panel_settings: dict) -> dict:
-    """Generate the server-side Xray config with inbounds for all enabled protocols."""
+    """Generate the server-side Xray config with inbounds for all enabled protocols.
+
+    NOTE: Currently unused. The canonical implementation lives in
+    app/api/compat.py — the runtime path at line ~1247 explicitly imports it
+    via `from .api.compat import _generate_xray_server_config as _gen`. This
+    copy is kept temporarily so the in-progress WS+TLS migration retains a
+    second reference for diffing; it can be deleted once the migration ships.
+    """
     inbounds = []
     sni = panel_settings.get("vmess_sni") or "www.aparat.com"
     fp = panel_settings.get("fingerprint") or "chrome"
@@ -964,8 +1012,8 @@ def _generate_xray_server_config(panel_settings: dict) -> dict:
             "wsSettings": {"path": panel_settings.get("vmess_ws_path") or "/api/v1/stream"},
             "tlsSettings": {
                 "serverName": sni,
-                "certificates": [{"certificateFile": "/etc/ssl/certs/fullchain.pem",
-                                   "keyFile": "/etc/ssl/private/privkey.pem"}],
+                "certificates": [{"certificateFile": settings.tls_cert_file,
+                                   "keyFile": settings.tls_key_file}],
                 "minVersion": "1.2",
             },
         },
@@ -1070,8 +1118,8 @@ def _generate_xray_server_config(panel_settings: dict) -> dict:
                 "security": "tls",
                 "tlsSettings": {
                     "serverName": sni,
-                    "certificates": [{"certificateFile": "/etc/ssl/certs/fullchain.pem",
-                                       "keyFile": "/etc/ssl/private/privkey.pem"}],
+                    "certificates": [{"certificateFile": settings.tls_cert_file,
+                                       "keyFile": settings.tls_key_file}],
                 },
             },
             "sniffing": {"enabled": True, "destOverride": ["http", "tls"]},
@@ -1091,8 +1139,8 @@ def _generate_xray_server_config(panel_settings: dict) -> dict:
                 "grpcSettings": {"serviceName": panel_settings.get("grpc_service_name") or "GunService"},
                 "tlsSettings": {
                     "serverName": sni,
-                    "certificates": [{"certificateFile": "/etc/ssl/certs/fullchain.pem",
-                                       "keyFile": "/etc/ssl/private/privkey.pem"}],
+                    "certificates": [{"certificateFile": settings.tls_cert_file,
+                                       "keyFile": settings.tls_key_file}],
                 },
             },
             "sniffing": {"enabled": True, "destOverride": ["http", "tls"]},
@@ -1112,8 +1160,8 @@ def _generate_xray_server_config(panel_settings: dict) -> dict:
                 "httpupgradeSettings": {"path": panel_settings.get("httpupgrade_path") or "/httpupgrade"},
                 "tlsSettings": {
                     "serverName": sni,
-                    "certificates": [{"certificateFile": "/etc/ssl/certs/fullchain.pem",
-                                       "keyFile": "/etc/ssl/private/privkey.pem"}],
+                    "certificates": [{"certificateFile": settings.tls_cert_file,
+                                       "keyFile": settings.tls_key_file}],
                 },
             },
             "sniffing": {"enabled": True, "destOverride": ["http", "tls"]},
@@ -1133,31 +1181,35 @@ def _generate_xray_server_config(panel_settings: dict) -> dict:
                 "wsSettings": {"path": panel_settings.get("vless_ws_path") or "/vless-ws"},
                 "tlsSettings": {
                     "serverName": sni,
-                    "certificates": [{"certificateFile": "/etc/ssl/certs/fullchain.pem",
-                                       "keyFile": "/etc/ssl/private/privkey.pem"}],
+                    "certificates": [{"certificateFile": settings.tls_cert_file,
+                                       "keyFile": settings.tls_key_file}],
                 },
             },
             "sniffing": {"enabled": True, "destOverride": ["http", "tls"]},
         })
 
-    # VLESS WS Plain (no TLS) — Iranian domain fronting
-    # Used with CDN/proxy that terminates TLS at edge (e.g., Cloudflare, Argo)
-    # Client connects to trusted Iranian domain (snapp.ir) on plain HTTP,
-    # CDN forwards to this inbound based on Host header
+    # VLESS WS+TLS Domain Fronting — TLS with spoofed SNI
+    # Client connects directly to our server with TLS, SNI shows a trusted domain
+    # (e.g. chat.deepseek.com) to bypass DPI. Server terminates TLS with its own cert.
     if panel_settings.get("vless_ws_plain_front_enabled"):
-        _front_host = panel_settings.get("vless_ws_plain_front_domain") or "snapp.ir"
+        _front_host = panel_settings.get("vless_ws_plain_front_domain") or "chat.deepseek.com"
+        _front_port = int(panel_settings.get("vless_ws_plain_front_port") or 2052)
         inbounds.append({
             "tag": "in-vless-ws-plain",
-            "port": int(panel_settings.get("vless_ws_plain_front_port") or 2052),
+            "port": _front_port,
             "listen": listen_addr,
             "protocol": "vless",
             "settings": {"clients": [], "decryption": "none"},
             "streamSettings": {
                 "network": "ws",
-                "security": "none",
+                "security": "tls",
                 "wsSettings": {
                     "path": panel_settings.get("vless_ws_plain_front_path") or "/",
-                    "headers": {"Host": _front_host},
+                },
+                "tlsSettings": {
+                    "serverName": _front_host,
+                    "certificates": [{"certificateFile": settings.tls_cert_file,
+                                       "keyFile": settings.tls_key_file}],
                 },
             },
             "sniffing": {"enabled": True, "destOverride": ["http", "tls"]},
@@ -1179,8 +1231,8 @@ def _generate_xray_server_config(panel_settings: dict) -> dict:
                 "security": "tls",
                 "tlsSettings": {
                     "serverName": sni,
-                    "certificates": [{"certificateFile": "/etc/ssl/certs/fullchain.pem",
-                                       "keyFile": "/etc/ssl/private/privkey.pem"}],
+                    "certificates": [{"certificateFile": settings.tls_cert_file,
+                                       "keyFile": settings.tls_key_file}],
                 },
             },
             "sniffing": {"enabled": True, "destOverride": ["http", "tls"]},
@@ -1201,8 +1253,8 @@ def _generate_xray_server_config(panel_settings: dict) -> dict:
                 "wsSettings": {"path": panel_settings.get("cdn_ws_path") or "/cdn-ws"},
                 "tlsSettings": {
                     "serverName": cdn_domain,
-                    "certificates": [{"certificateFile": "/etc/ssl/certs/fullchain.pem",
-                                       "keyFile": "/etc/ssl/private/privkey.pem"}],
+                    "certificates": [{"certificateFile": settings.tls_cert_file,
+                                       "keyFile": settings.tls_key_file}],
                 },
             },
             "sniffing": {"enabled": True, "destOverride": ["http", "tls"]},

@@ -54,29 +54,40 @@ class MessageResponse(BaseModel):
     message: str
     success: bool = True
 
-# In-memory store for demo (replace with DB in production)
-_users_db: dict = {}
-_login_attempts: dict = {}
+# Redis-backed login attempt tracking
+async def _is_locked_out(ip: str) -> bool:
+    """Check if IP is locked out due to too many failed attempts (Redis-backed)."""
+    from ..redis_client import get_redis
+    try:
+        redis = await get_redis()
+        key = f"login_attempts:{ip}"
+        current = await redis.get(key)
+        if current and int(current) >= settings.max_login_attempts:
+            return True
+    except Exception:
+        pass  # If Redis is down, allow through
+    return False
 
-def _is_locked_out(ip: str) -> bool:
-    """Check if IP is locked out due to too many failed attempts."""
-    if ip not in _login_attempts:
-        return False
-    import time
-    now = time.time()
-    _login_attempts[ip] = [t for t in _login_attempts[ip] if now - t < settings.lockout_seconds]
-    return len(_login_attempts[ip]) >= settings.max_login_attempts
+async def _record_failed_attempt(ip: str):
+    """Record a failed login attempt (Redis-backed)."""
+    from ..redis_client import get_redis
+    try:
+        redis = await get_redis()
+        key = f"login_attempts:{ip}"
+        current = await redis.incr(key)
+        if current == 1:
+            await redis.expire(key, settings.lockout_seconds)
+    except Exception:
+        pass  # If Redis is down, skip rate limiting
 
-def _record_failed_attempt(ip: str):
-    """Record a failed login attempt."""
-    import time
-    if ip not in _login_attempts:
-        _login_attempts[ip] = []
-    _login_attempts[ip].append(time.time())
-
-def _clear_attempts(ip: str):
-    """Clear login attempts for an IP."""
-    _login_attempts.pop(ip, None)
+async def _clear_attempts(ip: str):
+    """Clear login attempts for an IP (Redis-backed)."""
+    from ..redis_client import get_redis
+    try:
+        redis = await get_redis()
+        await redis.delete(f"login_attempts:{ip}")
+    except Exception:
+        pass
 
 @router.post("/login", response_model=Token)
 async def login(request: LoginRequest, req: Request, db: AsyncSession = Depends(get_async_db)):
@@ -90,7 +101,7 @@ async def login(request: LoginRequest, req: Request, db: AsyncSession = Depends(
             detail=f"IP banned. Contact admin."
         )
 
-    if _is_locked_out(client_ip):
+    if await _is_locked_out(client_ip):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=f"Too many failed attempts. Try again in {settings.lockout_seconds}s"
@@ -102,13 +113,13 @@ async def login(request: LoginRequest, req: Request, db: AsyncSession = Depends(
 
     if admin_user:
         if not verify_password(request.password, admin_user.password_hash):
-            _record_failed_attempt(client_ip)
+            await _record_failed_attempt(client_ip)
             await fail2ban_manager.record_failed_attempt(client_ip, "panel", db, "Failed admin login")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid credentials"
             )
-        _clear_attempts(client_ip)
+        await _clear_attempts(client_ip)
 
         totp_required = admin_user.totp_enabled and bool(admin_user.totp_secret)
 
@@ -130,7 +141,7 @@ async def login(request: LoginRequest, req: Request, db: AsyncSession = Depends(
         with open(pw_file) as f:
             stored_pw = f.read().strip()
         if request.password != stored_pw:
-            _record_failed_attempt(client_ip)
+            await _record_failed_attempt(client_ip)
             await fail2ban_manager.record_failed_attempt(client_ip, "panel", db, "Failed panel login")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -142,7 +153,7 @@ async def login(request: LoginRequest, req: Request, db: AsyncSession = Depends(
             detail="Panel not initialized"
         )
 
-    _clear_attempts(client_ip)
+    await _clear_attempts(client_ip)
 
     access_token = create_access_token(
         data={"sub": request.username, "is_admin": True}
@@ -160,7 +171,7 @@ async def login_with_2fa(request: Login2FARequest, req: Request, db: AsyncSessio
     """Login with 2FA/TOTP verification."""
     client_ip = req.client.host
 
-    if _is_locked_out(client_ip):
+    if await _is_locked_out(client_ip):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=f"Too many failed attempts. Try again in {settings.lockout_seconds}s"
@@ -170,22 +181,22 @@ async def login_with_2fa(request: Login2FARequest, req: Request, db: AsyncSessio
     admin_user = db_result.scalar_one_or_none()
 
     if not admin_user:
-        _record_failed_attempt(client_ip)
+        await _record_failed_attempt(client_ip)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
     if not verify_password(request.password, admin_user.password_hash):
-        _record_failed_attempt(client_ip)
+        await _record_failed_attempt(client_ip)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
     if not admin_user.totp_enabled or not admin_user.totp_secret:
-        _record_failed_attempt(client_ip)
+        await _record_failed_attempt(client_ip)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="2FA not enabled for this user")
 
     if not verify_totp(admin_user.totp_secret, request.totp_code):
-        _record_failed_attempt(client_ip)
+        await _record_failed_attempt(client_ip)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid 2FA code")
 
-    _clear_attempts(client_ip)
+    await _clear_attempts(client_ip)
 
     access_token = create_access_token(
         data={"sub": request.username, "is_admin": True, "user_id": admin_user.id}

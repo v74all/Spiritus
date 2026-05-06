@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     app_name: str = "V7LTHRONYX VPN Panel"
     debug: bool = False
     secret_key: str = Field(default_factory=lambda: secrets.token_urlsafe(32))
+    # CORS — comma-separated list of allowed origins (no wildcards in production)
+    cors_origins: str = Field("*", env="CORS_ORIGINS")
     
     # Server
     host: str = "0.0.0.0"
@@ -23,9 +25,9 @@ class Settings(BaseSettings):
     web_port: int = Field(38471, env="VPN_WEB_PORT")
     api_port: int = Field(10085, env="VPN_API_PORT")
     
-    # Database
+    # Database — MUST be set via DATABASE_URL env var
     database_url: str = Field(
-        "postgresql://vpnadmin:securepassword@localhost:5432/vpnpanel",
+        "",
         env="DATABASE_URL"
     )
     database_pool_size: int = 20
@@ -55,10 +57,16 @@ class Settings(BaseSettings):
     vpn_sni_host: str = Field("www.google.com", env="VPN_SNI_HOST")
     xray_config_path: str = "/usr/local/etc/xray/config.json"
     xray_bin_path: str = "/usr/local/bin/xray"
+
+    # TLS certificate paths used by all TLS-bearing Xray inbounds.
+    # Override via TLS_CERT_FILE / TLS_KEY_FILE for non-standard layouts
+    # (e.g. /etc/letsencrypt/live/<domain>/fullchain.pem).
+    tls_cert_file: str = Field("/etc/ssl/certs/fullchain.pem", env="TLS_CERT_FILE")
+    tls_key_file: str = Field("/etc/ssl/private/privkey.pem", env="TLS_KEY_FILE")
     
-    # REALITY
-    reality_private_key: str = "aGM7HELLUCgA3icWeQYOba7HL-82ocrTkG3k4PhBZ28"
-    reality_public_key: str = "oZVaAa694VcKxWb-gH31sPpMIQ9XAozoJ6BOAA1DkC0"
+    # REALITY — MUST be set via environment variables; no insecure defaults
+    reality_private_key: str = Field("", env="REALITY_PRIVATE_KEY")
+    reality_public_key: str = Field("", env="REALITY_PUBLIC_KEY")
     
     # Protocols
     vless_ws_enabled: bool = Field(False, env="VLESS_WS_ENABLED")
@@ -67,7 +75,7 @@ class Settings(BaseSettings):
     vless_ws_host: str = Field("", env="VLESS_WS_HOST")
     vless_ws_plain_front_enabled: bool = Field(True, env="VLESS_WS_PLAIN_FRONT_ENABLED")
     vless_ws_plain_front_port: int = Field(2052, env="VLESS_WS_PLAIN_FRONT_PORT")
-    vless_ws_plain_front_domain: str = Field("snapp.ir", env="VLESS_WS_PLAIN_FRONT_DOMAIN")
+    vless_ws_plain_front_domain: str = Field("chat.deepseek.com", env="VLESS_WS_PLAIN_FRONT_DOMAIN")
     vless_ws_plain_front_path: str = Field("/", env="VLESS_WS_PLAIN_FRONT_PATH")
 
     # VLESS XHTTP REALITY

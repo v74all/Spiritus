@@ -382,7 +382,7 @@ class Orchestrator:
 
             # Update agent status
             agent.status = AgentStatus.online if is_healthy else AgentStatus.offline
-            agent.last_heartbeat = datetime.utcnow() if is_healthy else agent.last_heartbeat
+            agent.last_heartbeat = datetime.now(timezone.utc) if is_healthy else agent.last_heartbeat
 
             statuses.append({
                 "id": agent.id,

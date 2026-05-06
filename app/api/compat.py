@@ -9,7 +9,7 @@ the frontend.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 import asyncio
 import base64
@@ -220,7 +220,7 @@ def _write_password_file(new_password: str) -> bool:
 def _days_left(expire_at: Optional[datetime]) -> int:
     if not expire_at:
         return 9999
-    delta = expire_at - datetime.utcnow()
+    delta = expire_at - datetime.now(timezone.utc)
     return max(0, delta.days)
 
 
@@ -346,9 +346,11 @@ def _build_share_links(u: VpnUser, server_ip: Optional[str] = None) -> Dict[str,
             sni=sni_host,
             path=ws_path,
             allow_insecure=True,
+            label="VMess",
             **_dpi_vmess_kwargs(extra_host=_host_spoof or _ws_front),
         )
     except Exception:
+        logger.warning("Failed to build %s share link", "vmess", exc_info=False)
         links["vmess"] = ""
 
     if _settings_state.get("reality_public_key"):
@@ -364,9 +366,11 @@ def _build_share_links(u: VpnUser, server_ip: Optional[str] = None) -> Dict[str,
                 sid=_settings_state.get("reality_short_id") or "",
                 flow="xtls-rprx-vision",
                 network="tcp",
+                label="VLESS-Reality",
                 **_dpi_vless_kwargs(),
             )
         except Exception:
+            logger.warning("Failed to build %s share link", "vless", exc_info=False)
             links["vless"] = ""
 
     if _settings_state.get("cdn_enabled") and _settings_state.get("cdn_domain"):
@@ -380,9 +384,11 @@ def _build_share_links(u: VpnUser, server_ip: Optional[str] = None) -> Dict[str,
                 sni=cdn_host,
                 path=_settings_state.get("cdn_ws_path") or "/cdn-ws",
                 allow_insecure=True,
+                label="CDN-VMess",
                 **_dpi_vmess_kwargs(extra_host=cdn_host),
             )
         except Exception:
+            logger.warning("Failed to build %s share link", "cdn_vmess", exc_info=False)
             links["cdn_vmess"] = ""
 
     if _settings_state.get("vless_ws_enabled") or settings.vless_ws_enabled:
@@ -397,27 +403,34 @@ def _build_share_links(u: VpnUser, server_ip: Optional[str] = None) -> Dict[str,
                 host=_host_spoof or _ws_front or sni_host,
                 path=_settings_state.get("vless_ws_path") or settings.vless_ws_path,
                 allow_insecure=True,
+                label="VLESS-WS",
                 **_dpi_vless_kwargs(),
             )
         except Exception:
+            logger.warning("Failed to build %s share link", "vless_ws", exc_info=False)
             links["vless_ws"] = ""
 
     if _settings_state.get("vless_ws_plain_front_enabled"):
         try:
-            _front_domain = _settings_state.get("vless_ws_plain_front_domain") or "snapp.ir"
+            _front_domain = _settings_state.get("vless_ws_plain_front_domain") or "chat.deepseek.com"
             _front_path = _settings_state.get("vless_ws_plain_front_path") or "/"
+            _front_port = int(_settings_state.get("vless_ws_plain_front_port") or 2052)
             links["vless_ws_plain_front"] = ClientConfigGenerator.generate_vless_share_url(
                 uuid=u.uuid,
-                address=_front_domain,
-                port=int(_settings_state.get("vless_ws_plain_front_port") or 2052),
+                address=server_ip,
+                port=_front_port,
                 network="ws",
-                security="none",
-                host=sni_host or server_ip,
+                security="tls",
+                sni=_front_domain,
+                fp=_settings_state.get("fingerprint") or "chrome",
+                host=_front_domain,
                 path=_front_path,
-                fp="",
+                allow_insecure=True,
+                label="VLESS-WS-TLS",
                 **_dpi_vless_kwargs(),
             )
         except Exception:
+            logger.warning("Failed to build %s share link", "vless_ws_plain_front", exc_info=False)
             links["vless_ws_plain_front"] = ""
 
     if _settings_state.get("trojan_enabled"):
@@ -429,9 +442,11 @@ def _build_share_links(u: VpnUser, server_ip: Optional[str] = None) -> Dict[str,
                 sni=sni_host,
                 network="tcp",
                 allow_insecure=True,
+                label="Trojan",
                 **_dpi_trojan_kwargs(),
             )
         except Exception:
+            logger.warning("Failed to build %s share link", "trojan", exc_info=False)
             links["trojan"] = ""
 
     if _settings_state.get("grpc_enabled"):
@@ -445,9 +460,11 @@ def _build_share_links(u: VpnUser, server_ip: Optional[str] = None) -> Dict[str,
                 sni=sni_host,
                 path=_settings_state.get("grpc_service_name") or "GunService",
                 allow_insecure=True,
+                label="gRPC",
                 **_dpi_vmess_kwargs(),
             )
         except Exception:
+            logger.warning("Failed to build %s share link", "grpc_vmess", exc_info=False)
             links["grpc_vmess"] = ""
 
     if _settings_state.get("httpupgrade_enabled"):
@@ -461,9 +478,11 @@ def _build_share_links(u: VpnUser, server_ip: Optional[str] = None) -> Dict[str,
                 sni=sni_host,
                 path=_settings_state.get("httpupgrade_path") or "/httpupgrade",
                 allow_insecure=True,
+                label="HTTPUpgrade",
                 **_dpi_vmess_kwargs(extra_host=_host_spoof or _ws_front),
             )
         except Exception:
+            logger.warning("Failed to build %s share link", "httpupgrade_vmess", exc_info=False)
             links["httpupgrade_vmess"] = ""
 
     if _settings_state.get("ss2022_enabled") and _settings_state.get("ss2022_server_key"):
@@ -477,6 +496,7 @@ def _build_share_links(u: VpnUser, server_ip: Optional[str] = None) -> Dict[str,
                 f"ss://{userinfo}@{server_ip}:{int(_settings_state.get('ss2022_port') or 2056)}#{label}"
             )
         except Exception:
+            logger.warning("Failed to build %s share link", "ss2022", exc_info=False)
             links["ss2022"] = ""
 
     # Hysteria2
@@ -489,8 +509,10 @@ def _build_share_links(u: VpnUser, server_ip: Optional[str] = None) -> Dict[str,
                 sni=sni_host,
                 obfs=_settings_state.get("hysteria2_obfs_password") or "",
                 insecure=1,
+                label="Hysteria2",
             )
         except Exception:
+            logger.warning("Failed to build %s share link", "hysteria2", exc_info=False)
             links["hysteria2"] = ""
 
     # TUIC v5
@@ -510,6 +532,7 @@ def _build_share_links(u: VpnUser, server_ip: Optional[str] = None) -> Dict[str,
                 f"tuic://{u.uuid}:{tuic_password}@{server_ip}:{tuic_port}?{params}#{label}"
             )
         except Exception:
+            logger.warning("Failed to build %s share link", "tuic", exc_info=False)
             links["tuic"] = ""
 
     # VLESS xHTTP REALITY
@@ -531,9 +554,11 @@ def _build_share_links(u: VpnUser, server_ip: Optional[str] = None) -> Dict[str,
                 network="xhttp",
                 xhttp_mode=_settings_state.get("vless_xhttp_mode") or "auto",
                 path=_settings_state.get("vless_xhttp_path") or "/xhttp",
+                label="VLESS-XHTTP",
                 **_dpi_vless_kwargs(),
             )
         except Exception:
+            logger.warning("Failed to build %s share link", "vless_xhttp", exc_info=False)
             links["vless_xhttp"] = ""
 
     # VLESS Vision REALITY
@@ -550,9 +575,11 @@ def _build_share_links(u: VpnUser, server_ip: Optional[str] = None) -> Dict[str,
                 sid=_settings_state.get("vless_vision_reality_short_id") or _settings_state.get("reality_short_id") or "",
                 flow="xtls-rprx-vision",
                 network="tcp",
+                label="VLESS-Vision",
                 **_dpi_vless_kwargs(),
             )
         except Exception:
+            logger.warning("Failed to build %s share link", "vless_vision", exc_info=False)
             links["vless_vision"] = ""
 
     # VLESS Reverse REALITY
@@ -568,9 +595,11 @@ def _build_share_links(u: VpnUser, server_ip: Optional[str] = None) -> Dict[str,
                 pbk=_settings_state.get("vless_reverse_reality_public_key") or _settings_state.get("reality_public_key") or "",
                 sid=_settings_state.get("vless_reverse_reality_short_id") or "",
                 network="tcp",
+                label="VLESS-Reverse",
                 **_dpi_vless_kwargs(),
             )
         except Exception:
+            logger.warning("Failed to build %s share link", "vless_reverse", exc_info=False)
             links["vless_reverse"] = ""
 
     # Trojan CDN
@@ -584,9 +613,11 @@ def _build_share_links(u: VpnUser, server_ip: Optional[str] = None) -> Dict[str,
                 network="ws",
                 path=_settings_state.get("cdn_ws_path") or "/cdn-ws",
                 allow_insecure=False,
+                label="Trojan-CDN",
                 **_dpi_trojan_kwargs(),
             )
         except Exception:
+            logger.warning("Failed to build %s share link", "trojan_cdn", exc_info=False)
             links["trojan_cdn"] = ""
 
     # ── IPv6 variants: generate dual-stack copies of all non-empty links ──
@@ -1074,7 +1105,7 @@ async def legacy_create_user(
     admin: User = Depends(get_current_admin_cookie),
     db: AsyncSession = Depends(get_async_db),
 ):
-    expire_at = datetime.utcnow() + timedelta(days=body.days) if body.days else None
+    expire_at = datetime.now(timezone.utc) + timedelta(days=body.days) if body.days else None
     db_user = VpnUser(
         uuid=str(uuid_lib.uuid4()),
         name=body.name,
@@ -1152,7 +1183,7 @@ async def legacy_renew_user(
         return {"ok": False, "error": "User not found"}
     user.traffic_limit = int(body.traffic * (1024**3))
     user.traffic_used = 0
-    user.expire_at = datetime.utcnow() + timedelta(days=body.days)
+    user.expire_at = datetime.now(timezone.utc) + timedelta(days=body.days)
     user.active = 1
     await db.commit()
     return {"ok": True}
@@ -1283,7 +1314,7 @@ async def legacy_bulk_users(
     admin: User = Depends(get_current_admin_cookie),
     db: AsyncSession = Depends(get_async_db),
 ):
-    expire_at = datetime.utcnow() + timedelta(days=body.days) if body.days else None
+    expire_at = datetime.now(timezone.utc) + timedelta(days=body.days) if body.days else None
     created_users: List[VpnUser] = []
     for i in range(body.count):
         if body.numbered:
@@ -1609,7 +1640,7 @@ async def legacy_sync(
     admin: User = Depends(get_current_admin_cookie),
     db: AsyncSession = Depends(get_async_db),
 ):
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     result = await db.execute(
         select(VpnUser).where(VpnUser.expire_at != None, VpnUser.active == 1)
     )
@@ -1931,8 +1962,8 @@ def _generate_xray_server_config() -> dict:
     # IPv6 dual-stack: "::" accepts both v4+v6 on Linux (IPV6_V6ONLY=false)
     listen_addr = "::" if _as_bool(s.get("ipv6_enabled")) else "0.0.0.0"
 
-    cert_file = "/etc/ssl/certs/fullchain.pem"
-    key_file = "/etc/ssl/private/privkey.pem"
+    cert_file = settings.tls_cert_file
+    key_file = settings.tls_key_file
 
     # Fetch active user UUIDs for client authentication
     vmess_clients = _get_active_vmess_clients()
@@ -2147,21 +2178,27 @@ def _generate_xray_server_config() -> dict:
             "sniffing": {"enabled": True, "destOverride": ["http", "tls"]},
         })
 
-    # VLESS WS Plain (no TLS) — Iranian domain fronting
+    # VLESS WS+TLS Domain Fronting — TLS with spoofed SNI
+    # Client connects directly to our server with TLS, SNI shows a trusted domain
+    # (e.g. chat.deepseek.com) to bypass DPI. Server terminates TLS with its own cert.
     if _as_bool(s.get("vless_ws_plain_front_enabled")):
-        _front_host = s.get("vless_ws_plain_front_domain") or "snapp.ir"
+        _front_host = s.get("vless_ws_plain_front_domain") or "chat.deepseek.com"
+        _front_port = int(s.get("vless_ws_plain_front_port") or 2052)
         inbounds.append({
             "tag": "in-vless-ws-plain",
-            "port": int(s.get("vless_ws_plain_front_port") or 2052),
+            "port": _front_port,
             "listen": listen_addr,
             "protocol": "vless",
             "settings": {"clients": vless_clients, "decryption": "none"},
             "streamSettings": {
                 "network": "ws",
-                "security": "none",
+                "security": "tls",
                 "wsSettings": {
                     "path": s.get("vless_ws_plain_front_path") or "/",
-                    "headers": {"Host": _front_host},
+                },
+                "tlsSettings": {
+                    "serverName": _front_host,
+                    "certificates": [{"certificateFile": cert_file, "keyFile": key_file}],
                 },
             },
             "sniffing": {"enabled": True, "destOverride": ["http", "tls"]},
@@ -2460,7 +2497,7 @@ async def legacy_report(
         select(func.coalesce(func.sum(VpnUser.traffic_limit), 0))
     )).scalar() or 0
 
-    week_ahead = datetime.utcnow() + timedelta(days=7)
+    week_ahead = datetime.now(timezone.utc) + timedelta(days=7)
     expiring = (await db.execute(
         select(func.count(VpnUser.id)).where(
             VpnUser.active == 1,
@@ -2561,7 +2598,7 @@ async def legacy_resilience_run(
     technique = body.get("technique", "unknown")
     _resilience_state["active_attacks"] += 1
     _resilience_state["stats"][technique] = {
-        "started_at": datetime.utcnow().isoformat(),
+        "started_at": datetime.now(timezone.utc).isoformat(),
         "target": body.get("target"),
         "duration": body.get("duration"),
     }
@@ -2941,7 +2978,7 @@ async def legacy_agent_create_user(
     if quota_error:
         return {"ok": False, "error": quota_error}
 
-    expire_at = datetime.utcnow() + timedelta(days=body.days) if body.days else None
+    expire_at = datetime.now(timezone.utc) + timedelta(days=body.days) if body.days else None
     default_speed = int(_agent_meta(agent).get("speed_limit_default") or 0)
     db_user = VpnUser(
         uuid=str(uuid_lib.uuid4()),
@@ -2978,7 +3015,7 @@ async def legacy_agent_bulk_users(
     if quota_error:
         return {"ok": False, "error": quota_error}
 
-    expire_at = datetime.utcnow() + timedelta(days=body.days) if body.days else None
+    expire_at = datetime.now(timezone.utc) + timedelta(days=body.days) if body.days else None
     created_users: List[VpnUser] = []
     default_speed = int(_agent_meta(agent).get("speed_limit_default") or 0)
     for i in range(body.count):
@@ -3107,7 +3144,7 @@ async def legacy_agent_renew_user(
         return {"ok": False, "error": quota_error}
     user.traffic_limit = int(body.traffic * (1024**3))
     user.traffic_used = 0
-    user.expire_at = datetime.utcnow() + timedelta(days=body.days)
+    user.expire_at = datetime.now(timezone.utc) + timedelta(days=body.days)
     user.active = 1
     await db.commit()
     return {"ok": True}
@@ -3152,7 +3189,7 @@ async def legacy_agent_sync(
     agent: Agent = Depends(_get_current_agent_cookie),
     db: AsyncSession = Depends(get_async_db),
 ):
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     result = await db.execute(
         select(VpnUser).where(
             VpnUser.agent_id == agent.id,

@@ -333,20 +333,19 @@ PROTOCOLS: Dict[str, ProtocolSpec] = {
     # ── WireGuard ──
     "vless_ws_plain_front": ProtocolSpec(
         key="vless_ws_plain_front",
-        name="VLESS + WS Plain (Domain Fronting)",
-        name_fa="VLESS + WS Plain (Domain Fronting)",
+        name="VLESS + WS+TLS (Domain Fronting)",
+        name_fa="VLESS + WS+TLS (Domain Fronting)",
         category=ProtocolCategory.xray,
         backend=ProtocolBackend.xray,
-        description="VLESS with plain WebSocket (no TLS). Uses trusted Iranian domain as front address for DPI bypass.",
-        description_fa="VLESS با WebSocket ساده (بدون TLS). از دامنه ایرانی معتبر به عنوان فرانت برای دور زدن DPI استفاده می‌کند.",
-        requires_tls=False,
+        description="VLESS with WebSocket over TLS. Uses a trusted domain as SNI for DPI bypass via TLS domain fronting.",
+        description_fa="VLESS با WebSocket روی TLS. از دامنه معتبر به عنوان SNI برای دور زدن DPI با Domain Fronting استفاده می‌کند.",
+        requires_tls=True,
         supports_cdn=False,
         supports_reality=False,
         config_fields=[
             {"key": "port", "type": "int", "default": 2052, "label": "Port"},
             {"key": "ws_path", "type": "string", "default": "/", "label": "WS Path"},
-            {"key": "front_domain", "type": "string", "default": "snapp.ir", "label": "Front Domain"},
-            {"key": "ws_host", "type": "string", "label": "WS Host (actual server)"},
+            {"key": "front_domain", "type": "string", "default": "chat.deepseek.com", "label": "SNI Domain"},
         ],
     ),
     "amneziawg": ProtocolSpec(
@@ -834,6 +833,7 @@ class ClientConfigGenerator:
         xhttp_mode: str = "",
         allow_insecure: bool = False,
         ech: Optional[Dict] = None,
+        label: str = "",
         # DPI evasion parameters
         fragment: bool = False,
         fragment_packets: str = "tlshello",
@@ -886,7 +886,8 @@ class ClientConfigGenerator:
             params["bugHost"] = bug_host
 
         query = urlencode({k: v for k, v in params.items() if v})
-        return f"vless://{uuid}@{address}:{port}?{query}#V7LTHRONYX"
+        tag = f"V7LTHRONYX-{label}" if label else "V7LTHRONYX"
+        return f"vless://{uuid}@{address}:{port}?{query}#{tag}"
 
     @staticmethod
     def generate_vmess_share_url(
@@ -899,6 +900,7 @@ class ClientConfigGenerator:
         sni: str = "",
         path: str = "",
         allow_insecure: bool = False,
+        label: str = "",
         # DPI evasion parameters
         fragment: bool = False,
         fragment_packets: str = "tlshello",
@@ -913,9 +915,10 @@ class ClientConfigGenerator:
         extra_host_header: str = "",
     ) -> str:
         """Generate VMess share URL (vmess://base64...)."""
+        tag = f"V7LTHRONYX-{label}" if label else "V7LTHRONYX"
         vmess_obj = {
             "v": "2",
-            "ps": "V7LTHRONYX",
+            "ps": tag,
             "add": address,
             "port": str(port),
             "id": uuid,
@@ -963,6 +966,7 @@ class ClientConfigGenerator:
         network: str = "tcp",
         path: str = "",
         allow_insecure: bool = False,
+        label: str = "",
         # DPI evasion parameters
         fragment: bool = False,
         fragment_packets: str = "tlshello",
@@ -1000,7 +1004,8 @@ class ClientConfigGenerator:
         if bug_host:
             params["bugHost"] = bug_host
         query = urlencode({k: v for k, v in params.items() if v})
-        return f"trojan://{password}@{address}:{port}?{query}#V7LTHRONYX"
+        tag = f"V7LTHRONYX-{label}" if label else "V7LTHRONYX"
+        return f"trojan://{password}@{address}:{port}?{query}#{tag}"
 
     @staticmethod
     def generate_hysteria2_share_url(
@@ -1010,6 +1015,7 @@ class ClientConfigGenerator:
         sni: str = "",
         obfs: str = "",
         insecure: int = 0,
+        label: str = "",
     ) -> str:
         """Generate Hysteria2 share URL."""
         params = {
@@ -1020,7 +1026,8 @@ class ClientConfigGenerator:
             params["obfs"] = "salamander"
             params["obfs-password"] = obfs
         query = urlencode({k: v for k, v in params.items() if v})
-        return f"hysteria2://{password}@{address}:{port}?{query}#V7LTHRONYX"
+        tag = f"V7LTHRONYX-{label}" if label else "V7LTHRONYX"
+        return f"hysteria2://{password}@{address}:{port}?{query}#{tag}"
 
     @staticmethod
     def generate_wg_config(
