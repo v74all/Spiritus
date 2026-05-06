@@ -2257,14 +2257,19 @@ function switchFightbackTab(tab) {
 
 /* ── Helpers ── */
 function showModal(id) {
-  document.getElementById(id).classList.add('show');
+  document.querySelectorAll('.modal-overlay.show').forEach(el => {
+    if (el.id !== id) el.classList.remove('show');
+  });
+  const modal = document.getElementById(id);
+  if (!modal) return;
+  modal.classList.add('show');
   if (id === 'settings-modal') { loadSettings(); switchSettingsTab('protocols'); }
   if (id === 'agents-modal') fetchAgents();
   if (id === 'sysmon-modal') openSysmonDetail();
   if (id === 'online-modal') fetchOnlineUsers();
 }
-function closeModal(id){document.getElementById(id).classList.remove('show')}
-function hideModal(id){document.getElementById(id).classList.remove('show')}
+function closeModal(id){const modal=document.getElementById(id); if(modal) modal.classList.remove('show')}
+function hideModal(id){closeModal(id)}
 function esc(s){if(!s)return '';return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 
 function fmtTraffic(bytes) {

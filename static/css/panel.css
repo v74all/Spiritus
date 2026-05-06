@@ -483,6 +483,7 @@ input, button, textarea, select { font-family: inherit; font-size: inherit; }
   display: flex;
   align-items: center;
   gap: 14px;
+  flex: 0 0 auto;
 }
 
 .brand-logo {
@@ -506,9 +507,41 @@ input, button, textarea, select { font-family: inherit; font-size: inherit; }
 
 .header-actions {
   display: flex;
-  gap: var(--sp-sm);
+  flex: 1 1 auto;
+  gap: 6px;
   align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
   flex-wrap: wrap;
+  overflow: visible;
+  padding: 3px 0;
+}
+
+.header-actions > .btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  min-height: 32px;
+}
+
+.header-actions > .btn-sm {
+  padding: 7px 11px;
+}
+
+.header-actions > .btn-ghost {
+  border: 1px solid transparent;
+}
+
+.header-actions > .btn-ghost:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: var(--glass-border);
+}
+
+.header-primary {
+  border-color: rgba(0, 232, 240, 0.24);
+}
+
+.header-sep {
+  margin-inline-start: 8px;
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -1982,7 +2015,12 @@ input, button, textarea, select { font-family: inherit; font-size: inherit; }
   :root { --gutter: 16px; --margin: 24px; }
 
   .top-bar { flex-direction: column; gap: 12px; padding: 12px var(--gutter); }
-  .header-actions { justify-content: center; }
+  .brand { width: 100%; justify-content: center; }
+  .header-actions {
+    width: 100%;
+    justify-content: center;
+    padding-bottom: 6px;
+  }
   .stats-bar { flex-wrap: wrap; }
   .stat-item { flex: 1 1 50%; border-bottom: 1px solid var(--glass-border); }
   .grid { grid-template-columns: 1fr; }

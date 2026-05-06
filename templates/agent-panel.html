@@ -35,11 +35,11 @@ input,button,textarea,select{font-family:inherit;font-size:inherit}
 .top-bar{display:flex;align-items:center;justify-content:space-between;padding:16px 28px;
   background:var(--bg1);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100;
   backdrop-filter:blur(12px)}
-.brand{display:flex;align-items:center;gap:12px}
+.brand{display:flex;align-items:center;gap:12px;flex:0 0 auto}
 .brand-logo{font-family:var(--font-display);font-size:22px;font-weight:700;letter-spacing:2px;
   background:linear-gradient(135deg,var(--accent),var(--purple));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent}
 .brand-text{color:var(--t2);font-size:13px;font-weight:400}
-.header-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.header-actions{display:flex;flex:1 1 auto;gap:10px;align-items:center;justify-content:flex-end;min-width:0;flex-wrap:wrap;overflow:visible;padding:3px 0}
 
 .btn{padding:10px 20px;border:none;border-radius:var(--radius-sm);font-size:13px;font-weight:500;
   cursor:pointer;transition:all .2s;display:inline-flex;align-items:center;gap:6px}
@@ -210,7 +210,8 @@ input,button,textarea,select{font-family:inherit;font-size:inherit}
 
 @media(max-width:768px){
   .top-bar{flex-direction:column;gap:12px;padding:14px 16px}
-  .header-actions{width:100%;justify-content:center}
+  .brand{width:100%;justify-content:center}
+  .header-actions{width:100%;justify-content:center;padding-bottom:6px}
   .stats-bar{flex-wrap:wrap}.stat-item{min-width:50%;border-bottom:1px solid var(--border)}
   .proto-bar{padding:8px 16px}
   .quota-bar{flex-wrap:wrap;padding:8px 16px}
@@ -265,12 +266,12 @@ input,button,textarea,select{font-family:inherit;font-size:inherit}
       <span class="brand-text">Agent Panel — <span id="agent-name-top" style="color:var(--accent)"></span></span>
     </div>
     <div class="header-actions">
-      <button class="btn btn-ghost btn-sm dir-toggle" onclick="toggleDirection()" title="Toggle RTL/LTR">{{ 'RTL' if dir == 'ltr' else 'LTR' }}</button>
+      <button class="btn btn-primary btn-sm header-primary" onclick="showModal('add-modal')">Add User</button>
+      <button class="btn btn-outline btn-sm" onclick="showModal('bulk-modal')">Bulk</button>
       <button class="btn btn-outline btn-sm" onclick="forceSync()">Sync</button>
-      <button class="btn btn-primary btn-sm" onclick="showModal('add-modal')">+ Add User</button>
-      <button class="btn btn-outline btn-sm" onclick="showModal('bulk-modal')">Bulk Configs</button>
-      <button class="btn btn-outline btn-sm" id="btn-groups" onclick="switchMainView('groups')">Groups</button>
-      <button class="btn btn-outline btn-sm" id="btn-users" onclick="switchMainView('users')" style="display:none">Users</button>
+      <button class="btn btn-outline btn-sm header-sep" id="btn-groups" onclick="switchMainView('groups')">Groups</button>
+      <button class="btn btn-outline btn-sm header-sep" id="btn-users" onclick="switchMainView('users')" style="display:none">Users</button>
+      <button class="btn btn-ghost btn-sm header-sep dir-toggle" onclick="toggleDirection()" title="Toggle RTL/LTR">{{ 'RTL' if dir == 'ltr' else 'LTR' }}</button>
       <button class="btn btn-ghost btn-sm" onclick="doLogout()">Logout</button>
     </div>
   </header>
@@ -1519,14 +1520,19 @@ async function forceSync() {
 
 /* ── Helpers ── */
 function showModal(id) {
+  document.querySelectorAll('.modal-overlay.show').forEach(el => {
+    if (el.id !== id) el.classList.remove('show');
+  });
   if (id === 'brand-modal') {
     const cur = agentInfo.brand_name || '';
     document.getElementById('brand-input').value = cur;
     document.getElementById('brand-preview').textContent = cur || 'VPN';
   }
-  document.getElementById(id).classList.add('show');
+  const modal = document.getElementById(id);
+  if (!modal) return;
+  modal.classList.add('show');
 }
-function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+function closeModal(id) { const modal = document.getElementById(id); if (modal) modal.classList.remove('show'); }
 function esc(s) { if(!s)return ''; return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 function fmtTraffic(bytes) {

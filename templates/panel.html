@@ -32,23 +32,23 @@
       <span class="brand-text">Digital Bastion</span>
     </div>
     <div class="header-actions">
-      <button class="btn btn-ghost btn-sm dir-toggle" onclick="toggleDirection()" title="Toggle RTL/LTR">{{ 'RTL' if dir == 'ltr' else 'LTR' }}</button>
+      <button class="btn btn-primary btn-sm header-primary" onclick="showModal('add-modal')">Add User</button>
+      <button class="btn btn-outline btn-sm" onclick="showModal('bulk-modal')">Bulk</button>
       <button class="btn btn-outline btn-sm" onclick="forceSync()">Sync</button>
-      <button class="btn btn-primary btn-sm" onclick="showModal('add-modal')">+ Add User</button>
-      <button class="btn btn-outline btn-sm" onclick="showModal('bulk-modal')">Bulk Configs</button>
-      <button class="btn btn-outline btn-sm" id="btn-groups" onclick="switchMainView('groups')">Groups</button>
-      <button class="btn btn-outline btn-sm" id="btn-users" onclick="switchMainView('users')" style="display:none">Users</button>
+      <button class="btn btn-outline btn-sm header-sep" id="btn-groups" onclick="switchMainView('groups')">Groups</button>
+      <button class="btn btn-outline btn-sm header-sep" id="btn-users" onclick="switchMainView('users')" style="display:none">Users</button>
       <button class="btn btn-outline btn-sm" onclick="showModal('agents-modal')">Agents</button>
-      <button class="btn btn-outline btn-sm" onclick="showModal('sysmon-modal')" title="System Monitor">Monitor</button>
-      <button class="btn btn-outline btn-sm" onclick="showModal('online-modal')" title="Online Users & IPs">Online IPs</button>
-      <button class="btn btn-outline btn-sm" onclick="showModal('search-modal')" title="Search Users">🔍 Search</button>
-      <button class="btn btn-outline btn-sm" onclick="showModal('report-modal')" title="Statistics Report">📊 Report</button>
-      <button class="btn btn-outline btn-sm" onclick="showModal('analytics-modal')" title="Traffic Analytics">📈 Analytics</button>
-      <button class="btn btn-outline btn-sm" onclick="showModal('backup-modal')" title="Backup & Restore">💾 Backup</button>
-      <button class="btn btn-orange btn-sm" onclick="showModal('aggressive-modal')" title="Network Resilience">⚔️ Resilience</button>
-      <button class="btn btn-danger btn-sm" onclick="showModal('fightback-modal')" title="Counter Measures">🛡️ Counter</button>
+      <button class="btn btn-outline btn-sm header-sep" onclick="showModal('sysmon-modal')" title="System Monitor">Monitor</button>
+      <button class="btn btn-outline btn-sm" onclick="showModal('online-modal')" title="Online Users & IPs">Online</button>
+      <button class="btn btn-outline btn-sm" onclick="showModal('search-modal')" title="Search Users">Search</button>
+      <button class="btn btn-outline btn-sm" onclick="showModal('report-modal')" title="Statistics Report">Report</button>
+      <button class="btn btn-outline btn-sm" onclick="showModal('analytics-modal')" title="Traffic Analytics">Analytics</button>
+      <button class="btn btn-outline btn-sm header-sep" onclick="showModal('backup-modal')" title="Backup & Restore">Backup</button>
       <button class="btn btn-outline btn-sm" onclick="doExportCSV()" title="Export CSV">CSV</button>
       <button class="btn btn-outline btn-sm" onclick="doExportJSON()" title="Export JSON">JSON</button>
+      <button class="btn btn-orange btn-sm header-sep" onclick="showModal('aggressive-modal')" title="Network Resilience">Resilience</button>
+      <button class="btn btn-danger btn-sm" onclick="showModal('fightback-modal')" title="Counter Measures">Counter</button>
+      <button class="btn btn-ghost btn-sm header-sep dir-toggle" onclick="toggleDirection()" title="Toggle RTL/LTR">{{ 'RTL' if dir == 'ltr' else 'LTR' }}</button>
       <button class="btn btn-ghost btn-sm" onclick="showModal('settings-modal')">Settings</button>
       <button class="btn btn-ghost btn-sm" onclick="doLogout()">Logout</button>
     </div>
