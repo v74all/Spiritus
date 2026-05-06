@@ -162,9 +162,20 @@ async def generic_exception_handler(request: Request, exc: Exception):
         content={"message": "Internal server error"},
     )
 
-# Mount static files
+# Mount static files. Wrap StaticFiles to disable caching for JS/CSS so
+# users always get the latest panel.js after a deploy (combined with
+# the ?v=mtime cache-bust on /).
+class _NoCacheStatic(StaticFiles):
+    async def get_response(self, path, scope):
+        resp = await super().get_response(path, scope)
+        if path.endswith((".js", ".css", ".html")):
+            resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+            resp.headers["Pragma"] = "no-cache"
+            resp.headers["Expires"] = "0"
+        return resp
+
 if os.path.exists("static"):
-    app.mount("/static", StaticFiles(directory="static"), name="static")
+    app.mount("/static", _NoCacheStatic(directory="static"), name="static")
 
 # ── Mount API Routers ──────────────────────────────────
 
