@@ -323,12 +323,19 @@ async def serve_panel(request: Request):
         return HTMLResponse("<h1>V7LTHRONYX VPN Panel v2.0</h1><p>Panel template not found</p>")
 
     template = _jinja_env.get_template("panel.html")
+    # Cache-bust JS/CSS via mtime so browsers always pick up post-deploy changes
+    try:
+        _js_path = os.path.join(os.path.dirname(_templates_dir), "static", "js", "panel.js")
+        asset_v = str(int(os.path.getmtime(_js_path)))
+    except Exception:
+        asset_v = "0"
     html = template.render(
         dir=_detect_direction(request),
         server_ip=settings.host if settings.host != "0.0.0.0" else "",
         server_port=settings.web_port,
         sni_host=settings.vless_ws_host,
         ws_path=settings.vless_ws_path,
+        asset_v=asset_v,
     )
     return HTMLResponse(content=html)
 

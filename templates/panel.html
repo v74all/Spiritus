@@ -1847,8 +1847,8 @@ const SERVER_INFO = {
     path: "{{ ws_path }}"
 };
 </script>
-<script src="{{ url_for('static', filename='js/qrcode.js') }}"></script>
-<script src="{{ url_for('static', filename='js/panel.js') }}"></script>
+<script src="{{ url_for('static', filename='js/qrcode.js') }}?v={{ asset_v }}"></script>
+<script src="{{ url_for('static', filename='js/panel.js') }}?v={{ asset_v }}"></script>
 
 <!-- Search Modal -->
 <div class="modal-overlay" id="search-modal">
