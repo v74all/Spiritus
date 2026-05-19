@@ -2,29 +2,50 @@
 Configuration management for V7LTHRONYX VPN Panel.
 
 Uses Pydantic Settings for type-safe configuration with environment variables.
+
+Security note: secret_key, jwt_secret_key, and database_url MUST be supplied
+via environment variables (typically .env, chmod 600). Startup will hard-fail
+if a critical secret is missing or shorter than 32 chars — this is intentional
+to prevent accidentally running with weak/default credentials.
 """
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field
+from pydantic import Field, field_validator
 from typing import Optional
+import os
 import secrets
+
+_WEAK_SECRETS = {
+    "change-me",
+    "change-me-in-production",
+    "change-me-to-a-random-secret-key",
+    "dev-secret-key-local-only-not-for-production-use-32chars",
+    "secret",
+    "password",
+    "default",
+}
+
 
 class Settings(BaseSettings):
     """Application settings with environment variable support."""
-    
+
     # Core
     app_name: str = "V7LTHRONYX VPN Panel"
     debug: bool = False
-    secret_key: str = Field(default_factory=lambda: secrets.token_urlsafe(32))
-    # CORS — comma-separated list of allowed origins (no wildcards in production)
-    cors_origins: str = Field("*", env="CORS_ORIGINS")
-    
-    # Server
-    host: str = "0.0.0.0"
+    # secret_key is REQUIRED via env. No default — fail-closed.
+    secret_key: str = Field(..., env="SECRET_KEY", min_length=32)
+    jwt_secret_key: str = Field("", env="JWT_SECRET_KEY")
+    csrf_secret: str = Field("", env="CSRF_SECRET")
+    # CORS — comma-separated list of allowed origins. Empty = no CORS middleware.
+    # Wildcard "*" is REJECTED at startup (see validator below).
+    cors_origins: str = Field("", env="CORS_ORIGINS")
+
+    # Server — default to loopback. Expose externally only via reverse proxy.
+    host: str = Field("127.0.0.1", env="HOST")
     port: int = 38471
     web_port: int = Field(38471, env="VPN_WEB_PORT")
     api_port: int = Field(10085, env="VPN_API_PORT")
-    
+
     # Database — MUST be set via DATABASE_URL env var
     database_url: str = Field(
         "",
@@ -32,22 +53,51 @@ class Settings(BaseSettings):
     )
     database_pool_size: int = 20
     database_max_overflow: int = 10
-    
+
     # Redis
     redis_url: str = Field(
         "redis://localhost:6379/0",
         env="REDIS_URL"
     )
     redis_pool_size: int = 50
-    
+
     # Security
     argon2_salt: str = Field(
         default_factory=lambda: secrets.token_hex(16),
         env="ARGON2_SALT"
     )
     session_lifetime_hours: int = 1
-    max_login_attempts: int = 3
+    max_login_attempts: int = 5
+    max_2fa_attempts: int = Field(10, env="MAX_2FA_ATTEMPTS")
     lockout_seconds: int = 1800
+    # Bootstrap admin (one-shot, cleared after first use)
+    admin_bootstrap_username: str = Field("admin", env="ADMIN_BOOTSTRAP_USERNAME")
+    admin_bootstrap_password: str = Field("", env="ADMIN_BOOTSTRAP_PASSWORD")
+
+    @field_validator("secret_key", "jwt_secret_key")
+    @classmethod
+    def _reject_weak_secret(cls, v: str, info):
+        if not v:
+            return v  # jwt_secret_key may be empty and derive from secret_key
+        if v.lower() in _WEAK_SECRETS:
+            raise ValueError(
+                f"{info.field_name} is set to a known weak/default value. "
+                "Generate a strong secret: python -c 'import secrets; print(secrets.token_urlsafe(48))'"
+            )
+        if len(v) < 32:
+            raise ValueError(f"{info.field_name} must be at least 32 chars")
+        return v
+
+    @field_validator("cors_origins")
+    @classmethod
+    def _reject_wildcard_cors(cls, v: str):
+        parts = [p.strip() for p in (v or "").split(",") if p.strip()]
+        if "*" in parts:
+            raise ValueError(
+                "CORS_ORIGINS=* is forbidden. Use an explicit comma-separated allowlist, "
+                "or leave empty to disable CORS."
+            )
+        return v
     
     # Xray
     vpn_server_ip: str = Field("", env="VPN_SERVER_IP")
@@ -109,5 +159,14 @@ class Settings(BaseSettings):
         extra="ignore"
     )
 
-# Initialize settings
+    def model_post_init(self, __context):
+        # If JWT_SECRET_KEY is not explicitly set, derive from SECRET_KEY so
+        # both signing keys stay strong-by-default (no "change-me" fallback).
+        if not self.jwt_secret_key:
+            object.__setattr__(self, "jwt_secret_key", self.secret_key)
+        if not self.csrf_secret:
+            object.__setattr__(self, "csrf_secret", self.secret_key)
+
+
+# Initialize settings — will raise at import time if SECRET_KEY missing/weak.
 settings = Settings()

@@ -216,7 +216,4 @@ max-line-length = 100
 
 [tool.pydantic]
 smart_union = true
-json_encoders = {
-    "datetime.datetime" = "datetime.isoformat",
-    "uuid.UUID" = "str",
-}
+json_encoders = { "datetime.datetime" = "datetime.isoformat", "uuid.UUID" = "str" }

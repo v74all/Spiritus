@@ -128,22 +128,36 @@ setup_postgresql() {
         print_success "PostgreSQL started"
     fi
     
-    # Create database and user
+    # Create database and user. Password is generated per-install and persisted
+    # only in the DB-secrets file (chmod 600) and the .env (also chmod 600).
     DB_USER="vpnadmin"
-    DB_PASS="securepassword"
     DB_NAME="vpnpanel"
-    
+    DB_SECRET_FILE="${INSTALL_DIR}/.db-secret"
+
+    if [[ -f "$DB_SECRET_FILE" ]]; then
+        DB_PASS=$(cat "$DB_SECRET_FILE")
+    else
+        DB_PASS=$(python3 -c "import secrets; print(secrets.token_urlsafe(24))")
+        mkdir -p "${INSTALL_DIR}"
+        umask 077
+        echo -n "$DB_PASS" > "$DB_SECRET_FILE"
+        chmod 600 "$DB_SECRET_FILE"
+    fi
+
     # Always ensure user exists and password is correct
     sudo -u postgres psql -c "CREATE USER ${DB_USER} WITH PASSWORD '${DB_PASS}';" || true
     sudo -u postgres psql -c "ALTER USER ${DB_USER} WITH PASSWORD '${DB_PASS}';" || true
-    
+
     # Always try to create the database (will harmlessly error if it already exists)
     sudo -u postgres psql -c "CREATE DATABASE ${DB_NAME} OWNER ${DB_USER};" || true
     print_success "PostgreSQL database initialized"
-    
+
     # Ensure privileges and schema access for PostgreSQL 15+
     sudo -u postgres psql -d ${DB_NAME} -c "GRANT ALL PRIVILEGES ON DATABASE ${DB_NAME} TO ${DB_USER};" || true
     sudo -u postgres psql -d ${DB_NAME} -c "GRANT ALL ON SCHEMA public TO ${DB_USER};" || true
+
+    # Export for later setup steps.
+    export DB_USER DB_PASS DB_NAME
 }
 
 setup_redis() {
@@ -196,32 +210,87 @@ print('Fail2ban setup:', results)
 setup_env() {
     print_info "Setting up environment configuration..."
     cd "$INSTALL_DIR"
-    
+
     if [[ ! -f .env ]]; then
         cp .env.example .env
-        
-        SECRET=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
-        sed -i "s/change-me-to-a-random-secret-key/${SECRET}/" .env
-        
+
+        # Generate strong, per-install secrets. Each is at least 32 chars so
+        # app/config.py will accept them (the validator rejects shorter).
+        SECRET=$(python3 -c "import secrets; print(secrets.token_urlsafe(48))")
+        JWT_SECRET=$(python3 -c "import secrets; print(secrets.token_urlsafe(48))")
+        CSRF=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
+        ARGON_SALT=$(python3 -c "import secrets; print(secrets.token_hex(16))")
+        BOOTSTRAP_PW=$(python3 -c "
+import secrets, string
+alphabet = string.ascii_letters + string.digits + '!@#%^*-_=+'
+print(''.join(secrets.choice(alphabet) for _ in range(20)))
+")
+
+        sed -i "s|^SECRET_KEY=.*|SECRET_KEY=${SECRET}|" .env
+        sed -i "s|^JWT_SECRET_KEY=.*|JWT_SECRET_KEY=${JWT_SECRET}|" .env || echo "JWT_SECRET_KEY=${JWT_SECRET}" >> .env
+        sed -i "s|^CSRF_SECRET=.*|CSRF_SECRET=${CSRF}|" .env || echo "CSRF_SECRET=${CSRF}" >> .env
+        sed -i "s|^ARGON2_SALT=.*|ARGON2_SALT=${ARGON_SALT}|" .env || echo "ARGON2_SALT=${ARGON_SALT}" >> .env
+        sed -i "s|^ADMIN_BOOTSTRAP_PASSWORD=.*|ADMIN_BOOTSTRAP_PASSWORD=${BOOTSTRAP_PW}|" .env || \
+            echo "ADMIN_BOOTSTRAP_PASSWORD=${BOOTSTRAP_PW}" >> .env
+
         SERVER_IP=$(hostname -I | awk '{print $1}')
-        sed -i "s/VPN_SERVER_IP=your-server-ip/VPN_SERVER_IP=${SERVER_IP}/" .env
-        
+        sed -i "s|VPN_SERVER_IP=your-server-ip|VPN_SERVER_IP=${SERVER_IP}|" .env
+
+        # Default the app to bind loopback only; the reverse proxy fronts it.
+        sed -i "s|^HOST=.*|HOST=127.0.0.1|" .env
+
         print_success "Environment configuration created (.env)"
+        echo
+        echo "─────────────────────────────────────────────────────────────"
+        echo "  Initial admin credentials (write these down — shown ONCE):"
+        echo "    user:     admin"
+        echo "    password: ${BOOTSTRAP_PW}"
+        echo "  After first login, REMOVE ADMIN_BOOTSTRAP_PASSWORD from .env."
+        echo "─────────────────────────────────────────────────────────────"
+        echo
     else
         print_success "Environment configuration already exists"
     fi
-    
-    # Ensure DATABASE_URL is strictly correct (forces IPv4 and correct credentials)
-    if grep -q "^DATABASE_URL=" .env; then
-        sed -i 's|^DATABASE_URL=.*|DATABASE_URL=postgresql://vpnadmin:securepassword@127.0.0.1:5432/vpnpanel|' .env
-    else
-        echo "DATABASE_URL=postgresql://vpnadmin:securepassword@127.0.0.1:5432/vpnpanel" >> .env
+
+    # Ensure DATABASE_URL has the random per-install password.
+    if [[ -n "${DB_PASS:-}" ]]; then
+        DB_URL="postgresql+asyncpg://${DB_USER:-vpnadmin}:${DB_PASS}@127.0.0.1:5432/${DB_NAME:-vpnpanel}"
+        if grep -q "^DATABASE_URL=" .env; then
+            sed -i "s|^DATABASE_URL=.*|DATABASE_URL=${DB_URL}|" .env
+        else
+            echo "DATABASE_URL=${DB_URL}" >> .env
+        fi
     fi
+
+    # Lock down .env permissions — secrets at rest must be operator-only.
+    chmod 600 .env || true
+    chown "${PANEL_USER:-root}:${PANEL_USER:-root}" .env 2>/dev/null || true
 }
+
+setup_panel_user() {
+    print_info "Creating dedicated unprivileged service user..."
+    PANEL_USER="${PANEL_USER:-vpnpanel}"
+    if ! id "$PANEL_USER" >/dev/null 2>&1; then
+        useradd --system --home-dir "${INSTALL_DIR}" --shell /usr/sbin/nologin \
+            --comment "V7LTHRONYX VPN Panel" "$PANEL_USER" 2>/dev/null || \
+            useradd --system --home "${INSTALL_DIR}" --shell /usr/sbin/nologin "$PANEL_USER"
+    fi
+    # Tighten ownership of the panel install dir.
+    chown -R "${PANEL_USER}:${PANEL_USER}" "${INSTALL_DIR}" 2>/dev/null || true
+    # Allow ONLY the narrow systemctl restart needed for live config push.
+    cat > /etc/sudoers.d/${PANEL_USER} <<EOF
+${PANEL_USER} ALL=(root) NOPASSWD: /bin/systemctl restart xray, /bin/systemctl reload xray, /bin/systemctl status xray
+EOF
+    chmod 440 /etc/sudoers.d/${PANEL_USER}
+    print_success "Service user '${PANEL_USER}' created with minimal sudo"
+    export PANEL_USER
+}
+
 
 configure_systemd() {
     print_info "Configuring systemd service..."
-    
+    PANEL_USER="${PANEL_USER:-vpnpanel}"
+
     cat > /etc/systemd/system/${SERVICE_NAME}.service << EOF
 [Unit]
 Description=V7LTHRONYX VPN Management Panel
@@ -230,21 +299,43 @@ Wants=xray.service postgresql.service redis-server.service
 
 [Service]
 Type=simple
-User=root
-Group=root
+User=${PANEL_USER}
+Group=${PANEL_USER}
 WorkingDirectory=${INSTALL_DIR}
 Environment="PYTHONUNBUFFERED=1"
 Environment="PATH=${INSTALL_DIR}/venv/bin:/usr/local/bin:/usr/bin:/bin"
-ExecStart=${INSTALL_DIR}/venv/bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port 38471 --workers 2
+# Bind to loopback only. External access goes through a TLS-terminating
+# reverse proxy (nginx/Caddy) on 80/443.
+ExecStart=${INSTALL_DIR}/venv/bin/python3 -m uvicorn app.main:app --host 127.0.0.1 --port 38471 --workers 2
 ExecReload=/bin/kill -HUP \$MAINPID
 Restart=always
 RestartSec=10
 StartLimitInterval=60
 StartLimitBurst=3
 
+# ── Sandboxing ──
+NoNewPrivileges=true
 PrivateTmp=true
-ProtectSystem=full
-ReadWritePaths=${INSTALL_DIR} /usr/local/etc/xray /var/log/xray /tmp
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+PrivateDevices=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+AmbientCapabilities=
+UMask=0027
+ReadWritePaths=${INSTALL_DIR} /usr/local/etc/xray /var/log/xray
 LimitNOFILE=65536
 
 StandardOutput=append:${INSTALL_DIR}/vpn-panel.log
@@ -264,14 +355,23 @@ Wants=redis-server.service
 
 [Service]
 Type=simple
-User=root
-Group=root
+User=${PANEL_USER}
+Group=${PANEL_USER}
 WorkingDirectory=${INSTALL_DIR}
 Environment="PYTHONUNBUFFERED=1"
 Environment="PATH=${INSTALL_DIR}/venv/bin:/usr/local/bin:/usr/bin:/bin"
 ExecStart=${INSTALL_DIR}/venv/bin/celery -A app.celery_tasks worker --loglevel=info --concurrency=2
 Restart=always
 RestartSec=10
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=
+UMask=0027
+ReadWritePaths=${INSTALL_DIR} /tmp
 
 StandardOutput=append:${INSTALL_DIR}/celery-worker.log
 StandardError=append:${INSTALL_DIR}/celery-worker.log
@@ -290,13 +390,22 @@ Wants=redis-server.service
 
 [Service]
 Type=simple
-User=root
-Group=root
+User=${PANEL_USER}
+Group=${PANEL_USER}
 WorkingDirectory=${INSTALL_DIR}
 Environment="PYTHONUNBUFFERED=1"
 Environment="PATH=${INSTALL_DIR}/venv/bin:/usr/local/bin:/usr/bin:/bin"
 ExecStart=${INSTALL_DIR}/venv/bin/celery -A app.celery_tasks beat --loglevel=info
 Restart=always
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=
+UMask=0027
+ReadWritePaths=${INSTALL_DIR}
 RestartSec=10
 
 StandardOutput=append:${INSTALL_DIR}/celery-beat.log
@@ -360,14 +469,12 @@ UPDATEEOF
 
 start_panel() {
     print_info "Starting V7LTHRONYX panel..."
-    
-    PW_FILE="${INSTALL_DIR}/vpn-panel-password"
-    if [[ ! -f "$PW_FILE" ]]; then
-        PW=$(python3 -c "import secrets; print(secrets.token_urlsafe(12))")
-        echo -n "$PW" > "$PW_FILE"
-        chmod 600 "$PW_FILE"
-    fi
-    
+
+    # NOTE: the legacy plaintext password file has been removed as part of
+    # the 2026-05 security hardening pass. The initial admin user is now
+    # bootstrapped from the ADMIN_BOOTSTRAP_PASSWORD env var in .env on first
+    # boot, then the env var must be deleted by the operator.
+
     systemctl restart ${SERVICE_NAME}
     systemctl restart ${SERVICE_NAME}-worker 2>/dev/null || true
     systemctl restart ${SERVICE_NAME}-beat 2>/dev/null || true
@@ -400,13 +507,13 @@ start_panel() {
 }
 
 show_info() {
-    PW_FILE="${INSTALL_DIR}/vpn-panel-password"
-    if [[ -f "$PW_FILE" ]]; then
-        PANEL_PASSWORD=$(cat "$PW_FILE")
-    else
-        PANEL_PASSWORD="N/A (check: cat ${PW_FILE})"
+    # Pull the one-shot bootstrap password from the .env, then hint that it
+    # should be removed after the first login.
+    PANEL_PASSWORD=$(grep '^ADMIN_BOOTSTRAP_PASSWORD=' "${INSTALL_DIR}/.env" 2>/dev/null | cut -d= -f2- || true)
+    if [[ -z "$PANEL_PASSWORD" ]]; then
+        PANEL_PASSWORD="(consumed — change at /change-password)"
     fi
-    
+
     echo ""
     echo -e "${CYAN}═══════════════════════════════════════════════════════════${NC}"
     echo -e "${GREEN}  V7LTHRONYX VPN Panel v2.0 - Installation Complete!${NC}"
@@ -466,21 +573,24 @@ main() {
     echo -e "${CYAN}[6/11]${NC} Setting up Fail2ban..."
     setup_fail2ban
     
-    echo -e "${CYAN}[7/11]${NC} Setting up Python environment..."
+    echo -e "${CYAN}[7/12]${NC} Setting up Python environment..."
     setup_python
-    
-    echo -e "${CYAN}[8/11]${NC} Setting up environment config..."
+
+    echo -e "${CYAN}[8/12]${NC} Creating unprivileged service user..."
+    setup_panel_user
+
+    echo -e "${CYAN}[9/12]${NC} Setting up environment config..."
     setup_env
-    
-    echo -e "${CYAN}[9/11]${NC} Configuring services..."
+
+    echo -e "${CYAN}[10/12]${NC} Configuring services..."
     configure_systemd
-    
-    echo -e "${CYAN}[10/11]${NC} Setting up auto-update..."
+
+    echo -e "${CYAN}[11/12]${NC} Setting up auto-update..."
     setup_auto_update
-    
-    echo -e "${CYAN}[11/11]${NC} Starting panel..."
+
+    echo -e "${CYAN}[12/12]${NC} Starting panel..."
     start_panel
-    
+
     show_info
 }
 

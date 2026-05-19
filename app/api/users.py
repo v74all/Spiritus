@@ -86,7 +86,7 @@ def _user_to_response(u: VpnUser) -> UserResponse:
 
 @router.get("", response_model=List[UserResponse])
 async def list_users(
-    search: Optional[str] = Query(None, description="Search by name"),
+    search: Optional[str] = Query(None, description="Search by name", max_length=100),
     active: Optional[int] = Query(None, description="Filter by active status"),
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0),
@@ -97,7 +97,11 @@ async def list_users(
     query = select(VpnUser).order_by(VpnUser.id.desc()).limit(limit).offset(offset)
 
     if search:
-        query = query.where(VpnUser.name.ilike(f"%{search}%"))
+        # Escape SQL LIKE wildcards so a search of `%` doesn't fan out to a
+        # full-table scan. SQLAlchemy parameterises this, so no SQL injection,
+        # but the pattern semantics are still under user control.
+        safe = search.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
+        query = query.where(VpnUser.name.ilike(f"%{safe}%", escape="\\"))
     if active is not None:
         query = query.where(VpnUser.active == active)
 

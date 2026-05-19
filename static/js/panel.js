@@ -1,3 +1,34 @@
+// ── CSRF / fetch hardening ──
+// Auto-attach X-CSRF-Token to every unsafe same-origin request so the new
+// CSRF middleware (app/middleware/csrf.py) accepts them. The token is read
+// from the `csrf_token` cookie on every call, so rotation just works.
+(function () {
+  function readCookie(name) {
+    const m = document.cookie.match('(?:^|; )' + name.replace(/[.$?*|{}()[\]\\/+^]/g, '\\$&') + '=([^;]*)');
+    return m ? decodeURIComponent(m[1]) : '';
+  }
+  const SAFE = new Set(['GET', 'HEAD', 'OPTIONS', 'TRACE']);
+  const origFetch = window.fetch.bind(window);
+  window.fetch = function (input, init) {
+    init = init || {};
+    const method = String((init && init.method) || (input && input.method) || 'GET').toUpperCase();
+    // Same-origin only — never leak the CSRF token to other origins.
+    let urlStr = '';
+    try { urlStr = (typeof input === 'string') ? input : (input && input.url) || ''; } catch (e) {}
+    const sameOrigin = !urlStr || urlStr.startsWith('/') || urlStr.startsWith(location.origin);
+    if (!SAFE.has(method) && sameOrigin) {
+      const token = readCookie('csrf_token');
+      if (token) {
+        const headers = new Headers(init.headers || {});
+        if (!headers.has('X-CSRF-Token')) headers.set('X-CSRF-Token', token);
+        init.headers = headers;
+      }
+      if (!('credentials' in init)) init.credentials = 'same-origin';
+    }
+    return origFetch(input, init);
+  };
+})();
+
 const API = '/api';
 // QR_LIB_URL and SERVER_INFO are injected by the template in panel.html
 let users = [];

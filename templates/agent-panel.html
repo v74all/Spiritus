@@ -556,6 +556,33 @@ input,button,textarea,select{font-family:inherit;font-size:inherit}
 
 <script src="{{ url_for('static', filename='js/qrcode.js') }}"></script>
 <script>
+// ── CSRF / fetch hardening (mirrors static/js/panel.js) ──
+(function () {
+  function readCookie(name) {
+    const m = document.cookie.match('(?:^|; )' + name.replace(/[.$?*|{}()[\]\\/+^]/g, '\\$&') + '=([^;]*)');
+    return m ? decodeURIComponent(m[1]) : '';
+  }
+  const SAFE = new Set(['GET', 'HEAD', 'OPTIONS', 'TRACE']);
+  const origFetch = window.fetch.bind(window);
+  window.fetch = function (input, init) {
+    init = init || {};
+    const method = String((init && init.method) || (input && input.method) || 'GET').toUpperCase();
+    let urlStr = '';
+    try { urlStr = (typeof input === 'string') ? input : (input && input.url) || ''; } catch (e) {}
+    const sameOrigin = !urlStr || urlStr.startsWith('/') || urlStr.startsWith(location.origin);
+    if (!SAFE.has(method) && sameOrigin) {
+      const token = readCookie('csrf_token');
+      if (token) {
+        const headers = new Headers(init.headers || {});
+        if (!headers.has('X-CSRF-Token')) headers.set('X-CSRF-Token', token);
+        init.headers = headers;
+      }
+      if (!('credentials' in init)) init.credentials = 'same-origin';
+    }
+    return origFetch(input, init);
+  };
+})();
+
 const API = '/api/agent';
 const QR_LIB_URL = "{{ url_for('static', filename='js/qrcode.js') }}";
 let users = [];

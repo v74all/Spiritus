@@ -5,10 +5,16 @@
 # --- Sensitive Files ---
 vpn-panel-password
 vpn-panel-password-hash
+vpn-panel-password*
 vpn-settings.json
 *.secret
 *.key
 *.pem
+*.password
+*.hash
+.env
+.env.*
+!.env.example
 
 # --- Database Files ---
 *.db

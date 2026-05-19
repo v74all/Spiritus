@@ -87,15 +87,17 @@ async def lifespan(app: FastAPI):
         )
         logger.info("USDT TRC-20 gateway configured")
     
-    # Generate password if not exists
-    pw_file = os.path.join(os.getcwd(), "vpn-panel-password")
-    if not os.path.exists(pw_file):
-        import secrets
-        pw = secrets.token_urlsafe(12)
-        with open(pw_file, "w") as f:
-            f.write(pw)
-        os.chmod(pw_file, 0o600)
-        logger.info(f"Panel password generated: {pw_file}")
+    # First-run admin bootstrap (replaces the legacy plaintext password file).
+    # Creates an Admin row from ADMIN_BOOTSTRAP_PASSWORD env if and only if
+    # no admin exists yet. Bootstrap secret is consumed once — operators must
+    # remove it from .env after first boot.
+    try:
+        from .api.auth import bootstrap_initial_admin
+        from .database import AsyncSessionLocal
+        async with AsyncSessionLocal() as _db:
+            await bootstrap_initial_admin(_db)
+    except Exception as e:
+        logger.error("admin bootstrap failed: %s", type(e).__name__)
 
     # TLS cert precondition: any TLS-bearing inbound will fail to start in Xray
     # if these files don't exist. Surface a clear log line at boot rather than
@@ -119,60 +121,109 @@ async def lifespan(app: FastAPI):
     await close_redis()
     logger.info("Shutdown complete")
 
-# Initialize FastAPI app
+# Initialize FastAPI app. API docs are gated behind DEBUG to prevent schema
+# leakage in production deployments.
 app = FastAPI(
     title="V7LTHRONYX VPN Panel",
     description="Unified VPN management panel with multi-protocol support",
     version="2.0.0",
     lifespan=lifespan,
-    docs_url="/api/docs",
-    redoc_url="/api/redoc",
-    openapi_url="/api/openapi.json"
+    docs_url="/api/docs" if settings.debug else None,
+    redoc_url="/api/redoc" if settings.debug else None,
+    openapi_url="/api/openapi.json" if settings.debug else None,
 )
 
-# Configure CORS — restrict to configured origins
-_allowed_origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=_allowed_origins,
-    allow_credentials=True if _allowed_origins != ["*"] else False,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# ── CORS ─────────────────────────────────────────────────────────────────────
+# Default policy: NO CORS middleware. Add only when an explicit allowlist is
+# configured. Wildcard "*" was already rejected at config-load time.
+_allowed_origins = [o.strip() for o in (settings.cors_origins or "").split(",") if o.strip()]
+if _allowed_origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_allowed_origins,
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type", "X-CSRF-Token"],
+        expose_headers=["Retry-After"],
+        max_age=600,
+    )
 
-# Security headers middleware
+# ── Rate limit (global) ──────────────────────────────────────────────────────
+from .middleware.rate_limit import RateLimitMiddleware
+app.add_middleware(RateLimitMiddleware)
+
+# ── CSRF (double-submit cookie) ──────────────────────────────────────────────
+from .middleware.csrf import CSRFMiddleware
+app.add_middleware(CSRFMiddleware)
+
+
+# ── Security headers ─────────────────────────────────────────────────────────
+import secrets as _secrets_mod
+
+
 @app.middleware("http")
 async def add_security_headers(request: Request, call_next):
+    # Per-request nonce for inline scripts. Templates that need to embed an
+    # inline <script> should render it as `<script nonce="{{ csp_nonce }}">`.
+    nonce = _secrets_mod.token_urlsafe(16)
+    request.state.csp_nonce = nonce
+
     response = await call_next(request)
+
+    # HSTS: only emit over HTTPS, but headers are still safe to send over HTTP
+    # because browsers ignore HSTS from plain HTTP responses. Keep the long
+    # max-age + preload eligibility.
     response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains; preload"
-    # 'unsafe-eval' is required because some bundled libraries (qrcode/chart helpers)
-    # and inline event handlers in panel.html can trigger string evaluation paths
-    # under strict CSP. Without it, browsers (and some security extensions that
-    # tighten CSP further) silently disable handlers and the dashboard buttons
-    # appear dead.
+
+    # CSP: drop 'unsafe-eval' entirely. 'unsafe-inline' is retained for
+    # legacy inline event handlers in panel.html — eliminating that requires
+    # rewriting all the onclick=… attributes into addEventListener, which is
+    # tracked separately. The nonce is still injected so future inline scripts
+    # can adopt a stricter policy without further server changes.
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+        f"script-src 'self' 'nonce-{nonce}' 'unsafe-inline'; "
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
         "font-src 'self' https://fonts.gstatic.com; "
-        "img-src 'self' data:; "
-        "connect-src 'self'"
+        "img-src 'self' data: blob:; "
+        "connect-src 'self'; "
+        "frame-ancestors 'none'; "
+        "base-uri 'self'; "
+        "form-action 'self'; "
+        "object-src 'none'"
     )
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
-    response.headers["X-XSS-Protection"] = "1; mode=block"
-    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    response.headers["X-XSS-Protection"] = "0"  # modern guidance: disable
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Permissions-Policy"] = (
+        "camera=(), microphone=(), geolocation=(), payment=(), usb=(), "
+        "accelerometer=(), gyroscope=(), magnetometer=()"
+    )
+    response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+    response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
+    # Leak-prevention: strip the Server header (FastAPI sets it to "uvicorn").
+    if "server" in response.headers:
+        del response.headers["server"]
     return response
 
-# Exception handlers
+
+# ── Exception handler ────────────────────────────────────────────────────────
 @app.exception_handler(Exception)
 async def generic_exception_handler(request: Request, exc: Exception):
-    logger.error(f"Unhandled error: {exc}", exc_info=True)
-    return JSONResponse(
-        status_code=500,
-        content={"message": "Internal server error"},
+    # Avoid leaking stack traces. Always log server-side; only return the
+    # exception class name (never the message) to the client in non-debug.
+    logger.error(
+        "unhandled exception type=%s path=%s",
+        type(exc).__name__,
+        request.url.path,
+        exc_info=settings.debug,
     )
+    payload = {"message": "Internal server error"}
+    if settings.debug:
+        payload["type"] = type(exc).__name__
+        payload["detail"] = str(exc)[:500]
+    return JSONResponse(status_code=500, content=payload)
 
 # Mount static files. Wrap StaticFiles to disable caching for JS/CSS so
 # users always get the latest panel.js after a deploy (combined with
@@ -275,47 +326,78 @@ async def google_relay_proxy(
     if not url:
         return JSONResponse({"error": "url is required"}, status_code=400)
 
-    # Security: only allow HTTP/HTTPS URLs
+    # Method allowlist (block weird verbs that DPI/EDR may misinterpret).
+    if method not in ("GET", "POST", "PUT", "DELETE", "HEAD", "PATCH"):
+        return JSONResponse({"error": "method not allowed"}, status_code=405)
+
+    # Only http/https URLs.
     if not url.startswith(("http://", "https://")):
         return JSONResponse({"error": "only http/https URLs allowed"}, status_code=400)
 
-    # SSRF protection: block private/internal IPs and cloud metadata endpoints
+    # ─── SSRF protection ────────────────────────────────────────────────
+    from urllib.parse import urlparse
+    import socket
+    parsed = urlparse(url)
+    hostname = parsed.hostname
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    if not hostname or len(hostname) > 253:
+        return JSONResponse({"error": "invalid hostname"}, status_code=400)
+    # Reject literal "localhost" early — getaddrinfo would resolve it to
+    # loopback, but operators sometimes alias it to public IPs in /etc/hosts.
+    if hostname.lower() in ("localhost", "localhost.localdomain", "ip6-localhost"):
+        return JSONResponse({"error": "internal hostname not allowed"}, status_code=400)
+    # Resolve ALL A and AAAA records; reject if any one is unsafe.
     try:
-        from urllib.parse import urlparse
-        parsed = urlparse(url)
-        hostname = parsed.hostname
-        if hostname:
-            resolved_ip = None
-            import socket
-            try:
-                resolved_ip = socket.gethostbyname(hostname)
-            except socket.gaierror:
-                pass
-            if resolved_ip:
-                ip = ipaddress.ip_address(resolved_ip)
-                if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
-                    return JSONResponse({"error": "private/internal IPs not allowed"}, status_code=400)
-                # Block cloud metadata endpoints (AWS, GCP, Azure)
-                if str(ip) in ("169.254.169.254", "fd00:ec2::254"):
-                    return JSONResponse({"error": "metadata endpoint not allowed"}, status_code=400)
-    except Exception:
-        pass  # If we can't parse, let httpx handle it
+        infos = socket.getaddrinfo(hostname, port, type=socket.SOCK_STREAM)
+    except socket.gaierror:
+        return JSONResponse({"error": "hostname did not resolve"}, status_code=400)
+    if not infos:
+        return JSONResponse({"error": "hostname did not resolve"}, status_code=400)
 
+    _METADATA_HOSTS = {
+        "169.254.169.254",                            # AWS / GCP / Azure / OCI
+        "fd00:ec2::254",                              # AWS IMDS v6
+        "100.100.100.200",                            # Alibaba ECS
+    }
+    for info in infos:
+        try:
+            ip_str = info[4][0]
+            ip = ipaddress.ip_address(ip_str)
+        except (ValueError, IndexError):
+            return JSONResponse({"error": "invalid resolved address"}, status_code=400)
+        if (
+            ip.is_private
+            or ip.is_loopback
+            or ip.is_link_local
+            or ip.is_reserved
+            or ip.is_multicast
+            or ip.is_unspecified
+            or str(ip) in _METADATA_HOSTS
+        ):
+            return JSONResponse(
+                {"error": "internal/metadata address blocked"}, status_code=400
+            )
+
+    # Disable redirects so a 30x → internal host can't bypass the resolver.
+    # Cap body size and total timeout.
     try:
-        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
-            if method == "POST" and body:
-                r = await client.request(method, url, headers=headers, content=body)
-            else:
-                r = await client.request(method, url, headers=headers)
-
-            return JSONResponse({
-                "status": r.status_code,
-                "body": r.text,
-            })
+        limits = httpx.Limits(max_keepalive_connections=2, max_connections=4)
+        async with httpx.AsyncClient(
+            timeout=httpx.Timeout(connect=5.0, read=20.0, write=20.0, pool=5.0),
+            follow_redirects=False,
+            limits=limits,
+        ) as client:
+            r = await client.request(
+                method, url, headers=headers,
+                content=body if (method in ("POST", "PUT", "PATCH") and body) else None,
+            )
+            # Truncate response to prevent abuse as a generic proxy.
+            text = r.text[:1_000_000]
+            return JSONResponse({"status": r.status_code, "body": text})
     except httpx.TimeoutException:
         return JSONResponse({"status": 504, "body": "Gateway Timeout"})
     except Exception as e:
-        return JSONResponse({"status": 502, "body": f"Proxy error: {str(e)[:200]}"})
+        return JSONResponse({"status": 502, "body": f"Proxy error: {type(e).__name__}"})
 
 # ── Panel HTML (serves the frontend) ───────────────────
 

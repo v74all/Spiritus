@@ -10,7 +10,7 @@ Endpoints:
 - GET  /system/metrics - Prometheus metrics
 """
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
 import psutil
@@ -142,23 +142,28 @@ async def get_logs(
     log_type: str = Query("panel", description="panel|xray|access"),
     admin: User = Depends(get_current_admin)
 ):
-    """Get system logs."""
+    """Get system logs. Path is whitelisted — no user-controlled file paths."""
+    # Use absolute paths so a manipulated CWD can't redirect reads to a
+    # different file. The dict acts as a strict allowlist.
     log_files = {
-        "panel": "vpn-panel.log",
+        "panel": os.path.abspath("vpn-panel.log"),
         "xray": "/var/log/xray/error.log",
-        "access": "access.log"
+        "access": os.path.abspath("access.log"),
     }
-    
-    log_file = log_files.get(log_type, "vpn-panel.log")
-    
-    try:
-        if os.path.exists(log_file):
-            with open(log_file, 'r') as f:
-                all_lines = f.readlines()
-                return {"logs": all_lines[-lines:]}
+    if log_type not in log_files:
+        raise HTTPException(status_code=404, detail="Unknown log type")
+
+    log_file = log_files[log_type]
+    if not os.path.isfile(log_file):
         return {"logs": []}
+
+    try:
+        with open(log_file, "r", errors="replace") as f:
+            all_lines = f.readlines()
+            return {"logs": all_lines[-lines:]}
     except Exception as e:
-        return {"logs": [], "error": str(e)}
+        logger.error("logs.read failure type=%s", type(e).__name__)
+        return {"logs": [], "error": "Failed to read log"}
 
 @router.get("/metrics")
 async def get_metrics():

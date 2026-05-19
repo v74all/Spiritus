@@ -363,7 +363,11 @@ class AuditLog(Base):
 class Fail2banBan(Base):
     __tablename__ = "fail2ban_bans"
 
-    id = Column(BigInteger, primary_key=True)
+    # SQLite only aliases ROWID for INTEGER PRIMARY KEY, not BIGINT — so we
+    # use the standard with_variant trick to keep PostgreSQL on BIGINT while
+    # giving SQLite an autoincrementing INTEGER PK.
+    id = Column(BigInteger().with_variant(Integer, "sqlite"),
+                primary_key=True, autoincrement=True)
     ip_address = Column(String(45), nullable=False, index=True)
     service = Column(String(50), nullable=False)  # panel, ssh, xray
     reason = Column(String(255), nullable=True)

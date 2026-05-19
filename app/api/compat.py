@@ -195,27 +195,11 @@ def _request_config_host(request: Request) -> str:
     return ""
 
 
-def _read_password_file() -> Optional[str]:
-    pw_file = os.path.join(os.getcwd(), "vpn-panel-password")
-    if not os.path.exists(pw_file):
-        return None
-    try:
-        with open(pw_file) as f:
-            return f.read().strip()
-    except Exception as exc:
-        logger.error(f"Failed to read password file: {exc}")
-        return None
-
-
-def _write_password_file(new_password: str) -> bool:
-    pw_file = os.path.join(os.getcwd(), "vpn-panel-password")
-    try:
-        with open(pw_file, "w") as f:
-            f.write(new_password)
-        return True
-    except Exception as exc:
-        logger.error(f"Failed to write password file: {exc}")
-        return False
+# NOTE: The legacy _read_password_file / _write_password_file helpers were
+# removed as part of the 2026-05 security hardening pass. Admin credentials
+# are now stored exclusively in the database (Argon2-hashed via passlib).
+# First-run installs use the ADMIN_BOOTSTRAP_PASSWORD env var, which is
+# consumed once by app/api/auth.py:bootstrap_initial_admin().
 
 
 def _days_left(expire_at: Optional[datetime]) -> int:
@@ -1001,17 +985,17 @@ async def legacy_login(
         authenticated = True
         admin_id = admin_user.id
 
-    if not authenticated:
-        stored_pw = _read_password_file()
-        if stored_pw and request.password == stored_pw:
-            authenticated = True
+    # NOTE: the legacy plaintext password-file fallback has been intentionally
+    # removed. First-run installs are bootstrapped via the ADMIN_BOOTSTRAP_*
+    # env vars (see app/api/auth.py:bootstrap_initial_admin).
 
     if not authenticated:
         _record_failed_attempt(client_ip)
         await fail2ban_manager.record_failed_attempt(
             client_ip, "panel", db, "Failed panel login"
         )
-        return {"ok": False, "error": "Invalid password"}
+        # Constant message — no user enumeration.
+        return {"ok": False, "error": "Invalid credentials"}
 
     _clear_attempts(client_ip)
 
@@ -1020,12 +1004,16 @@ async def legacy_login(
         token_payload["user_id"] = admin_id
 
     access_token = create_access_token(data=token_payload)
+    # Cookie hardening: HttpOnly + Secure + SameSite=strict. Secure=True means
+    # browsers will only send this cookie over HTTPS — which is the only way
+    # the panel should ever be exposed. If you must run plain HTTP for local
+    # dev, set DEBUG=true so the cookie's Secure flag is dropped explicitly.
     response.set_cookie(
         key="access_token",
         value=access_token,
         httponly=True,
-        secure=False,
-        samesite="lax",
+        secure=not settings.debug,
+        samesite="strict",
         max_age=settings.session_lifetime_hours * 3600,
         path="/",
     )
@@ -1049,28 +1037,26 @@ async def legacy_change_password(
     admin: User = Depends(get_current_admin_cookie),
     db: AsyncSession = Depends(get_async_db),
 ):
-    if len(body.new) < 8:
-        return {"ok": False, "error": "Password too short (min 8 chars)"}
+    from ..auth import validate_password_strength
 
-    db_admin = None
-    if admin.username:
-        result = await db.execute(select(Admin).where(Admin.username == admin.username))
-        db_admin = result.scalar_one_or_none()
+    err = validate_password_strength(body.new)
+    if err:
+        return {"ok": False, "error": err}
 
-    if db_admin is not None:
-        if not verify_password(body.current, db_admin.password_hash):
-            return {"ok": False, "error": "Current password is incorrect"}
-        db_admin.password_hash = get_password_hash(body.new)
-        await db.commit()
-        return {"ok": True}
+    if not admin.username:
+        return {"ok": False, "error": "Session invalid"}
 
-    stored_pw = _read_password_file()
-    if stored_pw is None:
-        return {"ok": False, "error": "Password store not initialized"}
-    if body.current != stored_pw:
+    result = await db.execute(select(Admin).where(Admin.username == admin.username))
+    db_admin = result.scalar_one_or_none()
+    if db_admin is None:
+        return {"ok": False, "error": "User not found"}
+
+    if not verify_password(body.current, db_admin.password_hash):
         return {"ok": False, "error": "Current password is incorrect"}
-    if not _write_password_file(body.new):
-        return {"ok": False, "error": "Failed to update password"}
+
+    db_admin.password_hash = get_password_hash(body.new)
+    await db.commit()
+    logger.info("password.change user=%s", admin.username)
     return {"ok": True}
 
 
@@ -2897,8 +2883,8 @@ async def legacy_agent_login(
         key="agent_access_token",
         value=token,
         httponly=True,
-        secure=False,
-        samesite="lax",
+        secure=not settings.debug,
+        samesite="strict",
         max_age=settings.session_lifetime_hours * 3600,
         path="/",
     )

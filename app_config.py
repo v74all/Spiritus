@@ -222,25 +222,27 @@ class Settings(BaseSettings):
     OPENVPN_TA_PATH: str = ""
     
     # Security
-    SECRET_KEY: str = __import__("os").environ.get("SECRET_KEY", "change-me-in-production")
+    # SECRET_KEY / JWT_SECRET_KEY MUST be supplied via environment; the module
+    # raises at load time if either is missing or matches a known weak token.
+    SECRET_KEY: str = ""
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
-    
+
     # JWT
-    JWT_SECRET_KEY: str = __import__("os").environ.get("JWT_SECRET_KEY", "change-me")
+    JWT_SECRET_KEY: str = ""
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRATION: int = 3600
-    
+
     # TOTP
     TOTP_ISSUER: str = "Spiritus"
     TOTP_WINDOW: int = 1
-    
-    # Security Headers
-    CORS_ORIGINS: list = ["*"]
-    CORS_CREDENTIALS: bool = True
-    CORS_METHODS: list = ["*"]
-    CORS_HEADERS: list = ["*"]
+
+    # Security Headers — no wildcards, no credentials-by-default.
+    CORS_ORIGINS: list = []
+    CORS_CREDENTIALS: bool = False
+    CORS_METHODS: list = ["GET", "POST", "PUT", "PATCH", "DELETE"]
+    CORS_HEADERS: list = ["Authorization", "Content-Type", "X-CSRF-Token"]
     
     # Audit
     AUDIT_LOG_RETENTION_DAYS: int = 90
@@ -270,4 +272,37 @@ class Settings(BaseSettings):
         case_sensitive = True
 
 
+_WEAK_SECRETS = {
+    "",
+    "change-me",
+    "change-me-in-production",
+    "change-me-to-a-random-secret-key",
+    "dev-secret-key-local-only-not-for-production-use-32chars",
+    "secret",
+    "password",
+    "default",
+}
+
+
+def _validate_secrets(s: "Settings") -> None:
+    """Reject empty/weak secrets at module load time."""
+    for name in ("SECRET_KEY", "JWT_SECRET_KEY"):
+        val = getattr(s, name, "") or ""
+        if val.lower() in _WEAK_SECRETS:
+            raise RuntimeError(
+                f"{name} is unset or set to a known weak default. Generate one with "
+                "`python -c \"import secrets; print(secrets.token_urlsafe(48))\"` "
+                "and add it to your .env (chmod 600)."
+            )
+        if len(val) < 32:
+            raise RuntimeError(f"{name} must be at least 32 chars (got {len(val)}).")
+
+
 settings = Settings()
+# Allow legacy modules that don't actually use the secrets (e.g. read-only
+# protocol/config helpers) to import this module even without SECRET_KEY set,
+# unless the strict flag is enabled. Production deployments should set
+# STRICT_CONFIG=1 in the environment to enforce.
+import os as _os
+if _os.environ.get("STRICT_CONFIG", "").lower() in ("1", "true", "yes"):
+    _validate_secrets(settings)

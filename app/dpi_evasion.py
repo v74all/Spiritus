@@ -244,10 +244,13 @@ class SNIManager:
                 return IranDPIThreat.get_preferred_sni_for_protocol(protocol_type)
             return "objects.githubusercontent.com"
 
-        # Sort by score (descending), pick top with some randomization
+        # Sort by score (descending), pick top with some randomization.
+        # Use secrets.choice — predictable PRNG output here would let an
+        # adversary anticipate SNI rotation and block proactively.
+        import secrets as _secrets
         candidates.sort(key=lambda x: x[1], reverse=True)
         top_candidates = candidates[:3]
-        chosen = random.choice(top_candidates)
+        chosen = _secrets.choice(top_candidates)
         self._current_sni = chosen[0]
         self._last_rotation = now
 
