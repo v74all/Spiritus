@@ -1004,15 +1004,17 @@ async def legacy_login(
         token_payload["user_id"] = admin_id
 
     access_token = create_access_token(data=token_payload)
-    # Cookie hardening: HttpOnly + Secure + SameSite=strict. Secure=True means
-    # browsers will only send this cookie over HTTPS — which is the only way
-    # the panel should ever be exposed. If you must run plain HTTP for local
-    # dev, set DEBUG=true so the cookie's Secure flag is dropped explicitly.
+    # Cookie hardening: HttpOnly + SameSite=strict, plus Secure when the
+    # request actually arrived over HTTPS. Hard-coding Secure=True bricks the
+    # panel when it's reached over plain HTTP — the browser silently drops
+    # the cookie, the very next /api/me request looks unauthenticated, and
+    # the UI bounces back to the login screen.
+    from ..middleware.csrf import is_secure_request
     response.set_cookie(
         key="access_token",
         value=access_token,
         httponly=True,
-        secure=not settings.debug,
+        secure=is_secure_request(req),
         samesite="strict",
         max_age=settings.session_lifetime_hours * 3600,
         path="/",
@@ -1951,31 +1953,45 @@ def _generate_xray_server_config() -> dict:
 
     cert_file = settings.tls_cert_file
     key_file = settings.tls_key_file
+    # If the cert files are missing, ALL TLS-bearing inbounds (VMess-WS, VLESS-
+    # WS, Trojan, gRPC, HTTPUpgrade, SS2022, CDN-WS, WS-Plain-Front, ...) would
+    # crash-loop Xray with "open: no such file or directory". We detect that
+    # here once and gate every TLS inbound on the result. REALITY-mode inbounds
+    # (VLESS-Reality / Vision / XHTTP) don't need cert files and stay enabled.
+    _tls_ready = bool(cert_file) and bool(key_file) \
+        and os.path.exists(cert_file) and os.path.exists(key_file)
+    if not _tls_ready:
+        logger.warning(
+            "Xray sync: TLS cert/key missing (cert=%s, key=%s). "
+            "Skipping TLS-bearing inbounds; only REALITY inbounds will start.",
+            cert_file, key_file,
+        )
 
     # Fetch active user UUIDs for client authentication
     vmess_clients = _get_active_vmess_clients()
     vless_clients = _get_active_vless_clients()
     trojan_clients = _get_active_trojan_clients()
 
-    # VMess WS+TLS (always-on)
-    inbounds.append({
-        "tag": "in-vmess-ws",
-        "port": int(s.get("vmess_port") or 443),
-        "listen": listen_addr,
-        "protocol": "vmess",
-        "settings": {"clients": vmess_clients},
-        "streamSettings": {
-            "network": "ws",
-            "security": "tls",
-            "wsSettings": {"path": s.get("vmess_ws_path") or "/api/v1/stream"},
-            "tlsSettings": {
-                "serverName": sni,
-                "certificates": [{"certificateFile": cert_file, "keyFile": key_file}],
-                "minVersion": "1.2",
+    # VMess WS+TLS (always-on when TLS is available; skipped otherwise)
+    if _tls_ready:
+        inbounds.append({
+            "tag": "in-vmess-ws",
+            "port": int(s.get("vmess_port") or 443),
+            "listen": listen_addr,
+            "protocol": "vmess",
+            "settings": {"clients": vmess_clients},
+            "streamSettings": {
+                "network": "ws",
+                "security": "tls",
+                "wsSettings": {"path": s.get("vmess_ws_path") or "/api/v1/stream"},
+                "tlsSettings": {
+                    "serverName": sni,
+                    "certificates": [{"certificateFile": cert_file, "keyFile": key_file}],
+                    "minVersion": "1.2",
+                },
             },
-        },
-        "sniffing": {"enabled": True, "destOverride": ["http", "tls", "quic"]},
-    })
+            "sniffing": {"enabled": True, "destOverride": ["http", "tls", "quic"]},
+        })
 
     # VLESS REALITY (Vision)
     if s.get("reality_public_key"):
@@ -2087,7 +2103,7 @@ def _generate_xray_server_config() -> dict:
         })
 
     # Trojan TCP+TLS
-    if _as_bool(s.get("trojan_enabled")):
+    if _as_bool(s.get("trojan_enabled")) and _tls_ready:
         inbounds.append({
             "tag": "in-trojan",
             "port": int(s.get("trojan_port") or 2083),
@@ -2106,7 +2122,7 @@ def _generate_xray_server_config() -> dict:
         })
 
     # gRPC
-    if _as_bool(s.get("grpc_enabled")):
+    if _as_bool(s.get("grpc_enabled")) and _tls_ready:
         inbounds.append({
             "tag": "in-grpc",
             "port": int(s.get("grpc_port") or 2054),
@@ -2126,7 +2142,7 @@ def _generate_xray_server_config() -> dict:
         })
 
     # HTTPUpgrade
-    if _as_bool(s.get("httpupgrade_enabled")):
+    if _as_bool(s.get("httpupgrade_enabled")) and _tls_ready:
         inbounds.append({
             "tag": "in-httpupgrade",
             "port": int(s.get("httpupgrade_port") or 2055),
@@ -2146,7 +2162,7 @@ def _generate_xray_server_config() -> dict:
         })
 
     # VLESS WS+TLS
-    if _as_bool(s.get("vless_ws_enabled")):
+    if _as_bool(s.get("vless_ws_enabled")) and _tls_ready:
         inbounds.append({
             "tag": "in-vless-ws",
             "port": int(s.get("vless_ws_port") or 2057),
@@ -2168,7 +2184,7 @@ def _generate_xray_server_config() -> dict:
     # VLESS WS+TLS Domain Fronting — TLS with spoofed SNI
     # Client connects directly to our server with TLS, SNI shows a trusted domain
     # (e.g. chat.deepseek.com) to bypass DPI. Server terminates TLS with its own cert.
-    if _as_bool(s.get("vless_ws_plain_front_enabled")):
+    if _as_bool(s.get("vless_ws_plain_front_enabled")) and _tls_ready:
         _front_host = s.get("vless_ws_plain_front_domain") or "chat.deepseek.com"
         _front_port = int(s.get("vless_ws_plain_front_port") or 2052)
         inbounds.append({
@@ -2192,7 +2208,7 @@ def _generate_xray_server_config() -> dict:
         })
 
     # ShadowSocks 2022
-    if _as_bool(s.get("ss2022_enabled")) and s.get("ss2022_server_key"):
+    if _as_bool(s.get("ss2022_enabled")) and s.get("ss2022_server_key") and _tls_ready:
         inbounds.append({
             "tag": "in-ss2022",
             "port": int(s.get("ss2022_port") or 2056),
@@ -2224,7 +2240,7 @@ def _generate_xray_server_config() -> dict:
     })
 
     # CDN WS+TLS
-    if _as_bool(s.get("cdn_enabled")) and s.get("cdn_domain"):
+    if _as_bool(s.get("cdn_enabled")) and s.get("cdn_domain") and _tls_ready:
         cdn_domain = s.get("cdn_domain")
         inbounds.append({
             "tag": "in-cdn-ws",
@@ -2861,6 +2877,7 @@ class LegacyAgentLoginRequest(BaseModel):
 @router.post("/agent/login")
 async def legacy_agent_login(
     body: LegacyAgentLoginRequest,
+    req: Request,
     response: Response,
     db: AsyncSession = Depends(get_async_db),
 ):
@@ -2879,11 +2896,12 @@ async def legacy_agent_login(
             "is_admin": False,
         }
     )
+    from ..middleware.csrf import is_secure_request
     response.set_cookie(
         key="agent_access_token",
         value=token,
         httponly=True,
-        secure=not settings.debug,
+        secure=is_secure_request(req),
         samesite="strict",
         max_age=settings.session_lifetime_hours * 3600,
         path="/",

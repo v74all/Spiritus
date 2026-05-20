@@ -29,6 +29,11 @@ logger = logging.getLogger(__name__)
 def setup_opentelemetry(app=None):
     """Initialize OpenTelemetry instrumentation.
 
+    Disabled by default — set `OTEL_ENABLED=true` in the environment to turn
+    it on. We default to off because the grpc exporter retries forever when
+    the collector is unreachable, drowning the journal in `StatusCode.UNAVAILABLE`
+    every few seconds on installs that never planned to run Tempo/Jaeger.
+
     Requires: opentelemetry-api, opentelemetry-sdk,
               opentelemetry-instrumentation-fastapi,
               opentelemetry-instrumentation-sqlalchemy,
@@ -36,6 +41,9 @@ def setup_opentelemetry(app=None):
               opentelemetry-instrumentation-httpx,
               opentelemetry-exporter-otlp
     """
+    if (os.environ.get("OTEL_ENABLED") or "").strip().lower() not in ("1", "true", "yes", "on"):
+        logger.info("OpenTelemetry disabled (set OTEL_ENABLED=true to enable).")
+        return False
     try:
         from opentelemetry import trace
         from opentelemetry.sdk.trace import TracerProvider

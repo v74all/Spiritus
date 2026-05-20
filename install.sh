@@ -262,10 +262,70 @@ print(''.join(secrets.choice(alphabet) for _ in range(20)))
         fi
     fi
 
+    # Wire the generated TLS cert paths into .env (only if setup_tls_cert ran).
+    if [[ -n "${TLS_CERT_FILE:-}" && -n "${TLS_KEY_FILE:-}" ]]; then
+        if grep -q "^TLS_CERT_FILE=" .env; then
+            sed -i "s|^TLS_CERT_FILE=.*|TLS_CERT_FILE=${TLS_CERT_FILE}|" .env
+        else
+            echo "TLS_CERT_FILE=${TLS_CERT_FILE}" >> .env
+        fi
+        if grep -q "^TLS_KEY_FILE=" .env; then
+            sed -i "s|^TLS_KEY_FILE=.*|TLS_KEY_FILE=${TLS_KEY_FILE}|" .env
+        else
+            echo "TLS_KEY_FILE=${TLS_KEY_FILE}" >> .env
+        fi
+    fi
+
+    # OpenTelemetry off by default — operators flip this on when a collector
+    # actually exists. Avoids the journal-spam from the OTLP gRPC retry loop.
+    if grep -q "^OTEL_ENABLED=" .env; then
+        sed -i "s|^OTEL_ENABLED=.*|OTEL_ENABLED=false|" .env
+    else
+        echo "OTEL_ENABLED=false" >> .env
+    fi
+
     # Lock down .env permissions — secrets at rest must be operator-only.
     chmod 600 .env || true
     chown "${PANEL_USER:-root}:${PANEL_USER:-root}" .env 2>/dev/null || true
 }
+
+setup_tls_cert() {
+    # Generate a self-signed cert so Xray's TLS-bearing inbounds boot on a
+    # fresh server. Operators are expected to swap this for a real cert
+    # (Let's Encrypt / Cloudflare Origin) once a domain is pointed at the
+    # box; the .env keeps the override knobs (TLS_CERT_FILE / TLS_KEY_FILE).
+    local TLS_DIR="${INSTALL_DIR}/tls"
+    local CERT="${TLS_DIR}/spiritus.crt"
+    local KEY="${TLS_DIR}/spiritus.key"
+    mkdir -p "${TLS_DIR}"
+    if [[ ! -s "${CERT}" || ! -s "${KEY}" ]]; then
+        print_info "Generating self-signed TLS cert at ${TLS_DIR}/ (10-year validity)..."
+        # SAN includes hostname + a wildcard so it works for IP-only access too.
+        openssl req -x509 -newkey rsa:2048 -nodes -days 3650 \
+            -keyout "${KEY}" -out "${CERT}" \
+            -subj "/CN=$(hostname || echo spiritus)" \
+            -addext "subjectAltName=DNS:$(hostname || echo localhost),DNS:localhost,IP:127.0.0.1" \
+            >/dev/null 2>&1 || {
+                print_warning "openssl missing? Skipping self-signed cert generation."
+                return 0
+            }
+        chmod 644 "${CERT}"
+        chmod 640 "${KEY}"
+    fi
+    # Cert is world-readable; key is group-readable. Group must contain
+    # whichever user xray runs as. Try the common ones.
+    local XRAY_USER=""
+    for _u in xray nobody root; do
+        id "${_u}" >/dev/null 2>&1 && { XRAY_USER="${_u}"; break; }
+    done
+    if [[ -n "${XRAY_USER}" ]]; then
+        chgrp "${XRAY_USER}" "${KEY}" 2>/dev/null || true
+    fi
+    export TLS_CERT_FILE="${CERT}"
+    export TLS_KEY_FILE="${KEY}"
+    print_success "TLS cert ready (${CERT})"
+}
+
 
 setup_panel_user() {
     print_info "Creating dedicated unprivileged service user..."
@@ -315,7 +375,7 @@ Environment="PYTHONUNBUFFERED=1"
 Environment="PATH=${INSTALL_DIR}/venv/bin:/usr/local/bin:/usr/bin:/bin"
 # Bind to loopback only. External access goes through a TLS-terminating
 # reverse proxy (nginx/Caddy) on 80/443.
-ExecStart=${INSTALL_DIR}/venv/bin/python3 -m uvicorn app.main:app --host 127.0.0.1 --port 38471 --workers 2
+ExecStart=${INSTALL_DIR}/venv/bin/python3 -m uvicorn app.main:app --host 127.0.0.1 --port 38471 --workers 2 --proxy-headers --forwarded-allow-ips=127.0.0.1
 ExecReload=/bin/kill -HUP \$MAINPID
 Restart=always
 RestartSec=10
@@ -564,40 +624,43 @@ main() {
     check_root
     check_os
     
-    echo -e "${CYAN}[1/11]${NC} Installing system dependencies..."
+    echo -e "${CYAN}[1/13]${NC} Installing system dependencies..."
     install_dependencies
     
-    echo -e "${CYAN}[2/11]${NC} Installing Xray..."
+    echo -e "${CYAN}[2/13]${NC} Installing Xray..."
     install_xray
     
-    echo -e "${CYAN}[3/11]${NC} Downloading V7LTHRONYX..."
+    echo -e "${CYAN}[3/13]${NC} Downloading V7LTHRONYX..."
     clone_or_update
     
-    echo -e "${CYAN}[4/11]${NC} Setting up PostgreSQL..."
+    echo -e "${CYAN}[4/13]${NC} Setting up PostgreSQL..."
     setup_postgresql
     
-    echo -e "${CYAN}[5/11]${NC} Setting up Redis..."
+    echo -e "${CYAN}[5/13]${NC} Setting up Redis..."
     setup_redis
     
-    echo -e "${CYAN}[6/11]${NC} Setting up Fail2ban..."
+    echo -e "${CYAN}[6/13]${NC} Setting up Fail2ban..."
     setup_fail2ban
     
-    echo -e "${CYAN}[7/12]${NC} Setting up Python environment..."
+    echo -e "${CYAN}[7/13]${NC} Setting up Python environment..."
     setup_python
 
-    echo -e "${CYAN}[8/12]${NC} Creating unprivileged service user..."
+    echo -e "${CYAN}[8/13]${NC} Creating unprivileged service user..."
     setup_panel_user
 
-    echo -e "${CYAN}[9/12]${NC} Setting up environment config..."
+    echo -e "${CYAN}[9/13]${NC} Generating self-signed TLS cert..."
+    setup_tls_cert
+
+    echo -e "${CYAN}[10/13]${NC} Setting up environment config..."
     setup_env
 
-    echo -e "${CYAN}[10/12]${NC} Configuring services..."
+    echo -e "${CYAN}[11/13]${NC} Configuring services..."
     configure_systemd
 
-    echo -e "${CYAN}[11/12]${NC} Setting up auto-update..."
+    echo -e "${CYAN}[12/13]${NC} Setting up auto-update..."
     setup_auto_update
 
-    echo -e "${CYAN}[12/12]${NC} Starting panel..."
+    echo -e "${CYAN}[13/13]${NC} Starting panel..."
     start_panel
 
     show_info

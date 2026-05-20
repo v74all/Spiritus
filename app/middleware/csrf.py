@@ -41,6 +41,22 @@ SAFE_METHODS: tuple[str, ...] = ("GET", "HEAD", "OPTIONS", "TRACE")
 COOKIE_NAME = "csrf_token"
 HEADER_NAME = "X-CSRF-Token"
 
+
+def is_secure_request(request: Request) -> bool:
+    """Decide whether the *original* client request reached us over HTTPS.
+
+    Browsers silently drop cookies with the Secure flag when they're set over
+    plain HTTP. We need to mirror the actual transport so panels reachable
+    over HTTP (direct, no reverse proxy) still receive their CSRF / session
+    cookies. When a reverse proxy terminates TLS upstream the `X-Forwarded-
+    Proto: https` header — honoured by uvicorn's --proxy-headers — flips
+    `request.url.scheme` to "https" for us.
+    """
+    if request.url.scheme == "https":
+        return True
+    xfp = (request.headers.get("X-Forwarded-Proto") or "").lower()
+    return xfp == "https"
+
 _EXEMPT_PATH_PREFIXES: tuple[str, ...] = (
     "/api/auth/login",            # establishes the first session
     "/api/auth/login/2fa",
@@ -98,7 +114,10 @@ class CSRFMiddleware(BaseHTTPMiddleware):
             # HttpOnly. The cookie is not a session credential by itself; even
             # if leaked, the attacker still needs same-origin JS to use it.
             httponly=False,
-            secure=not settings.debug,
+            # Only emit Secure when the request actually came in over HTTPS.
+            # Otherwise (e.g. http://server-ip:38471 direct access) the browser
+            # drops the cookie and every POST fails CSRF.
+            secure=is_secure_request(request),
             samesite="strict",
             max_age=60 * 60 * 24,  # 24h rotation
             path="/",

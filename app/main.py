@@ -523,11 +523,12 @@ async def set_direction(request: Request):
     new_dir = data.get("dir", "ltr")
     if new_dir not in ("ltr", "rtl"):
         new_dir = "ltr"
+    from .middleware.csrf import is_secure_request
     resp = JSONResponse({"dir": new_dir})
     resp.set_cookie(
         key="vpn_dir", value=new_dir,
         max_age=365 * 24 * 3600, path="/",
-        samesite="lax", secure=True, httponly=True,
+        samesite="lax", secure=is_secure_request(request), httponly=True,
     )
     return resp
 
