@@ -333,16 +333,21 @@ async def bootstrap_initial_admin(db: AsyncSession) -> None:
     """
     Create the initial admin record from ADMIN_BOOTSTRAP_PASSWORD env at startup.
 
-    Idempotent: skipped if any Admin row already exists. Aborts (logs error,
-    does nothing) if the bootstrap password is too weak — operators must set a
-    strong one or create the admin manually via SQL.
+    Idempotent and race-safe: uvicorn runs the panel with --workers 2 by
+    default, so both workers reach the lifespan handler at roughly the same
+    moment. We let both perform the check-then-insert and rely on the DB's
+    UNIQUE constraint on username — whichever loses the race gets an
+    IntegrityError and we treat that as "the other worker won, fine".
 
-    After successful creation the bootstrap secret is *not* removed from the
-    environment automatically — that's the operator's job — but a loud warning
-    is logged so it doesn't slip past.
+    Aborts cleanly (logs and returns) if the bootstrap password is missing or
+    too weak — operators must set a strong one or create the admin manually
+    via SQL. The bootstrap secret is *not* auto-removed from the environment
+    — that's the operator's job — but a loud warning is logged.
     """
-    count = (await db.execute(select(Admin))).scalars().first()
-    if count is not None:
+    from sqlalchemy.exc import IntegrityError
+
+    existing = (await db.execute(select(Admin))).scalars().first()
+    if existing is not None:
         return
     pw = (settings.admin_bootstrap_password or "").strip()
     user = (settings.admin_bootstrap_username or "admin").strip()
@@ -364,7 +369,12 @@ async def bootstrap_initial_admin(db: AsyncSession) -> None:
         totp_secret=None,
     )
     db.add(admin)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        logger.info("bootstrap: admin '%s' already created by a sibling worker; skipping.", user)
+        return
     logger.warning(
         "bootstrap: initial admin '%s' created from ADMIN_BOOTSTRAP_PASSWORD. "
         "REMOVE that env var from .env immediately.",

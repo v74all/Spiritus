@@ -35,6 +35,18 @@ _EXEMPT_PREFIXES: tuple[str, ...] = (
     "/api/live",
 )
 
+# Per-prefix overrides. The default budget is generous (100/min) because the
+# admin UI polls a few endpoints every couple seconds. Subscription URLs are
+# anonymous and abuse-prone, so they get a much tighter budget — 60 hits/min
+# per IP is still comfortable for a real user reloading a client config but
+# stops a leaked URL from being scraped indefinitely.
+_PREFIX_BUDGETS: tuple[tuple[str, int, int], ...] = (
+    # (path_prefix, max_requests, window_seconds)
+    ("/sub/",        60, 60),
+    ("/sub-api/",    60, 60),
+    ("/sub-json/",   60, 60),
+)
+
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
     def __init__(self, app, default_per_minute: int | None = None):
@@ -42,21 +54,36 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self.budget = int(default_per_minute or getattr(settings, "rate_limit_requests", 100) or 100)
         self.window = int(getattr(settings, "rate_limit_period", 60) or 60)
 
+    def _budget_for(self, path: str) -> tuple[int, int]:
+        for prefix, budget, window in _PREFIX_BUDGETS:
+            if path.startswith(prefix):
+                return budget, window
+        return self.budget, self.window
+
     async def dispatch(self, request: Request, call_next):
         path = request.url.path or "/"
         if any(path.startswith(p) for p in _EXEMPT_PREFIXES):
             return await call_next(request)
 
         client_ip = request.client.host if request.client else "unknown"
-        key = f"ratelimit:{client_ip}:{path}"
+        budget, window = self._budget_for(path)
+        # For /sub/* paths key on the prefix + the UUID segment, so each
+        # subscription gets its own bucket and one popular link doesn't
+        # rate-limit unrelated users sharing the same outbound IP (CGNAT).
+        if any(path.startswith(p) for p, _, _ in _PREFIX_BUDGETS):
+            parts = path.strip("/").split("/", 2)
+            sub_key = parts[1] if len(parts) > 1 else ""
+            key = f"ratelimit:sub:{client_ip}:{sub_key}"
+        else:
+            key = f"ratelimit:{client_ip}:{path}"
 
         try:
             from ..redis_client import get_redis
             redis = await get_redis()
             current = await redis.incr(key)
             if current == 1:
-                await redis.expire(key, self.window)
-            if current > self.budget:
+                await redis.expire(key, window)
+            if current > budget:
                 retry_after = await redis.ttl(key)
                 return JSONResponse(
                     {"detail": "Rate limit exceeded"},

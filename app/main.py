@@ -118,7 +118,17 @@ async def lifespan(app: FastAPI):
         async with AsyncSessionLocal() as _db:
             await bootstrap_initial_admin(_db)
     except Exception as e:
-        logger.error("admin bootstrap failed: %s", type(e).__name__)
+        # Don't swallow this — without an admin row no one can log in, which
+        # is the single most operator-confusing failure mode this codebase
+        # has. Surface it loudly and drop a Redis breadcrumb so ops dashboards
+        # can detect "panel up but locked" without grepping the journal.
+        logger.critical("admin bootstrap failed: %s: %s", type(e).__name__, e)
+        try:
+            from .redis_client import get_redis
+            r = await get_redis()
+            await r.setex("bootstrap_status", 3600, f"failed:{type(e).__name__}")
+        except Exception:
+            pass
 
     # TLS cert precondition: any TLS-bearing inbound will fail to start in Xray
     # if these files don't exist. Surface a clear log line at boot rather than
@@ -609,8 +619,15 @@ async def subscription_page(
     request: Request,
     db: AsyncSession = Depends(get_async_db),
 ):
-    """Serve the public user subscription page."""
+    """Serve the public user subscription page.
+
+    Inactive / disabled users get a 404 — same gate as /sub-api and
+    /sub-json. Without this an attacker with a leaked UUID could
+    still read the configs of a disabled account from the HTML page.
+    """
     user = await _subscription_user(user_uuid, db)
+    if not user.active:
+        raise HTTPException(status_code=404, detail="Not found")
     links = await _subscription_links(user, request, db)
     template = _jinja_env.get_template("sub.html")
     html = template.render(

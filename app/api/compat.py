@@ -49,7 +49,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["compat"])
 
 # In-memory state for endpoints that don't have a DB-backed implementation yet.
-_login_attempts: dict[str, list[float]] = {}
+# Note: _login_attempts used to live here but has been migrated to Redis (see
+# the wrapper helpers below that delegate to app/api/auth.py).
 _settings_state: dict[str, Any] = {}
 _resilience_state: dict[str, Any] = {"active_attacks": 0, "stats": {}}
 _LEGACY_SETTINGS_KEY = "legacy_panel_settings"
@@ -132,22 +133,35 @@ _BOOLEAN_SETTING_KEYS = {
 #  Helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _is_locked_out(ip: str) -> bool:
-    if ip not in _login_attempts:
+# These wrap the Redis-backed primitives from app/api/auth.py so the legacy
+# compat endpoints share the SAME bucket as the modern /api/auth/login route.
+# The previous in-memory dict grew unbounded under an IP-rotating attack and
+# also produced split state — locking from the modern endpoint didn't lock the
+# legacy one. Both helpers fall back to a no-op if Redis is unreachable; the
+# auth-side wrappers (auth.py::_is_locked_out + _record_failed_login) are
+# fail-closed for the actual rate-limit decision, which is what we want.
+async def _is_locked_out(ip: str) -> bool:
+    from .auth import _is_locked_out as _redis_locked
+    try:
+        return await _redis_locked(ip)
+    except Exception:
         return False
-    now = time.time()
-    _login_attempts[ip] = [
-        t for t in _login_attempts[ip] if now - t < settings.lockout_seconds
-    ]
-    return len(_login_attempts[ip]) >= settings.max_login_attempts
 
 
-def _record_failed_attempt(ip: str) -> None:
-    _login_attempts.setdefault(ip, []).append(time.time())
+async def _record_failed_attempt(ip: str) -> None:
+    from .auth import _record_failed_login
+    try:
+        await _record_failed_login(ip)
+    except Exception:
+        pass
 
 
-def _clear_attempts(ip: str) -> None:
-    _login_attempts.pop(ip, None)
+async def _clear_attempts(ip: str) -> None:
+    from .auth import _clear_login_attempts
+    try:
+        await _clear_login_attempts(ip)
+    except Exception:
+        pass
 
 
 def _as_bool(value: Any) -> bool:
@@ -968,7 +982,7 @@ async def legacy_login(
     if await fail2ban_manager.is_banned(client_ip, "panel", db):
         return {"ok": False, "error": "IP banned. Contact admin.", "locked": True}
 
-    if _is_locked_out(client_ip):
+    if await _is_locked_out(client_ip):
         return {
             "ok": False,
             "error": f"Too many attempts. Try again in {settings.lockout_seconds}s",
@@ -990,14 +1004,14 @@ async def legacy_login(
     # env vars (see app/api/auth.py:bootstrap_initial_admin).
 
     if not authenticated:
-        _record_failed_attempt(client_ip)
+        await _record_failed_attempt(client_ip)
         await fail2ban_manager.record_failed_attempt(
             client_ip, "panel", db, "Failed panel login"
         )
         # Constant message — no user enumeration.
         return {"ok": False, "error": "Invalid credentials"}
 
-    _clear_attempts(client_ip)
+    await _clear_attempts(client_ip)
 
     token_payload: Dict[str, Any] = {"sub": username, "is_admin": True}
     if admin_id is not None:

@@ -65,6 +65,11 @@ _EXEMPT_PATH_PREFIXES: tuple[str, ...] = (
     "/api/payments/callback/",    # signed webhooks
     "/api/payments/webhook",
     "/sub/", "/sub-api/", "/sub-json/",
+    # /api/direction is a pure UI preference (LTR/RTL) — no security value
+    # in CSRF-protecting it, and gating it behind a cookie that's not yet
+    # established on the very first request to the panel was breaking
+    # initial language-detect flips.
+    "/api/direction",
 )
 
 
@@ -119,6 +124,9 @@ class CSRFMiddleware(BaseHTTPMiddleware):
             # drops the cookie and every POST fails CSRF.
             secure=is_secure_request(request),
             samesite="strict",
-            max_age=60 * 60 * 24,  # 24h rotation
+            # 1h rotation. The cookie auto-refreshes on every safe-method
+            # request, so an active operator never sees a CSRF mismatch.
+            # 24h was the old value and was too long for an admin tool.
+            max_age=60 * 60,
             path="/",
         )

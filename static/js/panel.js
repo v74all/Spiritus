@@ -32,6 +32,57 @@
 const API = '/api';
 // QR_LIB_URL and SERVER_INFO are injected by the template in panel.html
 let users = [];
+
+// ── apiCall: standardised fetch wrapper used by action handlers ──
+// Every action button used to do `const d = await (await fetch(...)).json()`
+// with no status check. On 403 (CSRF rejected) or 500 the JSON body still
+// parses, but `d.ok` is undefined, the if (d.ok) branch falls through, and
+// the user sees a generic "Error" toast — or nothing at all when the call
+// site swallowed the exception in `catch(e){}`. The result was the
+// long-standing "buttons don't work" report.
+//
+// apiCall surfaces the actual status with a useful toast message and throws
+// a sentinel so the call site's try/catch can stop without showing a
+// duplicate error. On 401 it reloads (session expired). Success returns the
+// parsed JSON body. On a network failure (no response at all) the error is
+// surfaced and re-thrown.
+async function apiCall(url, opts) {
+  let r;
+  try {
+    r = await fetch(url, opts);
+  } catch (e) {
+    if (typeof toast === 'function') toast('Network error — check connection', 'error');
+    throw e;
+  }
+  if (r.status === 401) { location.reload(); throw new Error('reauth'); }
+  let body = null;
+  try { body = await r.json(); } catch { body = {}; }
+  if (!r.ok) {
+    const msg = (body && (body.detail || body.error)) || ('HTTP ' + r.status);
+    if (typeof toast === 'function') toast(msg, 'error');
+    const err = new Error(msg);
+    err.status = r.status;
+    err.body = body;
+    throw err;
+  }
+  return body;
+}
+
+// withBusy: disables a button for the lifetime of an async action so a
+// double-click can't fire the underlying fetch twice. Use as:
+//   onclick="withBusy(this, () => doToggle('u1'))"
+// or inside JS:  withBusy(btn, async () => { ... })
+async function withBusy(btn, fn) {
+  if (btn && btn.disabled) return;
+  const prev = btn ? btn.disabled : false;
+  if (btn) btn.disabled = true;
+  try {
+    return await fn();
+  } finally {
+    if (btn) btn.disabled = prev;
+  }
+}
+
 let prevLive = {}, prevTime = 0, speeds = {};
 let renewTarget = '';
 let polling = false;
@@ -589,19 +640,20 @@ async function doAddUser() {
   const speed_limit_down = parseInt(document.getElementById('add-speed-down').value) || 200;
   const speed_limit_up = parseInt(document.getElementById('add-speed-up').value) || 200;
   if (!name) {toast('Please enter a username','error'); return;}
-  const r = await fetch(API+'/users', {method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({name, traffic, days, speed_limit_up, speed_limit_down, note})});
-  const d = await r.json();
-  if (d.ok) {
-    closeModal('add-modal');
-    document.getElementById('add-name').value = '';
-    document.getElementById('add-note').value = '';
-    document.getElementById('add-speed-down').value = '200';
-    document.getElementById('add-speed-up').value = '200';
-    toast('User '+name+' created');
-    fetchUsers();
-    setTimeout(()=>showConfig(name), 1500);
-  } else { toast(d.error||'Error','error'); }
+  try {
+    const d = await apiCall(API+'/users', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({name, traffic, days, speed_limit_up, speed_limit_down, note})});
+    if (d.ok) {
+      closeModal('add-modal');
+      document.getElementById('add-name').value = '';
+      document.getElementById('add-note').value = '';
+      document.getElementById('add-speed-down').value = '200';
+      document.getElementById('add-speed-up').value = '200';
+      toast('User '+name+' created');
+      fetchUsers();
+      setTimeout(()=>showConfig(name), 1500);
+    } else { toast(d.error||'Create failed','error'); }
+  } catch (e) { /* apiCall already toasted */ }
 }
 
 let _bulkLastUsers = [];
@@ -960,18 +1012,20 @@ async function toggleUser(name) {
   const u = users.find(x=>x.name===name);
   const action = u && u.active ? 'disconnect' : 'reconnect';
   if (!confirm(`${action === 'disconnect' ? 'Disconnect' : 'Reconnect'} "${name}"?`)) return;
-  const r = await fetch(API+'/users/'+encodeURIComponent(name)+'/toggle', {method:'POST'});
-  const d = await r.json();
-  if (d.ok) { toast(d.message); fetchUsers(); }
-  else toast(d.error||'Error','error');
+  try {
+    const d = await apiCall(API+'/users/'+encodeURIComponent(name)+'/toggle', {method:'POST'});
+    if (d.ok) { toast(d.message); fetchUsers(); }
+    else toast(d.error||'Action failed','error');
+  } catch (e) { /* apiCall already toasted */ }
 }
 
 async function deleteUser(name) {
   if (!confirm('Are you sure you want to delete "'+name+'"?')) return;
-  const r = await fetch(API+'/users/'+encodeURIComponent(name), {method:'DELETE'});
-  const d = await r.json();
-  if (d.ok) {toast(name+' deleted'); fetchUsers();}
-  else toast(d.error||'Error','error');
+  try {
+    const d = await apiCall(API+'/users/'+encodeURIComponent(name), {method:'DELETE'});
+    if (d.ok) { toast(name+' deleted'); fetchUsers(); }
+    else toast(d.error||'Delete failed','error');
+  } catch (e) { /* apiCall already toasted */ }
 }
 
 function showRenew(name) {
@@ -985,11 +1039,12 @@ function showRenew(name) {
 async function doRenewUser() {
   const traffic = parseFloat(document.getElementById('renew-traffic').value);
   const days = parseInt(document.getElementById('renew-days').value);
-  const r = await fetch(API+'/users/'+encodeURIComponent(renewTarget)+'/renew',
-    {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({traffic, days})});
-  const d = await r.json();
-  if (d.ok) {closeModal('renew-modal'); toast(renewTarget+' renewed'); fetchUsers();}
-  else toast(d.error||'Error','error');
+  try {
+    const d = await apiCall(API+'/users/'+encodeURIComponent(renewTarget)+'/renew',
+      {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({traffic, days})});
+    if (d.ok) { closeModal('renew-modal'); toast(renewTarget+' renewed'); fetchUsers(); }
+    else toast(d.error||'Renew failed','error');
+  } catch (e) { /* apiCall already toasted */ }
 }
 
 /* ── Config Modal (multi-protocol tabs) ── */
@@ -1247,18 +1302,22 @@ function renderConfigTab() {
       <span class="ck">Proto</span><span class="cv">${serverInfo.openvpn_proto || 'UDP'}</span>`;
   }
 
-  // Append host header spoofing info if active
+  // Append host header spoofing info if active. Every serverInfo.* field
+  // below is operator-controlled (lives in the settings table) so it can
+  // contain arbitrary text — esc() it because the result is innerHTML'd
+  // below at line ~1283. With CSP rolled back to 'unsafe-inline', any
+  // unescaped HTML here is a one-click admin→admin XSS.
   if (serverInfo.dpi_http_host_spoof_enabled) {
-    info += `\n<span class="ck" style="color:var(--purple)">Host Spoof</span><span class="cv" style="color:var(--purple)">HTTP → ${serverInfo.dpi_http_host_spoof_domain || '?'}</span>`;
+    info += `\n<span class="ck" style="color:var(--purple)">Host Spoof</span><span class="cv" style="color:var(--purple)">HTTP → ${esc(serverInfo.dpi_http_host_spoof_domain) || '?'}</span>`;
   }
   if (serverInfo.dpi_ws_host_front_enabled) {
-    info += `\n<span class="ck" style="color:var(--purple)">WS Front</span><span class="cv" style="color:var(--purple)">→ ${serverInfo.dpi_ws_host_front_domain || '?'}</span>`;
+    info += `\n<span class="ck" style="color:var(--purple)">WS Front</span><span class="cv" style="color:var(--purple)">→ ${esc(serverInfo.dpi_ws_host_front_domain) || '?'}</span>`;
   }
   if (serverInfo.dpi_cdn_host_front_enabled) {
-    info += `\n<span class="ck" style="color:var(--purple)">CDN Front</span><span class="cv" style="color:var(--purple)">→ ${serverInfo.dpi_cdn_host_front_domain || '?'}</span>`;
+    info += `\n<span class="ck" style="color:var(--purple)">CDN Front</span><span class="cv" style="color:var(--purple)">→ ${esc(serverInfo.dpi_cdn_host_front_domain) || '?'}</span>`;
   }
   if (serverInfo.dpi_bug_host_enabled) {
-    info += `\n<span class="ck" style="color:var(--purple)">Bug Host</span><span class="cv" style="color:var(--purple)">→ ${serverInfo.dpi_bug_host_domain || '?'}</span>`;
+    info += `\n<span class="ck" style="color:var(--purple)">Bug Host</span><span class="cv" style="color:var(--purple)">→ ${esc(serverInfo.dpi_bug_host_domain) || '?'}</span>`;
   }
   // Tunneling
   if (serverInfo.dpi_dns_tunnel) {
@@ -1275,7 +1334,7 @@ function renderConfigTab() {
     info += `\n<span class="ck" style="color:var(--orange)">CDN Front</span><span class="cv" style="color:var(--orange)">Active — Cloudflare/CDN fronting</span>`;
   }
   if (serverInfo.emergency_relay_enabled && serverInfo.emergency_relay_address) {
-    info += `\n<span class="ck" style="color:var(--red)">EMERGENCY RELAY</span><span class="cv" style="color:var(--red)">ACTIVE → ${serverInfo.emergency_relay_address}</span>`;
+    info += `\n<span class="ck" style="color:var(--red)">EMERGENCY RELAY</span><span class="cv" style="color:var(--red)">ACTIVE → ${esc(serverInfo.emergency_relay_address)}</span>`;
   }
 
   document.getElementById('config-link-label').textContent = label;
