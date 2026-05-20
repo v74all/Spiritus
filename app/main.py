@@ -180,9 +180,18 @@ async def add_security_headers(request: Request, call_next):
     # rewriting all the onclick=… attributes into addEventListener, which is
     # tracked separately. The nonce is still injected so future inline scripts
     # can adopt a stricter policy without further server changes.
+    # CSP layout:
+    # - script-src:   strict — only nonce'd scripts. ('unsafe-inline' would be
+    #                 ignored by the browser as soon as a nonce is present.)
+    # - script-src-attr 'unsafe-inline': narrowly allows the legacy inline
+    #                 onclick=… attributes scattered through panel.html /
+    #                 agent-panel.html. This is the modern CSP-3 way to keep
+    #                 inline event handlers working while still demanding
+    #                 nonces for every <script> block.
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
-        f"script-src 'self' 'nonce-{nonce}' 'unsafe-inline'; "
+        f"script-src 'self' 'nonce-{nonce}'; "
+        "script-src-attr 'unsafe-inline'; "
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
         "font-src 'self' https://fonts.gstatic.com; "
         "img-src 'self' data: blob:; "
@@ -441,6 +450,7 @@ async def serve_panel(request: Request):
         sni_host=settings.vless_ws_host,
         ws_path=settings.vless_ws_path,
         asset_v=asset_v,
+        csp_nonce=getattr(request.state, "csp_nonce", ""),
     )
     return HTMLResponse(content=html)
 
@@ -461,6 +471,7 @@ async def serve_agent_panel(request: Request):
         sni_host=settings.vless_ws_host,
         ws_path=settings.vless_ws_path,
         apk_available=os.path.isfile(apk_path),
+        csp_nonce=getattr(request.state, "csp_nonce", ""),
     )
     return HTMLResponse(content=html)
 
@@ -590,6 +601,7 @@ async def subscription_page(
         ws_path=settings.vless_ws_path,
         settings=settings,
         apk_available=os.path.isfile(os.path.join(os.getcwd(), "static", "downloads", "app-release.apk")),
+        csp_nonce=getattr(request.state, "csp_nonce", ""),
     )
     return HTMLResponse(content=html)
 

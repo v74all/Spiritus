@@ -555,7 +555,10 @@ input,button,textarea,select{font-family:inherit;font-size:inherit}
 </div>
 
 <script src="{{ url_for('static', filename='js/qrcode.js') }}"></script>
-<script>
+<script nonce="{{ csp_nonce }}">
+// Per-request CSP nonce — needed when document.write builds a popup that
+// inherits this page's CSP (e.g. bulk-QR export window).
+window.__CSP_NONCE__ = "{{ csp_nonce }}";
 // ── CSRF / fetch hardening (mirrors static/js/panel.js) ──
 (function () {
   function readCookie(name) {
@@ -1264,9 +1267,9 @@ function openBulkInNewTab() {
       <h2>Text export</h2>
       <pre id="txt">${safe}</pre>
     </div>
-    <script type="application/json" id="bulk-json">${usersJson}<\/script>
-    <script src="${QR_LIB_URL}"><\/script>
-    <script>
+    <script nonce="${window.__CSP_NONCE__||''}" type="application/json" id="bulk-json">${usersJson}<\/script>
+    <script nonce="${window.__CSP_NONCE__||''}" src="${QR_LIB_URL}"><\/script>
+    <script nonce="${window.__CSP_NONCE__||''}">
       (function(){
         var users = JSON.parse(document.getElementById('bulk-json').textContent);
         var root = document.getElementById('qr-root');

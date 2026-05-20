@@ -872,9 +872,9 @@ function openBulkInNewTab() {
       <h2>Text export</h2>
       <pre id=\"txt\">${safe}</pre>
     </div>
-    <script type=\"application/json\" id=\"bulk-json\">${usersJson}<\/script>
-    <script src=\"${QR_LIB_URL}\"><\/script>
-    <script>
+    <script nonce=\"${window.__CSP_NONCE__||''}\" type=\"application/json\" id=\"bulk-json\">${usersJson}<\/script>
+    <script nonce=\"${window.__CSP_NONCE__||''}\" src=\"${QR_LIB_URL}\"><\/script>
+    <script nonce=\"${window.__CSP_NONCE__||''}\">
       (function(){
         var users = JSON.parse(document.getElementById('bulk-json').textContent);
         var root = document.getElementById('qr-root');

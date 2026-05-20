@@ -540,11 +540,12 @@ body{font-family:var(--font-body);background:var(--bg0);color:var(--t1);
 
 <div id="toast" class="toast"></div>
 
-<script id="data-links" type="application/json">
+<script id="data-links" type="application/json" nonce="{{ csp_nonce }}">
 {{ links | tojson }}
 </script>
 <script src="{{ url_for('static', filename='js/qrcode.js') }}"></script>
-<script>
+<script nonce="{{ csp_nonce }}">
+window.__CSP_NONCE__ = "{{ csp_nonce }}";
 async function toggleDirection() {
   var cur = document.documentElement.dir || 'ltr';
   var nxt = cur === 'rtl' ? 'ltr' : 'rtl';

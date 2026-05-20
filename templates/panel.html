@@ -1837,7 +1837,7 @@
 <!-- ── Toast ── -->
 <div id="toast" class="toast"></div>
 
-<script>
+<script nonce="{{ csp_nonce }}">
 // Template-injected configuration (must be before panel.js loads)
 const QR_LIB_URL = "{{ url_for('static', filename='js/qrcode.js') }}";
 const SERVER_INFO = {
@@ -1846,6 +1846,10 @@ const SERVER_INFO = {
     sni: "{{ sni_host }}",
     path: "{{ ws_path }}"
 };
+// Per-request CSP nonce — used by panel.js when it dynamically constructs
+// popup windows (e.g. the bulk-QR export) so the inline <script> blocks it
+// emits into the new document satisfy our nonce'd CSP.
+window.__CSP_NONCE__ = "{{ csp_nonce }}";
 </script>
 <script src="{{ url_for('static', filename='js/qrcode.js') }}?v={{ asset_v }}"></script>
 <script src="{{ url_for('static', filename='js/panel.js') }}?v={{ asset_v }}"></script>
