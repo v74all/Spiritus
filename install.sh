@@ -33,6 +33,12 @@ check_root() {
         print_error "This script must be run as root (sudo)"
         exit 1
     fi
+    # Defensive: also add INSTALL_DIR to root's global safe.directory list.
+    # This is a belt-and-suspenders alongside the per-command `git -c` wrap
+    # in clone_or_update — if a future code path forgets the wrap, git still
+    # works. Marking a single, root-controlled path safe doesn't widen the
+    # CVE-2022-24765 attack surface.
+    git config --global --add safe.directory "${INSTALL_DIR}" 2>/dev/null || true
 }
 
 check_os() {
