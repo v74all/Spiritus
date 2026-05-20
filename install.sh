@@ -277,6 +277,15 @@ setup_panel_user() {
     fi
     # Tighten ownership of the panel install dir.
     chown -R "${PANEL_USER}:${PANEL_USER}" "${INSTALL_DIR}" 2>/dev/null || true
+    # Pre-create log files with the right ownership. Python's FileHandler and
+    # systemd's StandardOutput=append: both need them writable before the
+    # service starts. Stale root-owned log files from earlier installs would
+    # otherwise survive the chown -R if any sub-tool created them late.
+    for _log in vpn-panel.log celery-worker.log celery-beat.log update.log; do
+        : > "${INSTALL_DIR}/${_log}" 2>/dev/null || true
+        chown "${PANEL_USER}:${PANEL_USER}" "${INSTALL_DIR}/${_log}" 2>/dev/null || true
+        chmod 640 "${INSTALL_DIR}/${_log}" 2>/dev/null || true
+    done
     # Allow ONLY the narrow systemctl restart needed for live config push.
     cat > /etc/sudoers.d/${PANEL_USER} <<EOF
 ${PANEL_USER} ALL=(root) NOPASSWD: /bin/systemctl restart xray, /bin/systemctl reload xray, /bin/systemctl status xray
@@ -338,8 +347,8 @@ UMask=0027
 ReadWritePaths=${INSTALL_DIR} /usr/local/etc/xray /var/log/xray
 LimitNOFILE=65536
 
-StandardOutput=append:${INSTALL_DIR}/vpn-panel.log
-StandardError=append:${INSTALL_DIR}/vpn-panel.log
+StandardOutput=journal
+StandardError=journal
 SyslogIdentifier=v7lthronyx
 
 [Install]
@@ -373,8 +382,8 @@ CapabilityBoundingSet=
 UMask=0027
 ReadWritePaths=${INSTALL_DIR} /tmp
 
-StandardOutput=append:${INSTALL_DIR}/celery-worker.log
-StandardError=append:${INSTALL_DIR}/celery-worker.log
+StandardOutput=journal
+StandardError=journal
 SyslogIdentifier=v7lthronyx-worker
 
 [Install]
@@ -408,8 +417,8 @@ UMask=0027
 ReadWritePaths=${INSTALL_DIR}
 RestartSec=10
 
-StandardOutput=append:${INSTALL_DIR}/celery-beat.log
-StandardError=append:${INSTALL_DIR}/celery-beat.log
+StandardOutput=journal
+StandardError=journal
 SyslogIdentifier=v7lthronyx-beat
 
 [Install]

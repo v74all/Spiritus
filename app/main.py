@@ -26,14 +26,35 @@ from .models import VpnUser
 from .redis_client import close_redis
 from .observability import setup_opentelemetry, prometheus_metrics
 
-# Configure logging
+# Configure logging — stderr is always wired; the file handler is best-effort
+# so the panel can still start under tightened systemd profiles where the
+# working directory may not be writable by the unprivileged service user.
+# systemd captures stderr to journald, so nothing is lost when the file
+# handler is skipped.
+_log_handlers = [logging.StreamHandler()]
+_log_path = os.environ.get("LOG_FILE", "vpn-panel.log")
+if _log_path:
+    try:
+        _fh = logging.FileHandler(_log_path)
+        try:
+            os.chmod(_log_path, 0o640)
+        except OSError:
+            pass
+        _log_handlers.insert(0, _fh)
+    except (OSError, PermissionError) as _e:
+        # Surface the reason via stderr so journald shows it, then continue.
+        import sys as _sys
+        print(
+            f"WARN: file log disabled ({type(_e).__name__}: {_e}); "
+            "falling back to stderr only.",
+            file=_sys.stderr,
+        )
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('vpn-panel.log'),
-        logging.StreamHandler()
-    ]
+    handlers=_log_handlers,
+    force=True,
 )
 logger = logging.getLogger("V7LTHRONYX")
 
