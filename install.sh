@@ -226,86 +226,120 @@ print('Fail2ban setup:', results)
     print_success "Fail2ban configured"
 }
 
+# Idempotent .env upsert. `_env_set KEY value` replaces an existing
+# `^KEY=...` line or appends one if missing. Always writes the key — no
+# silent skips because sed-with-`||` was a sharp edge:  sed returns 0
+# even when nothing matched, so the fallback `|| echo` never fired.
+_env_set() {
+    local key="$1" val="$2" file="${3:-.env}"
+    if [[ ! -f "$file" ]]; then touch "$file"; fi
+    if grep -q "^${key}=" "$file"; then
+        # Use | as delimiter so values containing / are safe.
+        # Escape & and | in the replacement.
+        local esc; esc=$(printf '%s' "$val" | sed -e 's/[\\&|]/\\&/g')
+        sed -i "s|^${key}=.*|${key}=${esc}|" "$file"
+    else
+        printf '%s=%s\n' "$key" "$val" >> "$file"
+    fi
+}
+
+# Read current value of KEY from .env (empty if missing).
+_env_get() {
+    local key="$1" file="${2:-.env}"
+    [[ -f "$file" ]] || { echo ""; return; }
+    sed -n "s|^${key}=\(.*\)$|\1|p" "$file" | head -1
+}
+
 setup_env() {
     print_info "Setting up environment configuration..."
     cd "$INSTALL_DIR"
 
+    local is_new_env=0
     if [[ ! -f .env ]]; then
         cp .env.example .env
+        is_new_env=1
+        print_info "Created .env from template"
+    fi
 
-        # Generate strong, per-install secrets. Each is at least 32 chars so
-        # app/config.py will accept them (the validator rejects shorter).
-        SECRET=$(python3 -c "import secrets; print(secrets.token_urlsafe(48))")
-        JWT_SECRET=$(python3 -c "import secrets; print(secrets.token_urlsafe(48))")
-        CSRF=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
-        ARGON_SALT=$(python3 -c "import secrets; print(secrets.token_hex(16))")
-        BOOTSTRAP_PW=$(python3 -c "
+    # ── Per-install secrets ───────────────────────────────────────────
+    # All of these are upserted so re-runs that inherit a partial .env
+    # from an earlier install (missing JWT_SECRET_KEY, CSRF_SECRET,
+    # ADMIN_BOOTSTRAP_PASSWORD, ...) get backfilled. Existing values are
+    # preserved when present and non-trivial — we never blow away a
+    # working secret on a re-install.
+    _maybe_gen_secret() {
+        local key="$1" len="${2:-48}" current
+        current=$(_env_get "$key")
+        if [[ -z "$current" || "$current" == "change-me"* || ${#current} -lt 32 ]]; then
+            _env_set "$key" "$(python3 -c "import secrets; print(secrets.token_urlsafe(${len}))")"
+        fi
+    }
+    _maybe_gen_secret SECRET_KEY 48
+    _maybe_gen_secret JWT_SECRET_KEY 48
+    _maybe_gen_secret CSRF_SECRET 32
+    if [[ -z "$(_env_get ARGON2_SALT)" ]]; then
+        _env_set ARGON2_SALT "$(python3 -c 'import secrets; print(secrets.token_hex(16))')"
+    fi
+
+    # ── Bootstrap admin password ──────────────────────────────────────
+    # Generated once and persisted in .env so the first /api/login
+    # actually has something to authenticate against. We surface the
+    # value at the end of install (and again here on re-runs) — the
+    # operator is responsible for unsetting it after first login.
+    local bootstrap_pw
+    bootstrap_pw=$(_env_get ADMIN_BOOTSTRAP_PASSWORD)
+    if [[ -z "$bootstrap_pw" ]]; then
+        bootstrap_pw=$(python3 -c "
 import secrets, string
 alphabet = string.ascii_letters + string.digits + '!@#%^*-_=+'
 print(''.join(secrets.choice(alphabet) for _ in range(20)))
 ")
+        _env_set ADMIN_BOOTSTRAP_PASSWORD "$bootstrap_pw"
+    fi
+    _env_set ADMIN_BOOTSTRAP_USERNAME "$(_env_get ADMIN_BOOTSTRAP_USERNAME)"
+    if [[ -z "$(_env_get ADMIN_BOOTSTRAP_USERNAME)" ]]; then
+        _env_set ADMIN_BOOTSTRAP_USERNAME admin
+    fi
+    export BOOTSTRAP_PW="$bootstrap_pw"
 
-        sed -i "s|^SECRET_KEY=.*|SECRET_KEY=${SECRET}|" .env
-        sed -i "s|^JWT_SECRET_KEY=.*|JWT_SECRET_KEY=${JWT_SECRET}|" .env || echo "JWT_SECRET_KEY=${JWT_SECRET}" >> .env
-        sed -i "s|^CSRF_SECRET=.*|CSRF_SECRET=${CSRF}|" .env || echo "CSRF_SECRET=${CSRF}" >> .env
-        sed -i "s|^ARGON2_SALT=.*|ARGON2_SALT=${ARGON_SALT}|" .env || echo "ARGON2_SALT=${ARGON_SALT}" >> .env
-        sed -i "s|^ADMIN_BOOTSTRAP_PASSWORD=.*|ADMIN_BOOTSTRAP_PASSWORD=${BOOTSTRAP_PW}|" .env || \
-            echo "ADMIN_BOOTSTRAP_PASSWORD=${BOOTSTRAP_PW}" >> .env
-
-        SERVER_IP=$(hostname -I | awk '{print $1}')
-        sed -i "s|VPN_SERVER_IP=your-server-ip|VPN_SERVER_IP=${SERVER_IP}|" .env
-
-        # Default the app to bind loopback only; the reverse proxy fronts it.
-        sed -i "s|^HOST=.*|HOST=127.0.0.1|" .env
-
-        print_success "Environment configuration created (.env)"
-        echo
-        echo "─────────────────────────────────────────────────────────────"
-        echo "  Initial admin credentials (write these down — shown ONCE):"
-        echo "    user:     admin"
-        echo "    password: ${BOOTSTRAP_PW}"
-        echo "  After first login, REMOVE ADMIN_BOOTSTRAP_PASSWORD from .env."
-        echo "─────────────────────────────────────────────────────────────"
-        echo
-    else
-        print_success "Environment configuration already exists"
+    # ── Server binding ────────────────────────────────────────────────
+    # Default to 0.0.0.0 so a fresh install is reachable from a browser
+    # without a reverse proxy. Operators who run nginx/Caddy in front of
+    # the panel should manually flip HOST=127.0.0.1 — the install script
+    # never silently re-tightens it, because doing so on every re-install
+    # bricks panels that were intentionally exposed.
+    if [[ "$is_new_env" -eq 1 || -z "$(_env_get HOST)" ]]; then
+        _env_set HOST "0.0.0.0"
     fi
 
-    # Ensure DATABASE_URL has the random per-install password.
+    # Server's primary IP (best-effort autodetect; can be overridden).
+    local server_ip; server_ip=$(hostname -I | awk '{print $1}')
+    if [[ -n "$server_ip" ]] && [[ "$(_env_get VPN_SERVER_IP)" == "" || "$(_env_get VPN_SERVER_IP)" == "your-server-ip" ]]; then
+        _env_set VPN_SERVER_IP "$server_ip"
+    fi
+
+    # ── Database URL with per-install random password ────────────────
     if [[ -n "${DB_PASS:-}" ]]; then
-        DB_URL="postgresql+asyncpg://${DB_USER:-vpnadmin}:${DB_PASS}@127.0.0.1:5432/${DB_NAME:-vpnpanel}"
-        if grep -q "^DATABASE_URL=" .env; then
-            sed -i "s|^DATABASE_URL=.*|DATABASE_URL=${DB_URL}|" .env
-        else
-            echo "DATABASE_URL=${DB_URL}" >> .env
-        fi
+        _env_set DATABASE_URL "postgresql+asyncpg://${DB_USER:-vpnadmin}:${DB_PASS}@127.0.0.1:5432/${DB_NAME:-vpnpanel}"
     fi
 
-    # Wire the generated TLS cert paths into .env (only if setup_tls_cert ran).
+    # ── TLS cert paths (set by setup_tls_cert) ───────────────────────
     if [[ -n "${TLS_CERT_FILE:-}" && -n "${TLS_KEY_FILE:-}" ]]; then
-        if grep -q "^TLS_CERT_FILE=" .env; then
-            sed -i "s|^TLS_CERT_FILE=.*|TLS_CERT_FILE=${TLS_CERT_FILE}|" .env
-        else
-            echo "TLS_CERT_FILE=${TLS_CERT_FILE}" >> .env
-        fi
-        if grep -q "^TLS_KEY_FILE=" .env; then
-            sed -i "s|^TLS_KEY_FILE=.*|TLS_KEY_FILE=${TLS_KEY_FILE}|" .env
-        else
-            echo "TLS_KEY_FILE=${TLS_KEY_FILE}" >> .env
-        fi
+        _env_set TLS_CERT_FILE "${TLS_CERT_FILE}"
+        _env_set TLS_KEY_FILE  "${TLS_KEY_FILE}"
     fi
 
-    # OpenTelemetry off by default — operators flip this on when a collector
-    # actually exists. Avoids the journal-spam from the OTLP gRPC retry loop.
-    if grep -q "^OTEL_ENABLED=" .env; then
-        sed -i "s|^OTEL_ENABLED=.*|OTEL_ENABLED=false|" .env
-    else
-        echo "OTEL_ENABLED=false" >> .env
-    fi
+    # ── OpenTelemetry off unless operator turns it on ────────────────
+    _env_set OTEL_ENABLED "false"
+
+    # ── DEBUG never on by default ────────────────────────────────────
+    _env_set DEBUG "false"
 
     # Lock down .env permissions — secrets at rest must be operator-only.
     chmod 600 .env || true
     chown "${PANEL_USER:-root}:${PANEL_USER:-root}" .env 2>/dev/null || true
+
+    print_success "Environment configuration ready (.env)"
 }
 
 setup_tls_cert() {
@@ -616,10 +650,15 @@ show_info() {
 
     echo -e "  ${YELLOW}Panel URL:${NC}     http://$(hostname -I | awk '{print $1}'):38471"
     echo -e "  ${YELLOW}API Docs:${NC}     http://$(hostname -I | awk '{print $1}'):38471/api/docs"
+    echo -e "  ${YELLOW}Username:${NC}     admin"
     echo -e "  ${YELLOW}Password:${NC}     ${PANEL_PASSWORD}"
+    echo ""
+    echo -e "  ${RED}IMPORTANT:${NC} after first login, change the password in the panel,"
+    echo -e "             then remove ADMIN_BOOTSTRAP_PASSWORD from .env and restart."
+    echo ""
     echo -e "  ${YELLOW}System Health:${NC} ${HEALTH_MSG}"
     echo -e "  ${YELLOW}Config Dir:${NC}    ${INSTALL_DIR}"
-    echo -e "  ${YELLOW}Log File:${NC}     ${INSTALL_DIR}/vpn-panel.log"
+    echo -e "  ${YELLOW}Logs:${NC}         journalctl -u ${SERVICE_NAME} -f"
     echo -e "  ${YELLOW}Database:${NC}     PostgreSQL (vpnpanel)"
     echo -e "  ${YELLOW}Cache:${NC}        Redis (localhost:6379)"
     echo -e "  ${YELLOW}Services:${NC}     ${SERVICE_NAME} + ${SERVICE_NAME}-worker + ${SERVICE_NAME}-beat"
