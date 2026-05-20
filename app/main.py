@@ -202,17 +202,21 @@ async def add_security_headers(request: Request, call_next):
     # tracked separately. The nonce is still injected so future inline scripts
     # can adopt a stricter policy without further server changes.
     # CSP layout:
-    # - script-src:   strict — only nonce'd scripts. ('unsafe-inline' would be
-    #                 ignored by the browser as soon as a nonce is present.)
-    # - script-src-attr 'unsafe-inline': narrowly allows the legacy inline
-    #                 onclick=… attributes scattered through panel.html /
-    #                 agent-panel.html. This is the modern CSP-3 way to keep
-    #                 inline event handlers working while still demanding
-    #                 nonces for every <script> block.
+    # - script-src 'self' 'unsafe-inline':  same-origin scripts + inline
+    #   <script>/onclick handlers. The panel templates carry ~240 legacy
+    #   inline onclick= attributes; the strict nonce-only CSP combined
+    #   with script-src-attr 'unsafe-inline' (CSP-3) only works on
+    #   Chrome 86+/Firefox 105+/Safari 15.4+. On anything older every
+    #   button silently does nothing.
+    # - 'unsafe-eval' is kept OFF — that's the genuinely-dangerous
+    #   directive (lets injected scripts JIT-compile new code at runtime).
+    # - The per-request nonce is still computed and exposed in
+    #   request.state.csp_nonce so future refactors that delete the inline
+    #   onclicks can flip this back to a strict nonce CSP without server
+    #   changes.
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
-        f"script-src 'self' 'nonce-{nonce}'; "
-        "script-src-attr 'unsafe-inline'; "
+        "script-src 'self' 'unsafe-inline'; "
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
         "font-src 'self' https://fonts.gstatic.com; "
         "img-src 'self' data: blob:; "
