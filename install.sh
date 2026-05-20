@@ -73,21 +73,34 @@ install_xray() {
 }
 
 clone_or_update() {
+    # The install dir gets chowned to `vpnpanel` later (setup_panel_user).
+    # When the operator re-runs this script as root, modern git refuses to
+    # touch a repo it sees as owned by a different user ("dubious ownership"),
+    # so we mark this specific path as safe — narrow scope, no global config
+    # change, no permission relaxation.
+    local GIT="git -c safe.directory=${INSTALL_DIR}"
+
     if [[ -d "$INSTALL_DIR/.git" ]]; then
         print_info "Updating V7LTHRONYX..."
         cd "$INSTALL_DIR"
-        git fetch origin
-        LOCAL=$(git rev-parse HEAD)
-        REMOTE=$(git rev-parse origin/main 2>/dev/null || git rev-parse origin/master 2>/dev/null)
-        
+        $GIT fetch origin
+        LOCAL=$($GIT rev-parse HEAD)
+        REMOTE=$($GIT rev-parse origin/main 2>/dev/null || $GIT rev-parse origin/master 2>/dev/null)
+
         if [[ "$LOCAL" != "$REMOTE" ]]; then
             print_info "New version available! Updating..."
-            git stash 2>/dev/null || true
-            git pull origin main 2>/dev/null || git pull origin master 2>/dev/null
-            git stash pop 2>/dev/null || true
+            $GIT stash 2>/dev/null || true
+            $GIT pull origin main 2>/dev/null || $GIT pull origin master 2>/dev/null
+            $GIT stash pop 2>/dev/null || true
             print_success "V7LTHRONYX updated to latest version"
         else
             print_success "V7LTHRONYX is already up to date"
+        fi
+        # Ensure the freshly pulled files end up owned by the panel user if
+        # the user already exists (re-install path). The first-time install
+        # path will chown later in setup_panel_user.
+        if id "${PANEL_USER:-vpnpanel}" >/dev/null 2>&1; then
+            chown -R "${PANEL_USER:-vpnpanel}:${PANEL_USER:-vpnpanel}" "$INSTALL_DIR" 2>/dev/null || true
         fi
     else
         print_info "Cloning Spiritus from GitHub..."
