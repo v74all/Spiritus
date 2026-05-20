@@ -304,11 +304,15 @@ print(''.join(secrets.choice(alphabet) for _ in range(20)))
 
     # ── Server binding ────────────────────────────────────────────────
     # Default to 0.0.0.0 so a fresh install is reachable from a browser
-    # without a reverse proxy. Operators who run nginx/Caddy in front of
-    # the panel should manually flip HOST=127.0.0.1 — the install script
-    # never silently re-tightens it, because doing so on every re-install
-    # bricks panels that were intentionally exposed.
-    if [[ "$is_new_env" -eq 1 || -z "$(_env_get HOST)" ]]; then
+    # without a reverse proxy. We also OVERWRITE the legacy 127.0.0.1
+    # default left behind by earlier installer versions (the previous
+    # hardening pass shipped HOST=127.0.0.1 by default and that breaks
+    # browser access on boxes without a reverse proxy — which is the
+    # vast majority of installs). Operators who *do* run nginx/Caddy in
+    # front of the panel can set HOST to a non-loopback non-wildcard
+    # value (e.g. a private IP) and that gets preserved.
+    local cur_host; cur_host=$(_env_get HOST)
+    if [[ -z "$cur_host" || "$cur_host" == "127.0.0.1" || "$cur_host" == "localhost" ]]; then
         _env_set HOST "0.0.0.0"
     fi
 
@@ -589,6 +593,22 @@ UPDATEEOF
     print_success "Auto-update configured (daily check at 4:00 AM)"
 }
 
+open_firewall_port() {
+    # The Fail2ban + per-IP rate limiter + CSRF middleware harden the public
+    # bind, but if the host has a firewall up the port still has to be open.
+    # Best-effort across ufw / firewalld / nftables / iptables — silent
+    # failures are fine (the operator may not have a firewall at all).
+    local port="${1:-38471}"
+    if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q "Status: active"; then
+        ufw allow "${port}/tcp" >/dev/null 2>&1 || true
+        print_info "ufw: allowed ${port}/tcp"
+    elif command -v firewall-cmd >/dev/null 2>&1 && firewall-cmd --state >/dev/null 2>&1; then
+        firewall-cmd --permanent --add-port="${port}/tcp" >/dev/null 2>&1 || true
+        firewall-cmd --reload >/dev/null 2>&1 || true
+        print_info "firewalld: allowed ${port}/tcp"
+    fi
+}
+
 start_panel() {
     print_info "Starting V7LTHRONYX panel..."
 
@@ -596,6 +616,9 @@ start_panel() {
     # the 2026-05 security hardening pass. The initial admin user is now
     # bootstrapped from the ADMIN_BOOTSTRAP_PASSWORD env var in .env on first
     # boot, then the env var must be deleted by the operator.
+
+    # Open the panel port in the local firewall (idempotent, best-effort).
+    open_firewall_port 38471
 
     systemctl restart ${SERVICE_NAME}
     systemctl restart ${SERVICE_NAME}-worker 2>/dev/null || true
