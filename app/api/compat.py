@@ -1536,10 +1536,19 @@ def _query_xray_stats(reset: bool = False) -> dict:
         return {}
 
 
+# Tracks {username: timestamp} of last observed traffic — used by /online-users.
+_user_last_seen: dict[str, float] = {}
+
+
 @router.get("/live")
 async def legacy_live(admin: User = Depends(get_current_admin_cookie)):
     """Realtime traffic counters keyed by username (from xray stats, reset each call)."""
-    return _query_xray_stats(reset=True)
+    stats = _query_xray_stats(reset=True)
+    now = time.time()
+    for username, s in stats.items():
+        if (s.get("up") or 0) + (s.get("down") or 0) > 0:
+            _user_last_seen[username] = now
+    return stats
 
 
 @router.get("/server-info")
@@ -1762,35 +1771,39 @@ async def legacy_online_users(
     admin: User = Depends(get_current_admin_cookie),
     db: AsyncSession = Depends(get_async_db),
 ):
-    """Return users who have had traffic in the last polling window."""
-    # Get current cumulative stats (no reset so we don't disturb live counters)
-    stats = _query_xray_stats(reset=False)
-    if not stats:
-        return []
+    """Return users who have had traffic in the last 90 seconds."""
+    cutoff = time.time() - 90
+    # Seed last-seen from cumulative xray stats on first call (before any /live poll)
+    if not _user_last_seen:
+        for username, s in _query_xray_stats(reset=False).items():
+            if (s.get("up") or 0) + (s.get("down") or 0) > 0:
+                _user_last_seen[username] = time.time()
 
-    # Fetch matching users from DB
-    active_names = list(stats.keys())
-    if not active_names:
+    recently_active = [u for u, ts in _user_last_seen.items() if ts >= cutoff]
+    if not recently_active:
         return []
 
     result = await db.execute(
-        select(VpnUser).where(VpnUser.name.in_(active_names), VpnUser.active == 1)
+        select(VpnUser).where(VpnUser.name.in_(recently_active), VpnUser.active == 1)
     )
     users = result.scalars().all()
+
+    # Get latest cumulative stats for display (no reset)
+    stats = _query_xray_stats(reset=False)
 
     online = []
     for u in users:
         s = stats.get(u.name, {})
-        if (s.get("up") or 0) + (s.get("down") or 0) > 0:
-            online.append({
-                "name": u.name,
-                "uuid": u.uuid,
-                "upload": s.get("up", 0),
-                "download": s.get("down", 0),
-                "total": (s.get("up") or 0) + (s.get("down") or 0),
-            })
+        online.append({
+            "name": u.name,
+            "uuid": u.uuid,
+            "upload": s.get("up", 0),
+            "download": s.get("down", 0),
+            "total": (s.get("up") or 0) + (s.get("down") or 0),
+            "last_seen": _user_last_seen.get(u.name, 0),
+        })
 
-    online.sort(key=lambda x: x["total"], reverse=True)
+    online.sort(key=lambda x: x["last_seen"], reverse=True)
     return online
 
 
