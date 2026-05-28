@@ -204,8 +204,13 @@ def _request_config_host(request: Request) -> str:
         host = _strip_host_port(raw)
         if not _is_placeholder_host(host):
             return host
+    # settings.host is the bind address (0.0.0.0 on most installs) — it is
+    # a placeholder and must not appear in client configs. Fall through to
+    # VPN_SERVER_IP which is the actual public IP.
     if not _is_placeholder_host(settings.host):
         return settings.host
+    if settings.vpn_server_ip and not _is_placeholder_host(settings.vpn_server_ip):
+        return settings.vpn_server_ip
     return ""
 
 
@@ -271,7 +276,16 @@ def _build_share_links(u: VpnUser, server_ip: Optional[str] = None) -> Dict[str,
     except Exception:
         return {}
 
-    server_ip = server_ip or _settings_state.get("server_ip") or settings.host
+    # Prefer explicit server IP sources over the binding address (0.0.0.0).
+    # settings.vpn_server_ip maps to VPN_SERVER_IP in .env — the actual public
+    # IP of this server. settings.host is the bind address and is a placeholder
+    # when set to 0.0.0.0, so it must not end up in client configs.
+    server_ip = (
+        server_ip
+        or _settings_state.get("server_ip")
+        or settings.vpn_server_ip
+        or settings.host
+    )
     if _is_placeholder_host(server_ip):
         server_ip = ""
     # ── Emergency Relay: override ALL addresses when activated ──
