@@ -359,7 +359,13 @@ async def bootstrap_initial_admin(db: AsyncSession) -> None:
         return
     err = validate_password_strength(pw)
     if err:
-        logger.error("bootstrap: refusing to seed admin — weak password: %s", err)
+        logger.error(
+            "bootstrap: ADMIN_BOOTSTRAP_PASSWORD fails strength check (%s). "
+            "The password shown by the installer will NOT work for login. "
+            "Fix: edit .env, set a valid ADMIN_BOOTSTRAP_PASSWORD (12+ chars, "
+            "upper+lower+digit+symbol), then restart the service.",
+            err,
+        )
         return
     admin = Admin(
         username=user,

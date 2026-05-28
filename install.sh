@@ -290,9 +290,22 @@ setup_env() {
     bootstrap_pw=$(_env_get ADMIN_BOOTSTRAP_PASSWORD)
     if [[ -z "$bootstrap_pw" ]]; then
         bootstrap_pw=$(python3 -c "
-import secrets, string
-alphabet = string.ascii_letters + string.digits + '!@#%^*-_=+'
-print(''.join(secrets.choice(alphabet) for _ in range(20)))
+import secrets, string, re
+
+# Guarantee every character class required by validate_password_strength:
+#   1+ uppercase, 1+ lowercase, 1+ digit, 1+ symbol, total >= 16
+upper   = string.ascii_uppercase
+lower   = string.ascii_lowercase
+digits  = string.digits
+symbols = '!@#%^*-_=+'
+alphabet = upper + lower + digits + symbols
+
+while True:
+    pw = ''.join(secrets.choice(alphabet) for _ in range(20))
+    if (re.search(r'[A-Z]', pw) and re.search(r'[a-z]', pw) and
+            re.search(r'[0-9]', pw) and re.search(r'[^A-Za-z0-9]', pw)):
+        print(pw)
+        break
 ")
         _env_set ADMIN_BOOTSTRAP_PASSWORD "$bootstrap_pw"
     fi
