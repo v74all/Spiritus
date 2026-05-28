@@ -27,6 +27,7 @@ from enum import Enum
 import httpx
 from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
+from .database import safe_refresh
 
 from .models import Payment, PaymentGateway, PaymentStatus, VpnUser, Reseller
 from .config import settings
@@ -393,7 +394,7 @@ class PaymentManager:
         )
         db.add(payment)
         await db.commit()
-        await db.refresh(payment)
+        await safe_refresh(db, payment)
 
         # Create gateway payment
         if gateway == "zarinpal":

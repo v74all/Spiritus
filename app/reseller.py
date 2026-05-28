@@ -24,6 +24,7 @@ from .timeutil import utcnow as _utcnow
 
 from sqlalchemy import select, and_, func
 from sqlalchemy.ext.asyncio import AsyncSession
+from .database import safe_refresh
 from passlib.context import CryptContext
 
 from .models import (
@@ -72,7 +73,7 @@ class ResellerManager:
         )
         db.add(reseller)
         await db.commit()
-        await db.refresh(reseller)
+        await safe_refresh(db, reseller)
 
         return {
             "success": True,
@@ -208,7 +209,7 @@ class ResellerManager:
         )
         db.add(user)
         await db.commit()
-        await db.refresh(user)
+        await safe_refresh(db, user)
 
         return {
             "success": True,

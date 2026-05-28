@@ -45,6 +45,22 @@ AsyncSessionLocal = async_sessionmaker(
     autoflush=False
 )
 
+async def safe_refresh(db: AsyncSession, instance) -> None:
+    """Refresh an ORM instance, ignoring failures.
+
+    With expire_on_commit=False the instance's attributes survive a commit
+    intact, so refresh is only needed to pick up server-generated values
+    (e.g. auto-incremented IDs). asyncpg uses RETURNING so those are
+    already set after INSERT. A failed refresh is therefore non-fatal —
+    we log a warning and continue rather than surfacing an
+    InvalidRequestError / DetachedInstanceError to the caller.
+    """
+    try:
+        await db.refresh(instance)
+    except Exception as exc:
+        logger.warning("safe_refresh: could not refresh %r: %s", instance, exc)
+
+
 async def get_async_db() -> AsyncGenerator[AsyncSession, None]:
     """Dependency to get async database session."""
     async with AsyncSessionLocal() as session:

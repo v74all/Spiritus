@@ -41,7 +41,7 @@ from ..auth import (
     verify_password,
 )
 from ..config import settings
-from ..database import get_async_db
+from ..database import get_async_db, safe_refresh
 from ..models import Admin, Agent, Setting, VpnUser
 from ..security import fail2ban_manager
 
@@ -1139,7 +1139,7 @@ async def legacy_create_user(
     db.add(db_user)
     try:
         await db.commit()
-        await db.refresh(db_user)
+        await safe_refresh(db, db_user)
     except Exception as exc:
         await db.rollback()
         return {"ok": False, "error": str(exc)}
@@ -1357,7 +1357,7 @@ async def legacy_bulk_users(
     try:
         await db.commit()
         for u in created_users:
-            await db.refresh(u)
+            await safe_refresh(db, u)
     except Exception as exc:
         await db.rollback()
         return {"ok": False, "error": str(exc)}
@@ -2918,7 +2918,7 @@ async def legacy_create_agent(
         )
         db.add(agent)
         await db.commit()
-        await db.refresh(agent)
+        await safe_refresh(db, agent)
     except Exception as exc:
         await db.rollback()
         return {"ok": False, "error": str(exc)}
@@ -3136,7 +3136,7 @@ async def legacy_agent_create_user(
     db.add(db_user)
     try:
         await db.commit()
-        await db.refresh(db_user)
+        await safe_refresh(db, db_user)
     except Exception as exc:
         await db.rollback()
         return {"ok": False, "error": str(exc)}
@@ -3182,7 +3182,7 @@ async def legacy_agent_bulk_users(
     try:
         await db.commit()
         for u in created_users:
-            await db.refresh(u)
+            await safe_refresh(db, u)
     except Exception as exc:
         await db.rollback()
         return {"ok": False, "error": str(exc)}

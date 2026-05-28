@@ -21,7 +21,7 @@ import logging
 
 from ..auth import get_current_admin, User
 from ..config import settings
-from ..database import get_async_db
+from ..database import get_async_db, safe_refresh
 from ..models import VpnUser, Agent
 from ..orchestrator import orchestrator
 from ..protocol_engine import ClientConfigGenerator, PROTOCOLS
@@ -144,7 +144,7 @@ async def create_user(
     )
     db.add(db_user)
     await db.commit()
-    await db.refresh(db_user)
+    await safe_refresh(db, db_user)
 
     # Add user to backend agent if assigned
     if db_user.agent_id:
@@ -215,7 +215,7 @@ async def update_user(
         db_user.note = user.note
 
     await db.commit()
-    await db.refresh(db_user)
+    await safe_refresh(db, db_user)
     return _user_to_response(db_user)
 
 @router.delete("/{user_id}", response_model=MessageResponse)

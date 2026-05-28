@@ -16,7 +16,7 @@ from ..timeutil import utcnow as _utcnow
 import logging
 
 from ..auth import get_current_admin, User
-from ..database import get_async_db
+from ..database import get_async_db, safe_refresh
 from ..models import Agent, AgentBackend, AgentStatus, ProtocolConfig
 from ..orchestrator import orchestrator
 
@@ -141,7 +141,7 @@ async def create_agent(
     )
     db.add(agent)
     await db.commit()
-    await db.refresh(agent)
+    await safe_refresh(db, agent)
 
     return AgentResponse(
         id=agent.id,
@@ -217,7 +217,7 @@ async def update_agent(
         agent.ech_config = data.ech_config
 
     await db.commit()
-    await db.refresh(agent)
+    await safe_refresh(db, agent)
 
     return AgentResponse(
         id=agent.id,
