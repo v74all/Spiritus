@@ -2441,15 +2441,16 @@ async function doAddAgent() {
   if (!name) { toast('Enter agent name','error'); return; }
   if (!pass || pass.length < 6) { toast('Password must be at least 6 chars','error'); return; }
   if (!quota || quota <= 0) { toast('Enter valid quota','error'); return; }
-  const r = await fetch(API+'/agents', {method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({name, password: pass, traffic_quota_gb: quota, speed_limit_default: speed})});
-  const d = await r.json();
-  if (d.ok) {
-    toast('Agent '+name+' created');
-    document.getElementById('agent-add-name').value = '';
-    document.getElementById('agent-add-pass').value = '';
-    fetchAgents();
-  } else { toast(d.error||'Error','error'); }
+  try {
+    const d = await apiCall(API+'/agents', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({name, password: pass, traffic_quota_gb: quota, speed_limit_default: speed})});
+    if (d.ok) {
+      toast('Agent '+name+' created');
+      document.getElementById('agent-add-name').value = '';
+      document.getElementById('agent-add-pass').value = '';
+      fetchAgents();
+    } else toast(d.error||'Error','error');
+  } catch(e) {}
 }
 
 function showEditAgent(id, name, quota) {
@@ -2463,11 +2464,12 @@ async function doEditAgentQuota() {
   if (!_agentEditId) return;
   const quota = parseFloat(document.getElementById('agent-edit-quota').value);
   if (!quota || quota <= 0) { toast('Enter valid quota','error'); return; }
-  const r = await fetch(API+'/agents/'+_agentEditId+'/edit', {method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({traffic_quota_gb: quota})});
-  const d = await r.json();
-  if (d.ok) { toast('Quota updated'); closeModal('agent-edit-modal'); fetchAgents(); }
-  else { toast(d.error||'Error','error'); }
+  try {
+    const d = await apiCall(API+'/agents/'+_agentEditId+'/edit', {method:'POST',
+      headers:{'Content-Type':'application/json'}, body: JSON.stringify({traffic_quota_gb: quota})});
+    if (d.ok) { toast('Quota updated'); closeModal('agent-edit-modal'); fetchAgents(); }
+    else toast(d.error||'Error','error');
+  } catch(e) {}
 }
 
 function showResetAgentPw(id, name) {
@@ -2481,28 +2483,32 @@ async function doResetAgentPw() {
   if (!_agentPwId) return;
   const pw = document.getElementById('agent-pw-new').value;
   if (!pw || pw.length < 6) { toast('Password must be at least 6 chars','error'); return; }
-  const r = await fetch(API+'/agents/'+_agentPwId+'/reset-password', {method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({password: pw})});
-  const d = await r.json();
-  if (d.ok) { toast('Password reset'); closeModal('agent-pw-modal'); }
-  else { toast(d.error||'Error','error'); }
+  try {
+    const d = await apiCall(API+'/agents/'+_agentPwId+'/reset-password', {method:'POST',
+      headers:{'Content-Type':'application/json'}, body: JSON.stringify({password: pw})});
+    if (d.ok) { toast('Password reset'); closeModal('agent-pw-modal'); }
+    else toast(d.error||'Error','error');
+  } catch(e) {}
 }
 
 async function toggleAgent(id, newState) {
-  const r = await fetch(API+'/agents/'+id+'/edit', {method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({active: !!newState})});
-  const d = await r.json();
-  if (d.ok) { toast(newState?'Agent enabled':'Agent disabled'); fetchAgents(); }
-  else { toast(d.error||'Error','error'); }
+  try {
+    const d = await apiCall(API+'/agents/'+id+'/edit', {method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({active: !!newState})});
+    if (d.ok) { toast(newState?'Agent enabled':'Agent disabled'); fetchAgents(); }
+    else toast(d.error||'Error','error');
+  } catch(e) {}
 }
 
 async function deleteAgent(id, name) {
-  if (!confirm('Delete agent "'+name+'"?\\n\\nTheir users will be transferred to admin.')) return;
-  const r = await fetch(API+'/agents/'+id, {method:'DELETE', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({delete_users: false})});
-  const d = await r.json();
-  if (d.ok) { toast('Agent deleted'); fetchAgents(); }
-  else { toast(d.error||'Error','error'); }
+  if (!confirm('Delete agent "'+name+'"?\n\nTheir users will be transferred to admin.')) return;
+  try {
+    const d = await apiCall(API+'/agents/'+id, {method:'DELETE',
+      headers:{'Content-Type':'application/json'}, body: JSON.stringify({delete_users: false})});
+    if (d.ok) { toast('Agent deleted'); fetchAgents(); }
+    else toast(d.error||'Error','error');
+  } catch(e) {}
 }
 
 /* ── System Monitor ── */

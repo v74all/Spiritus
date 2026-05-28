@@ -2844,7 +2844,9 @@ async def _get_current_agent_cookie(
         raise HTTPException(status_code=401, detail="Not authenticated")
 
     try:
-        payload = jwt.decode(token, settings.secret_key, algorithms=["HS256"])
+        # Tokens are signed with jwt_secret_key (same as all other JWTs in the app).
+        # Using secret_key here was a bug — it's the app secret, not the JWT key.
+        payload = jwt.decode(token, settings.jwt_secret_key, algorithms=["HS256"])
     except JWTError:
         raise HTTPException(status_code=401, detail="Could not validate credentials")
 
