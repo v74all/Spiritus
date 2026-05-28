@@ -1971,6 +1971,27 @@ def _generate_xray_server_config() -> dict:
 
     cert_file = settings.tls_cert_file
     key_file = settings.tls_key_file
+
+    # Xray runs as 'nobody' by default. If the cert/key files exist but are not
+    # world-readable, xray crashes with "permission denied". We copy them to the
+    # xray config dir (which is already accessible to xray) and use those copies.
+    _XRAY_CERT = "/usr/local/etc/xray/server.crt"
+    _XRAY_KEY  = "/usr/local/etc/xray/server.key"
+
+    def _ensure_xray_readable(src_cert: str, src_key: str) -> tuple:
+        """Return (cert_path, key_path) that xray can read, copying if needed."""
+        import shutil
+        try:
+            os.makedirs("/usr/local/etc/xray", exist_ok=True)
+            for src, dst in [(src_cert, _XRAY_CERT), (src_key, _XRAY_KEY)]:
+                if os.path.exists(src):
+                    shutil.copy2(src, dst)
+                    os.chmod(dst, 0o644)
+            return _XRAY_CERT, _XRAY_KEY
+        except Exception as exc:
+            logger.warning("Could not copy TLS certs to xray dir: %s", exc)
+            return src_cert, src_key
+
     # If the cert files are missing, ALL TLS-bearing inbounds (VMess-WS, VLESS-
     # WS, Trojan, gRPC, HTTPUpgrade, SS2022, CDN-WS, WS-Plain-Front, ...) would
     # crash-loop Xray with "open: no such file or directory". We detect that
@@ -1978,7 +1999,9 @@ def _generate_xray_server_config() -> dict:
     # (VLESS-Reality / Vision / XHTTP) don't need cert files and stay enabled.
     _tls_ready = bool(cert_file) and bool(key_file) \
         and os.path.exists(cert_file) and os.path.exists(key_file)
-    if not _tls_ready:
+    if _tls_ready:
+        cert_file, key_file = _ensure_xray_readable(cert_file, key_file)
+    else:
         logger.warning(
             "Xray sync: TLS cert/key missing (cert=%s, key=%s). "
             "Skipping TLS-bearing inbounds; only REALITY inbounds will start.",

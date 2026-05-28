@@ -145,6 +145,21 @@ async def lifespan(app: FastAPI):
                 _label, _p, _label.upper(),
             )
 
+    # Xray config bootstrap: load settings from DB (or defaults) and write a
+    # fresh xray config on every startup. Without this, a freshly-installed
+    # panel leaves xray with an empty {} config until the operator opens the
+    # Settings modal and clicks Save — meaning all user configs are broken out
+    # of the box. This runs after DB init so the settings row is available.
+    try:
+        from .api.compat import _load_legacy_settings, _schedule_xray_sync
+        from .database import AsyncSessionLocal
+        async with AsyncSessionLocal() as _db:
+            await _load_legacy_settings(_db)
+        _schedule_xray_sync()
+        logger.info("Xray config bootstrap: settings loaded, sync scheduled")
+    except Exception as _xray_exc:
+        logger.warning("Xray config bootstrap failed (non-fatal): %s", _xray_exc)
+
     yield
     
     # Shutdown
