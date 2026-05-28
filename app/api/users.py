@@ -20,6 +20,7 @@ import uuid as uuid_lib
 import logging
 
 from ..auth import get_current_admin, User
+from ..config import settings
 from ..database import get_async_db
 from ..models import VpnUser, Agent
 from ..orchestrator import orchestrator
@@ -274,13 +275,16 @@ async def get_user_config(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Get server address from agent
+    # Resolve server address: agent > VPN_SERVER_IP env > bind address
     server_address = ""
     if user.agent_id:
         agent_result = await db.execute(select(Agent).where(Agent.id == user.agent_id))
         agent = agent_result.scalar_one_or_none()
         if agent:
             server_address = agent.address
+    if not server_address:
+        ip = settings.vpn_server_ip or settings.host
+        server_address = "" if ip in ("0.0.0.0", "::", "") else ip
 
     share_url = ""
     if protocol.startswith("vless"):
