@@ -175,7 +175,7 @@ async def _decode_token_to_user(token: str, db: AsyncSession) -> User:
             token,
             settings.jwt_secret_key,
             algorithms=[_JWT_ALG],
-            options={"require": ["exp", "iat", "sub"]},
+            options={"require": ["exp", "iat", "sub", "nbf"]},
         )
         username: Optional[str] = payload.get("sub")
         is_admin: bool = bool(payload.get("is_admin", False))

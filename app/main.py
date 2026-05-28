@@ -17,6 +17,7 @@ import base64
 import json
 import logging
 import os
+import re
 import subprocess
 
 from .auth import User, get_current_admin_cookie
@@ -665,7 +666,9 @@ async def subscription_api(
         content=encoded,
         media_type="text/plain; charset=utf-8",
         headers={
-            "Content-Disposition": f"inline; filename={user.name}.txt",
+            "Content-Disposition": "inline; filename={}.txt".format(
+                re.sub(r"[^\w\-.]", "_", user.name)
+            ),
             "Profile-Update-Interval": "6",
             "Subscription-Userinfo": (
                 f"upload=0; download={int(user.traffic_used or 0)}; "
@@ -1145,7 +1148,9 @@ async def subscription_json(
     panel_settings = await _load_legacy_settings(db)
     return JSONResponse(
         content=_subscription_json_config(user, _public_server_ip(request), panel_settings),
-        headers={"Content-Disposition": f"inline; filename={user.name}.json"},
+        headers={"Content-Disposition": "inline; filename={}.json".format(
+            re.sub(r"[^\w\-.]", "_", user.name)
+        )},
     )
 
 def _generate_xray_server_config(panel_settings: dict) -> dict:

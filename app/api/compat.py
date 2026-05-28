@@ -954,9 +954,11 @@ async def _save_legacy_settings(db: AsyncSession, data: Dict[str, Any]) -> None:
 
     settings_path = os.path.join(os.getcwd(), _LEGACY_SETTINGS_FILE)
     try:
-        with open(settings_path, "w") as f:
+        tmp_path = settings_path + ".tmp"
+        with open(tmp_path, "w") as f:
             json.dump(_settings_state, f, indent=2)
-        os.chmod(settings_path, 0o600)
+        os.chmod(tmp_path, 0o600)
+        os.replace(tmp_path, settings_path)
     except Exception as exc:
         logger.warning(f"Failed to mirror legacy settings file: {exc}")
 
@@ -1375,7 +1377,8 @@ async def legacy_bulk_delete(
     if body.names:
         query = query.where(VpnUser.name.in_(body.names))
     elif body.prefix:
-        query = query.where(VpnUser.name.like(f"{body.prefix}%"))
+        safe_prefix = body.prefix.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
+        query = query.where(VpnUser.name.like(f"{safe_prefix}%", escape="\\"))
     else:
         return {"ok": False, "error": "Provide names or prefix"}
 
@@ -1472,8 +1475,9 @@ async def legacy_group_users(
     db: AsyncSession = Depends(get_async_db),
 ):
     await _load_legacy_settings(db)
+    safe_group_id = group_id.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
     result = await db.execute(
-        select(VpnUser).where(VpnUser.name.like(f"{group_id}%"))
+        select(VpnUser).where(VpnUser.name.like(f"{safe_group_id}%", escape="\\"))
     )
     server_ip = _request_config_host(request)
     users = [_user_to_legacy(u, server_ip=server_ip) for u in result.scalars().all()]
@@ -3090,7 +3094,8 @@ async def legacy_agent_bulk_delete(
     if body.names:
         query = query.where(VpnUser.name.in_(body.names))
     elif body.prefix:
-        query = query.where(VpnUser.name.like(f"{body.prefix}%"))
+        safe_prefix = body.prefix.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
+        query = query.where(VpnUser.name.like(f"{safe_prefix}%", escape="\\"))
     else:
         return {"ok": False, "error": "Provide names or prefix"}
     result = await db.execute(query)

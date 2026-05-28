@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 from prometheus_client import Counter, Histogram, Gauge
 import time
 import redis.asyncio as redis
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 
@@ -201,7 +202,7 @@ async def readiness_check(db: AsyncSession = Depends(get_db)):
     """Readiness check (k8s)"""
     try:
         # Test database
-        await db.execute("SELECT 1")
+        await db.execute(text("SELECT 1"))
         
         # Test redis
         await redis_client.ping()

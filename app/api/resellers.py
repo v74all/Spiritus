@@ -8,15 +8,18 @@ Endpoints:
 - Self-service portal (user-facing)
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, Request, status, Query
 from pydantic import BaseModel, Field
 from typing import Optional, List
 import logging
 
 from ..auth import get_current_admin, get_current_user, User, create_access_token
+from ..config import settings
 from ..database import get_async_db
 from ..models import Reseller
 from ..reseller import reseller_manager, self_service_portal
+from ..security import fail2ban_manager
+from ..redis_client import get_redis
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -154,18 +157,60 @@ async def toggle_reseller(
 
 # ── Reseller Auth ────────────────────────────────────────
 
+async def _reseller_ip_locked(ip: str) -> bool:
+    try:
+        redis = await get_redis()
+        val = await redis.get(f"reseller_login:{ip}")
+        return bool(val and int(val) >= settings.max_login_attempts)
+    except Exception:
+        return False
+
+
+async def _record_reseller_failure(ip: str) -> None:
+    try:
+        redis = await get_redis()
+        key = f"reseller_login:{ip}"
+        count = await redis.incr(key)
+        if count == 1:
+            await redis.expire(key, settings.lockout_seconds)
+    except Exception:
+        pass
+
+
+async def _clear_reseller_attempts(ip: str) -> None:
+    try:
+        redis = await get_redis()
+        await redis.delete(f"reseller_login:{ip}")
+    except Exception:
+        pass
+
+
 @router.post("/login")
 async def reseller_login(
     data: ResellerLogin,
+    req: Request,
     db: AsyncSession = Depends(get_async_db),
 ):
     """Reseller login."""
+    client_ip = req.client.host if req.client else "unknown"
+
+    if await fail2ban_manager.is_banned(client_ip, "panel", db):
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="IP banned")
+
+    if await _reseller_ip_locked(client_ip):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Too many failed attempts. Try again in {settings.lockout_seconds}s",
+        )
+
     reseller = await reseller_manager.authenticate_reseller(db, data.username, data.password)
     if not reseller:
+        await _record_reseller_failure(client_ip)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials"
         )
+    await _clear_reseller_attempts(client_ip)
 
     token = create_access_token(
         data={"sub": f"reseller:{reseller.username}", "is_admin": False, "reseller_id": reseller.id}

@@ -31,28 +31,111 @@
       <span class="brand-logo">SPIRITUS</span>
       <span class="brand-text">Digital Bastion</span>
     </div>
-    <div class="header-actions">
-      <button class="btn btn-primary btn-sm header-primary" onclick="showModal('add-modal')">Add User</button>
-      <button class="btn btn-outline btn-sm" onclick="showModal('bulk-modal')">Bulk</button>
-      <button class="btn btn-outline btn-sm" onclick="forceSync()">Sync</button>
-      <button class="btn btn-outline btn-sm header-sep" id="btn-groups" onclick="switchMainView('groups')">Groups</button>
-      <button class="btn btn-outline btn-sm header-sep" id="btn-users" onclick="switchMainView('users')" style="display:none">Users</button>
-      <button class="btn btn-outline btn-sm" onclick="showModal('agents-modal')">Agents</button>
-      <button class="btn btn-outline btn-sm header-sep" onclick="showModal('sysmon-modal')" title="System Monitor">Monitor</button>
-      <button class="btn btn-outline btn-sm" onclick="showModal('online-modal')" title="Online Users & IPs">Online</button>
-      <button class="btn btn-outline btn-sm" onclick="showModal('search-modal')" title="Search Users">Search</button>
-      <button class="btn btn-outline btn-sm" onclick="showModal('report-modal')" title="Statistics Report">Report</button>
-      <button class="btn btn-outline btn-sm" onclick="showModal('analytics-modal')" title="Traffic Analytics">Analytics</button>
-      <button class="btn btn-outline btn-sm header-sep" onclick="showModal('backup-modal')" title="Backup & Restore">Backup</button>
-      <button class="btn btn-outline btn-sm" onclick="doExportCSV()" title="Export CSV">CSV</button>
-      <button class="btn btn-outline btn-sm" onclick="doExportJSON()" title="Export JSON">JSON</button>
-      <button class="btn btn-orange btn-sm header-sep" onclick="showModal('aggressive-modal')" title="Network Resilience">Resilience</button>
-      <button class="btn btn-danger btn-sm" onclick="showModal('fightback-modal')" title="Counter Measures">Counter</button>
-      <button class="btn btn-ghost btn-sm header-sep dir-toggle" onclick="toggleDirection()" title="Toggle RTL/LTR">{{ 'RTL' if dir == 'ltr' else 'LTR' }}</button>
-      <button class="btn btn-ghost btn-sm" onclick="showModal('settings-modal')">Settings</button>
-      <button class="btn btn-ghost btn-sm" onclick="doLogout()">Logout</button>
-    </div>
+    <button class="nav-toggle" id="nav-toggle" onclick="toggleDrawer()" aria-label="Open navigation">
+      <span class="nav-toggle-line"></span>
+      <span class="nav-toggle-line"></span>
+      <span class="nav-toggle-line"></span>
+    </button>
   </header>
+
+  <!-- ── Nav Overlay ── -->
+  <div id="nav-overlay" class="nav-overlay" onclick="closeDrawer()"></div>
+
+  <!-- ── Nav Drawer ── -->
+  <nav id="nav-drawer" class="nav-drawer" aria-label="Navigation">
+    <div class="nav-drawer-head">
+      <span class="nav-drawer-title">Navigation</span>
+      <button class="nav-close" onclick="closeDrawer()" aria-label="Close navigation">&#x2715;</button>
+    </div>
+    <div class="nav-drawer-body">
+
+      <div class="nav-section">
+        <div class="nav-section-label">Quick Actions</div>
+        <button class="nav-btn nav-btn-primary" onclick="showModal('add-modal');closeDrawer()">
+          <span class="nav-btn-icon">+</span>Add User
+        </button>
+        <button class="nav-btn" onclick="showModal('bulk-modal');closeDrawer()">
+          <span class="nav-btn-icon">&#x229E;</span>Bulk Create
+        </button>
+        <button class="nav-btn" onclick="forceSync();closeDrawer()">
+          <span class="nav-btn-icon">&#x21BA;</span>Sync
+        </button>
+      </div>
+
+      <div class="nav-section">
+        <div class="nav-section-label">Views</div>
+        <button class="nav-btn" id="btn-groups" onclick="switchMainView('groups');closeDrawer()">
+          <span class="nav-btn-icon">&#x25AB;</span>Groups
+        </button>
+        <button class="nav-btn" id="btn-users" onclick="switchMainView('users');closeDrawer()" style="display:none">
+          <span class="nav-btn-icon">&#x25AA;</span>Users
+        </button>
+        <button class="nav-btn" onclick="showModal('agents-modal');closeDrawer()">
+          <span class="nav-btn-icon">&#x25C8;</span>Agents
+        </button>
+      </div>
+
+      <div class="nav-section">
+        <div class="nav-section-label">Monitor</div>
+        <button class="nav-btn" onclick="showModal('sysmon-modal');closeDrawer()">
+          <span class="nav-btn-icon">&#x25C9;</span>System Monitor
+        </button>
+        <button class="nav-btn" onclick="showModal('online-modal');closeDrawer()">
+          <span class="nav-btn-icon">&#x25CE;</span>Online Users
+        </button>
+      </div>
+
+      <div class="nav-section">
+        <div class="nav-section-label">Analytics</div>
+        <button class="nav-btn" onclick="showModal('search-modal');closeDrawer()">
+          <span class="nav-btn-icon">&#x2315;</span>Search
+        </button>
+        <button class="nav-btn" onclick="showModal('report-modal');closeDrawer()">
+          <span class="nav-btn-icon">&#x2261;</span>Report
+        </button>
+        <button class="nav-btn" onclick="showModal('analytics-modal');closeDrawer()">
+          <span class="nav-btn-icon">&#x25B2;</span>Analytics
+        </button>
+      </div>
+
+      <div class="nav-section">
+        <div class="nav-section-label">Data</div>
+        <button class="nav-btn" onclick="showModal('backup-modal');closeDrawer()">
+          <span class="nav-btn-icon">&#x229D;</span>Backup
+        </button>
+        <button class="nav-btn" onclick="doExportCSV();closeDrawer()">
+          <span class="nav-btn-icon">&#x229F;</span>Export CSV
+        </button>
+        <button class="nav-btn" onclick="doExportJSON();closeDrawer()">
+          <span class="nav-btn-icon">{ }</span>Export JSON
+        </button>
+      </div>
+
+      <div class="nav-section">
+        <div class="nav-section-label">Security</div>
+        <button class="nav-btn nav-btn-orange" onclick="showModal('aggressive-modal');closeDrawer()">
+          <span class="nav-btn-icon">&#x26A1;</span>Resilience
+        </button>
+        <button class="nav-btn nav-btn-danger" onclick="showModal('fightback-modal');closeDrawer()">
+          <span class="nav-btn-icon">&#x2694;</span>Counter
+        </button>
+      </div>
+
+      <div class="nav-section">
+        <div class="nav-section-label">System</div>
+        <button class="nav-btn dir-toggle" onclick="toggleDirection();closeDrawer()">
+          <span class="nav-btn-icon">&#x21C4;</span>Toggle {{ 'RTL' if dir == 'ltr' else 'LTR' }}
+        </button>
+        <button class="nav-btn" onclick="showModal('settings-modal');closeDrawer()">
+          <span class="nav-btn-icon">&#x2699;</span>Settings
+        </button>
+        <button class="nav-btn nav-btn-logout" onclick="doLogout()">
+          <span class="nav-btn-icon">&#x23FB;</span>Logout
+        </button>
+      </div>
+
+    </div>
+  </nav>
 
   <!-- System Monitor Bar -->
   <div class="sysmon-bar" id="sysmon-bar">
@@ -1682,6 +1765,7 @@
     </div>
   </div>
 </div>
+</div>
 
 <!-- ── Change Password Modal ── -->
 <div id="pw-modal" class="modal-overlay" onclick="if(event.target===this)closeModal(this.id)">
@@ -1853,6 +1937,27 @@ window.__CSP_NONCE__ = "{{ csp_nonce }}";
 </script>
 <script src="{{ url_for('static', filename='js/qrcode.js') }}?v={{ asset_v }}"></script>
 <script src="{{ url_for('static', filename='js/panel.js') }}?v={{ asset_v }}"></script>
+<script>
+function toggleDrawer() {
+  var d = document.getElementById('nav-drawer');
+  var o = document.getElementById('nav-overlay');
+  var t = document.getElementById('nav-toggle');
+  var isOpen = d.classList.contains('open');
+  d.classList.toggle('open');
+  o.classList.toggle('open');
+  t.classList.toggle('open');
+  document.body.style.overflow = isOpen ? '' : 'hidden';
+}
+function closeDrawer() {
+  document.getElementById('nav-drawer').classList.remove('open');
+  document.getElementById('nav-overlay').classList.remove('open');
+  document.getElementById('nav-toggle').classList.remove('open');
+  document.body.style.overflow = '';
+}
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeDrawer();
+});
+</script>
 
 <!-- Search Modal -->
 <div class="modal-overlay" id="search-modal">
