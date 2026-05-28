@@ -1502,10 +1502,44 @@ async def legacy_group_users(
 #  Live, server-info, sync, system-monitor, online-users
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _query_xray_stats(reset: bool = False) -> dict:
+    """Query xray stats API and return {username: {up, down}} for all users."""
+    try:
+        xray_api = f"127.0.0.1:{getattr(settings, 'api_port', 10085)}"
+        args = [settings.xray_bin_path, "api", "statsquery",
+                f"--server={xray_api}",
+                "--pattern", "user>>>"]
+        if reset:
+            args.append("--reset")
+        result = subprocess.run(args, capture_output=True, text=True, timeout=5)
+        if result.returncode != 0:
+            return {}
+        data = json.loads(result.stdout)
+        stats: dict = {}
+        for stat in data.get("stat", []):
+            name = stat.get("name", "")
+            value = int(stat.get("value") or 0)
+            # name format: user>>>username>>>traffic>>>uplink|downlink
+            parts = name.split(">>>")
+            if len(parts) == 4 and parts[0] == "user" and parts[2] == "traffic":
+                user = parts[1]
+                direction = parts[3]
+                if user not in stats:
+                    stats[user] = {"up": 0, "down": 0}
+                if direction == "uplink":
+                    stats[user]["up"] = value
+                elif direction == "downlink":
+                    stats[user]["down"] = value
+        return stats
+    except Exception as e:
+        logger.warning("xray stats query failed: %s", e)
+        return {}
+
+
 @router.get("/live")
 async def legacy_live(admin: User = Depends(get_current_admin_cookie)):
-    """Realtime traffic counters keyed by username."""
-    return {}
+    """Realtime traffic counters keyed by username (from xray stats, reset each call)."""
+    return _query_xray_stats(reset=True)
 
 
 @router.get("/server-info")
@@ -1724,8 +1758,40 @@ async def legacy_system_monitor(admin: User = Depends(get_current_admin_cookie))
 
 
 @router.get("/online-users")
-async def legacy_online_users(admin: User = Depends(get_current_admin_cookie)):
-    return []
+async def legacy_online_users(
+    admin: User = Depends(get_current_admin_cookie),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """Return users who have had traffic in the last polling window."""
+    # Get current cumulative stats (no reset so we don't disturb live counters)
+    stats = _query_xray_stats(reset=False)
+    if not stats:
+        return []
+
+    # Fetch matching users from DB
+    active_names = list(stats.keys())
+    if not active_names:
+        return []
+
+    result = await db.execute(
+        select(VpnUser).where(VpnUser.name.in_(active_names), VpnUser.active == 1)
+    )
+    users = result.scalars().all()
+
+    online = []
+    for u in users:
+        s = stats.get(u.name, {})
+        if (s.get("up") or 0) + (s.get("down") or 0) > 0:
+            online.append({
+                "name": u.name,
+                "uuid": u.uuid,
+                "upload": s.get("up", 0),
+                "download": s.get("down", 0),
+                "total": (s.get("up") or 0) + (s.get("down") or 0),
+            })
+
+    online.sort(key=lambda x: x["total"], reverse=True)
+    return online
 
 
 @router.get("/traffic-history")
