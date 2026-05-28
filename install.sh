@@ -422,6 +422,16 @@ ${PANEL_USER} ALL=(root) NOPASSWD: /bin/systemctl restart xray, /bin/systemctl r
 EOF
     chmod 440 /etc/sudoers.d/${PANEL_USER}
     print_success "Service user '${PANEL_USER}' created with minimal sudo"
+
+    # Grant the panel user write access to the xray config directory so it
+    # can push updated configs without running as root.
+    mkdir -p /usr/local/etc/xray
+    chown -R root:"${PANEL_USER}" /usr/local/etc/xray
+    chmod -R 775 /usr/local/etc/xray
+    # Ensure existing config.json is writable by the group
+    [[ -f /usr/local/etc/xray/config.json ]] && chmod 664 /usr/local/etc/xray/config.json || true
+    print_success "Xray config dir writable by ${PANEL_USER}"
+
     export PANEL_USER
 }
 

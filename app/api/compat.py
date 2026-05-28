@@ -2050,8 +2050,34 @@ def _get_active_trojan_clients() -> list:
         return []
 
 
-def _generate_xray_server_config() -> dict:
-    """Generate the server-side Xray config with inbounds for all enabled protocols."""
+async def _fetch_clients_async() -> tuple:
+    """Async-safe user fetch for use inside a running event loop."""
+    try:
+        from ..database import async_engine
+        async with async_engine.connect() as conn:
+            result = await conn.execute(
+                select(VpnUser.uuid, VpnUser.name).where(VpnUser.active == 1)
+            )
+            rows = result.all()
+        vmess   = [{"id": r.uuid, "alterId": 0, "email": r.name} for r in rows]
+        vless   = [{"id": r.uuid, "email": r.name} for r in rows]
+        trojan  = [{"password": r.uuid, "email": r.name} for r in rows]
+        return vmess, vless, trojan
+    except Exception as e:
+        logger.warning("_fetch_clients_async failed: %s", e)
+        return [], [], []
+
+
+def _generate_xray_server_config(
+    vmess_clients: list | None = None,
+    vless_clients: list | None = None,
+    trojan_clients: list | None = None,
+) -> dict:
+    """Generate the server-side Xray config with inbounds for all enabled protocols.
+
+    Optionally accepts pre-fetched client lists so callers running inside an
+    async context can avoid the sync thread-pool fallback.
+    """
     s = _settings_state
     inbounds = []
     sni = s.get("vmess_sni") or "www.aparat.com"
@@ -2101,10 +2127,14 @@ def _generate_xray_server_config() -> dict:
             cert_file, key_file,
         )
 
-    # Fetch active user UUIDs for client authentication
-    vmess_clients = _get_active_vmess_clients()
-    vless_clients = _get_active_vless_clients()
-    trojan_clients = _get_active_trojan_clients()
+    # Fetch active user UUIDs for client authentication (use provided lists or
+    # fall back to the sync thread-pool helper when called from sync context).
+    if vmess_clients is None:
+        vmess_clients = _get_active_vmess_clients()
+    if vless_clients is None:
+        vless_clients = _get_active_vless_clients()
+    if trojan_clients is None:
+        trojan_clients = _get_active_trojan_clients()
 
     # VMess WS+TLS (always-on when TLS is available; skipped otherwise)
     if _tls_ready:
@@ -2425,14 +2455,19 @@ async def _sync_xray_config_async():
     try:
         await asyncio.sleep(0.5)  # Small delay to let settings settle
 
-        config = _generate_xray_server_config()
+        # Fetch users via async-safe path — avoids the thread+new-loop approach
+        # that conflicts with asyncpg's connection pool during startup.
+        vmess_clients, vless_clients, trojan_clients = await _fetch_clients_async()
+
+        config = _generate_xray_server_config(vmess_clients, vless_clients, trojan_clients)
         config_path = settings.xray_config_path
 
         with open(config_path, "w") as f:
             json.dump(config, f, indent=2)
 
         subprocess.run(["systemctl", "restart", "xray"], capture_output=True, timeout=10)
-        logger.info(f"Xray config auto-synced ({len(config.get('inbounds', []))} inbounds)")
+        logger.info("Xray config auto-synced (%d inbounds, %d users)",
+                    len(config.get("inbounds", [])), len(vmess_clients))
     except Exception as e:
         logger.warning(f"Async Xray sync failed: {e}")
 
