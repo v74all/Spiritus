@@ -202,9 +202,14 @@ async def _decode_token_to_user(token: str, db: AsyncSession) -> User:
             locked_until = locked_until.replace(tzinfo=timezone.utc)
         if locked_until > now:
             raise credentials_exception
-    # Resolve role → is_admin. The Admin table covers admin/superadmin/reseller.
+    # Resolve role → is_admin. Deny if role is missing/unknown; only explicit
+    # admin/superadmin roles grant admin access. This prevents a NULL role from
+    # accidentally granting elevated privileges.
     role = getattr(admin, "role", None)
-    role_is_admin = role is None or str(getattr(role, "value", role)).lower() in ("admin", "superadmin")
+    if role is None:
+        role_is_admin = False
+    else:
+        role_is_admin = str(getattr(role, "value", role)).lower() in ("admin", "superadmin")
     return User(
         id=admin.id,
         username=admin.username,
@@ -303,5 +308,5 @@ async def rate_limit_dependency(
     except HTTPException:
         raise
     except Exception:
-        pass  # If Redis is down, allow request through
+        logger.warning("rate-limit Redis unavailable, allowing request through for %s %s", client_ip, request.url.path)
     return client_ip

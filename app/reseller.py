@@ -185,6 +185,12 @@ class ResellerManager:
         if (user_count.scalar() or 0) >= reseller.max_users:
             return {"success": False, "error": "User limit reached"}
 
+        # Validate agent_id before writing
+        if agent_id is not None:
+            agent_check = await db.execute(select(Agent).where(Agent.id == agent_id))
+            if agent_check.scalar_one_or_none() is None:
+                return {"success": False, "error": f"Agent {agent_id} not found"}
+
         # Create user
         import uuid
         user_uuid = str(uuid.uuid4())

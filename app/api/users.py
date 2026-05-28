@@ -124,6 +124,11 @@ async def create_user(
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid expire_at format. Use ISO 8601.")
 
+    if user.agent_id is not None:
+        agent_check = await db.execute(select(Agent).where(Agent.id == user.agent_id))
+        if agent_check.scalar_one_or_none() is None:
+            raise HTTPException(status_code=422, detail=f"Agent {user.agent_id} not found.")
+
     db_user = VpnUser(
         uuid=user_uuid,
         name=user.name,

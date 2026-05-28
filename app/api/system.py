@@ -20,6 +20,10 @@ import logging
 
 from ..auth import get_current_admin, User
 from ..config import settings
+from ..database import get_async_db
+from ..models import VpnUser
+from sqlalchemy import select, func
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/system", tags=["system"])
@@ -45,13 +49,16 @@ class MessageResponse(BaseModel):
     success: bool = True
 
 @router.get("/status", response_model=SystemStatus)
-async def get_system_status(admin: User = Depends(get_current_admin)):
+async def get_system_status(
+    admin: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_async_db),
+):
     """Get system status information."""
     # CPU & Memory
     cpu = psutil.cpu_percent(interval=1)
     mem = psutil.virtual_memory()
     disk = psutil.disk_usage('/')
-    
+
     # Xray status
     xray_running = False
     xray_version = None
@@ -65,12 +72,20 @@ async def get_system_status(admin: User = Depends(get_current_admin)):
             xray_version = result.stdout.strip().split('\n')[0]
     except Exception:
         pass
-    
+
     # Uptime
     boot_time = psutil.boot_time()
     import time
     uptime = time.time() - boot_time
-    
+
+    # User counts from DB
+    total_res = await db.execute(select(func.count(VpnUser.id)))
+    total_users = total_res.scalar() or 0
+    active_res = await db.execute(
+        select(func.count(VpnUser.id)).where(VpnUser.active == 1)
+    )
+    active_users = active_res.scalar() or 0
+
     return SystemStatus(
         cpu_percent=cpu,
         memory_percent=mem.percent,
@@ -78,8 +93,8 @@ async def get_system_status(admin: User = Depends(get_current_admin)):
         uptime_seconds=uptime,
         xray_running=xray_running,
         xray_version=xray_version,
-        active_users=0,  # TODO: Query from DB
-        total_users=0    # TODO: Query from DB
+        active_users=active_users,
+        total_users=total_users,
     )
 
 @router.get("/xray-status", response_model=XrayStatus)

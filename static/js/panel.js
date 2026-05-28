@@ -199,7 +199,7 @@ async function fetchUsers() {
     users = await r.json();
     if (mainView === 'users') renderUsers();
     updateStats();
-  } catch(e) {}
+  } catch(e) { console.error('fetchUsers failed:', e); }
 }
 
 async function fetchGroups() {
@@ -208,7 +208,7 @@ async function fetchGroups() {
     if (r.status === 401) { location.reload(); return; }
     groups = await r.json();
     if (mainView === 'groups') renderGroups();
-  } catch(e) {}
+  } catch(e) { console.error('fetchGroups failed:', e); }
 }
 async function fetchLive() {
   try {
@@ -238,7 +238,7 @@ async function fetchLive() {
     }
     prevLive = data; prevTime = now;
     renderSpeeds();
-  } catch(e) {}
+  } catch(e) { console.error('fetchLive failed:', e); }
 }
 
 async function fetchServerInfo() {
@@ -249,7 +249,7 @@ async function fetchServerInfo() {
       updateProtoBar();
       updateSettingsStatus();
     }
-  } catch(e) {}
+  } catch(e) { console.error('fetchServerInfo failed:', e); }
 }
 
 function startPolling() {
@@ -2394,7 +2394,7 @@ async function fetchAgents() {
     const r = await fetch(API+'/agents');
     if (r.ok) _agents = await r.json();
     renderAgents();
-  } catch(e) {}
+  } catch(e) { toast('Failed to load agents', 'error'); console.error('fetchAgents failed:', e); }
 }
 
 function renderAgents() {
@@ -2514,7 +2514,7 @@ async function fetchSystemMonitor() {
     if (!r.ok) return;
     sysmonData = await r.json();
     renderSysmonBar();
-  } catch(e) {}
+  } catch(e) { console.error('fetchSystemMonitor failed:', e); }
 }
 
 function gaugeClass(pct) { return pct < 60 ? 'gauge-ok' : pct < 85 ? 'gauge-warn' : 'gauge-crit'; }
@@ -2572,7 +2572,7 @@ async function fetchTrafficHistory() {
       return `<div class="traffic-chart-bar" style="height:${pct}%;background:var(--accent)" data-tip="${d.date}: ${fmtBytes(d.traffic_bytes||0)}"></div>`;
     }).join('');
     labels.innerHTML = data.map((d,i) => `<span>${i%5===0?d.date.slice(5):''}</span>`).join('');
-  } catch(e) {}
+  } catch(e) { console.error('fetchTrafficHistory failed:', e); }
 }
 
 async function fetchTopTrafficUsers() {
@@ -2592,7 +2592,7 @@ async function fetchTopTrafficUsers() {
         <span style="font-size:11px;color:var(--t2);min-width:60px;text-align:right">${fmtBytes(u.total_bytes)}</span>
       </div>`;
     }).join('');
-  } catch(e) {}
+  } catch(e) { console.error('fetchTopTrafficUsers failed:', e); }
 }
 
 /* ── Online Users ── */
