@@ -136,15 +136,19 @@ class Settings(BaseSettings):
     vless_xhttp_reality_sni: str = Field("digikala.com", env="VLESS_XHTTP_REALITY_SNI")
     vless_xhttp_reality_dest: str = Field("digikala.com:443", env="VLESS_XHTTP_REALITY_DEST")
     vless_xhttp_reality_short_id: str = Field("", env="VLESS_XHTTP_REALITY_SHORT_ID")
-    vless_xhttp_reality_public_key: str = Field("oZVaAa694VcKxWb-gH31sPpMIQ9XAozoJ6BOAA1DkC0", env="VLESS_XHTTP_REALITY_PUBLIC_KEY")
-    
+    # Public key: empty by default. We do NOT bake a published sample
+    # pair into the source tree — operators either set
+    # VLESS_XHTTP_REALITY_PUBLIC_KEY in their .env or, preferably, let
+    # `app.secrets.reality_public_key()` generate one on first read.
+    vless_xhttp_reality_public_key: str = Field("", env="VLESS_XHTTP_REALITY_PUBLIC_KEY")
+
     # VLESS Vision REALITY
     vless_vision_enabled: bool = Field(True, env="VLESS_VISION_ENABLED")
     vless_vision_port: int = Field(2058, env="VLESS_VISION_PORT")
     vless_vision_reality_sni: str = Field("objects.githubusercontent.com", env="VLESS_VISION_REALITY_SNI")
     vless_vision_reality_dest: str = Field("objects.githubusercontent.com:443", env="VLESS_VISION_REALITY_DEST")
     vless_vision_reality_short_id: str = Field("", env="VLESS_VISION_REALITY_SHORT_ID")
-    vless_vision_reality_public_key: str = Field("oZVaAa694VcKxWb-gH31sPpMIQ9XAozoJ6BOAA1DkC0", env="VLESS_VISION_REALITY_PUBLIC_KEY")
+    vless_vision_reality_public_key: str = Field("", env="VLESS_VISION_REALITY_PUBLIC_KEY")
     
     # CDN
     cdn_enabled: bool = Field(False, env="CDN_ENABLED")

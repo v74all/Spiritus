@@ -471,7 +471,12 @@ class RealityKeyManager:
         self._keys: Dict[str, Dict[str, Any]] = {}  # key_id -> key data
 
     async def generate_key_pair(self) -> Dict[str, str]:
-        """Generate a new REALITY X25519 key pair using xray binary."""
+        """Generate a new REALITY X25519 key pair using xray binary.
+
+        The pair is then persisted to /etc/v7lthronyx/secrets.json via
+        `app.secrets` so the same private key is reused across restarts
+        and across the panel/orchestrator boundary.
+        """
         try:
             result = subprocess.run(
                 [self._xray_bin, "x25519"],
@@ -487,6 +492,12 @@ class RealityKeyManager:
                     elif "Public key:" in line:
                         public_key = line.split(":", 1)[1].strip()
                 if private_key and public_key:
+                    # Persist so future restarts reuse the same key —
+                    # rotating REALITY keys silently would invalidate
+                    # every existing share URL in the wild.
+                    from . import secrets as _secrets
+                    _secrets.set_secret("reality_private_key", private_key)
+                    _secrets.set_secret("reality_public_key", public_key)
                     return {"private_key": private_key, "public_key": public_key}
         except FileNotFoundError:
             logger.warning("xray binary not found, generating placeholder keys")

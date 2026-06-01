@@ -408,6 +408,7 @@
       <button class="settings-tab-btn active" onclick="switchSettingsTab('protocols')">🌐 Protocols / پروتکل‌ها</button>
       <button class="settings-tab-btn" onclick="switchSettingsTab('dpi-security')">🛡️ DPI & Security / امنیت</button>
       <button class="settings-tab-btn" onclick="switchSettingsTab('network-cdn')">☁️ Network & CDN / شبکه</button>
+      <button class="settings-tab-btn" onclick="switchSettingsTab('domain')">🌍 Domain & TLS / دامنه</button>
       <button class="settings-tab-btn" onclick="switchSettingsTab('notifications-backup')">📨 Notifications & Backup / اعلان‌ها</button>
       <button class="settings-tab-btn" onclick="switchSettingsTab('system')">💻 System / سیستم</button>
     </div>
@@ -1480,6 +1481,84 @@
         <div class="settings-desc">Cloudflare connects to this port on your server / کلادفلر از این پورت به سرور وصل میشه</div></div>
     </div>
 
+    </div>
+    <!-- ═══ Domain & TLS Tab ═══ -->
+    <div id="settings-domain" class="settings-tab-content">
+    <!-- ═══ Active Domain Card ═══ -->
+    <div class="settings-section" id="domain-active-section" style="border:2px solid var(--accent);border-radius:var(--radius-lg);padding:20px;margin-bottom:20px;background:linear-gradient(135deg,rgba(88,166,255,.06),transparent)">
+      <div class="sec-header" style="margin-bottom:14px">
+        <span style="font-size:20px;margin-right:8px">🌍</span>
+        <div>
+          <div class="settings-title">Active Domain &amp; Certificate / دامنه و گواهی فعال</div>
+          <div class="settings-desc">Current domain serving TLS for VLESS/Trojan/VMess / دامنه فعلی برای TLS پروتکل‌ها</div>
+        </div>
+        <span class="s-indicator off" id="si-domain-status"><span class="dot"></span> <span class="si-text" id="si-domain-text">No domain</span></span>
+      </div>
+      <div id="domain-empty" style="padding:14px;background:var(--bg3);border-radius:var(--radius-sm);font-size:13px;color:var(--t2);line-height:1.6">
+        <b>No domain configured.</b> The panel currently uses IP-based configs.<br>
+        Add a domain to issue a Let's Encrypt certificate and set it as SNI for every TLS-bearing protocol.
+        <br><br>
+        <b>هیچ دامنه‌ای تنظیم نشده.</b> پنل در حال حاضر از کانفیگ‌های مبتنی بر IP استفاده می‌کنه.<br>
+        یک دامنه اضافه کنید تا گواهی Let's Encrypt صادر بشه و به عنوان SNI همه پروتکل‌های TLS تنظیم بشه.
+      </div>
+      <div id="domain-active" style="display:none">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-top:8px">
+          <div class="info-card"><div class="ic-lbl">Domain / دامنه</div><div class="ic-val" id="dom-active-val">—</div></div>
+          <div class="info-card"><div class="ic-lbl">Issuer / صادرکننده</div><div class="ic-val" id="dom-issuer-val">—</div></div>
+          <div class="info-card"><div class="ic-lbl">Expires / انقضا</div><div class="ic-val" id="dom-expires-val">—</div></div>
+          <div class="info-card"><div class="ic-lbl">Status / وضعیت</div><div class="ic-val" id="dom-cert-status-val">—</div></div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
+          <button class="btn btn-primary btn-sm" onclick="domainRenew()">🔄 Renew Now / تمدید</button>
+          <button class="btn btn-danger btn-sm" onclick="domainDisable()">🚫 Disable Domain / غیرفعال</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ Set / Change Domain ═══ -->
+    <div class="settings-section">
+      <div class="sec-header">
+        <div class="settings-title">🔧 Set or Change Domain / تنظیم یا تغییر دامنه</div>
+      </div>
+      <div class="help-box">
+        <div class="help-en">🌐 Enter the FQDN that's pointed at this server's IP. The panel tries <b>acme.sh</b> first (preferred — no root daemon), then <b>certbot</b>, and finally falls back to a self-signed cert if both fail. Every TLS-bearing inbound (VLESS-Reality, VLESS-WS, Trojan, NaiveProxy, etc.) gets this domain as SNI.</div>
+        <div class="help-fa">🌐 FQDN که به IP این سرور اشاره می‌کنه رو وارد کنید. پنل اول <b>acme.sh</b> رو امتحان می‌کنه (ترجیحی — بدون دیمون ریشه)، بعد <b>certbot</b>، و در نهایت اگه هر دو fail بشن به self-signed برمی‌گرده. همه inboundهای TLS (VLESS-Reality، VLESS-WS، Trojan، NaiveProxy و غیره) این دامنه رو به عنوان SNI می‌گیرن.</div>
+      </div>
+      <div class="form-group" style="margin-top:12px"><label>Domain / دامنه</label>
+        <input type="text" id="set-domain-name" placeholder="vpn.example.com" style="font-family:monospace">
+        <div class="settings-desc">Lowercase FQDN, no http://, no trailing slash / FQDN با حروف کوچک، بدون http://، بدون اسلش آخر</div></div>
+      <div class="form-group"><label>Contact Email (optional) / ایمیل تماس (اختیاری)</label>
+        <input type="text" id="set-domain-email" placeholder="admin@example.com" style="font-family:monospace">
+        <div class="settings-desc">For Let's Encrypt expiry warnings / برای هشدارهای انقضای Let's Encrypt</div></div>
+      <div class="settings-row" style="margin-top:8px">
+        <div><div class="settings-label">Force Self-Signed / مجبور به Self-Signed</div>
+          <div class="settings-desc">Skip ACME, use a 1-year self-signed cert / رد شدن از ACME، گواهی self-signed ۱ ساله</div></div>
+        <label class="toggle"><input type="checkbox" id="set-domain-self-signed"><span class="toggle-slider"></span></label>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
+        <button class="btn btn-primary" onclick="domainSet()">💾 Set / Issue Cert / تنظیم و صدور گواهی</button>
+        <button class="btn btn-outline" onclick="domainCheckOptions()">🔍 Probe Server / بررسی سرور</button>
+      </div>
+      <div id="domain-set-result" style="margin-top:14px;display:none"></div>
+    </div>
+
+    <!-- ═══ Autorenew & Files ═══ -->
+    <div class="settings-section">
+      <div class="sec-header">
+        <div class="settings-title">⏰ Auto-Renewal & Files / تمدید خودکار و فایل‌ها</div>
+        <span class="s-indicator info" id="si-domain-autorenew"><span class="dot"></span> <span class="si-text" id="si-domain-autorenew-text">—</span></span>
+      </div>
+      <div class="help-box">
+        <div class="help-en">⏰ The Celery <code>domain_autorenew</code> job runs daily and re-issues the cert when it's within the renew window. The default window is 30 days, hard floor is 7 days (so we never race expiry).</div>
+        <div class="help-fa">⏰ Job <code>domain_autorenew</code> سلری روزانه اجرا میشه و وقتی گواهی به پنجره تمدید رسید، دوباره صادرش می‌کنه. پنجره پیش‌فرض ۳۰ روز، کف سخت ۷ روز (پس هیچ‌وقت با انقضا مسابقه نمی‌دیم).</div>
+      </div>
+      <div class="form-group" style="margin-top:12px"><label>Auto-Renew Window (days) / پنجره تمدید خودکار (روز)</label>
+        <input type="number" id="set-domain-autorenew-days" value="30" min="7" max="60">
+        <div class="settings-desc">Renew when ≤ this many days remain. Minimum 7 to avoid the 7-day floor. / وقتی ≤ این روزها مانده تمدید کن. حداقل ۷ برای جلوگیری از کف ۷ روزه.</div></div>
+    </div>
+
+    <!-- ═══ Notification message area (toast) ═══ -->
+    <div id="domain-toast" style="position:fixed;bottom:30px;right:30px;z-index:10000;display:none"></div>
     </div>
     <!-- ═══ Notifications & Backup Tab ═══ -->
     <div id="settings-notifications-backup" class="settings-tab-content">

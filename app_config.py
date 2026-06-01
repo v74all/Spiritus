@@ -1,308 +1,57 @@
-"""FastAPI Application Configuration and Setup"""
+"""
+DEPRECATED: This module is a compatibility shim and will be removed in
+the next major release.
 
-from datetime import timedelta
-from typing import Optional
-from pydantic_settings import BaseSettings
+The real implementation lives in `app/config.py` (FastAPI v2). This
+file exists only so that operators with custom tooling importing
+`app_config` at the repo root still get a working settings object
+until they migrate.
 
+What changed:
+- Old:    `from app_config import settings`     (root module)
+- New:    `from app.config import settings`     (package module)
 
-class Settings(BaseSettings):
-    """Application settings"""
-    
-    # App
-    APP_NAME: str = "Spiritus"
-    APP_VERSION: str = "2.0.0"
-    DEBUG: bool = False
-    
-    # Server
-    HOST: str = "0.0.0.0"
-    PORT: int = int(__import__("os").environ.get("VPN_WEB_PORT", 38471))
-    API_PORT: int = int(__import__("os").environ.get("VPN_API_PORT", 10085))
-    
-    # Database
-    DATABASE_URL: str = "postgresql://spiritus:spiritus@localhost/spiritus"
-    SQLALCHEMY_ECHO: bool = False
-    
-    # Redis
-    REDIS_URL: str = "redis://localhost:6379/0"
-    REDIS_CACHE_TTL: int = 3600
-    
-    # ═══ Xray-Core ═══
-    XRAY_API_HOST: str = "127.0.0.1"
-    XRAY_API_PORT: int = 10085
-    VPN_SERVER_IP: str = __import__("os").environ.get("VPN_SERVER_IP", "127.0.0.1")
-    VPN_SERVER_PORT: int = int(__import__("os").environ.get("VPN_SERVER_PORT", 443))
-    VPN_SNI_HOST: str = __import__("os").environ.get("VPN_SNI_HOST", "chat.deepseek.com")
+Migration:
+    sed -i 's/from app_config import settings/from app.config import settings/' \\
+        your_script.py
 
-    # ── VLESS+XHTTP+REALITY (relay-fronted) ──
-    VLESS_XHTTP_ENABLED: bool = False
-    VLESS_XHTTP_PORT: int = 2053
-    VLESS_XHTTP_REALITY_PRIVATE_KEY: str = ""
-    VLESS_XHTTP_REALITY_PUBLIC_KEY: str = ""
-    VLESS_XHTTP_REALITY_SHORT_ID: str = ""
-    VLESS_XHTTP_REALITY_DEST: str = "digikala.com:443"
-    VLESS_XHTTP_REALITY_SNI: str = "digikala.com"
-    VLESS_XHTTP_PATH: str = "/xhttp-stream"
-    VLESS_XHTTP_MODE: str = "auto"  # auto / packet-up / stream-up / stream-one
+Do NOT add new code that imports from this module.
+"""
 
-    # ── VLESS+REALITY+Vision (direct, fresh IP) ──
-    VLESS_VISION_ENABLED: bool = False
-    VLESS_VISION_PORT: int = 2058
-    VLESS_VISION_REALITY_PRIVATE_KEY: str = ""
-    VLESS_VISION_REALITY_PUBLIC_KEY: str = ""
-    VLESS_VISION_REALITY_SHORT_ID: str = ""
-    VLESS_VISION_REALITY_DEST: str = "objects.githubusercontent.com:443"
-    VLESS_VISION_REALITY_SNI: str = "objects.githubusercontent.com"
-    VLESS_VISION_FLOW: str = "xtls-rprx-vision"
+from __future__ import annotations
 
-    # ── Reverse-tunneled VLESS-Reality (Backhaul/Rathole) ──
-    VLESS_REVERSE_ENABLED: bool = False
-    VLESS_REVERSE_PORT: int = 2059
-    VLESS_REVERSE_REALITY_PRIVATE_KEY: str = ""
-    VLESS_REVERSE_REALITY_PUBLIC_KEY: str = ""
-    VLESS_REVERSE_REALITY_SHORT_ID: str = ""
-    VLESS_REVERSE_REALITY_DEST: str = "digikala.com:443"
-    VLESS_REVERSE_REALITY_SNI: str = "digikala.com"
-    VLESS_REVERSE_TUNNEL_PORT: int = 0  # 0 = auto-assign
-    VLESS_REVERSE_BACKHAUL_MODE: str = "rathole"  # rathole / backhaul / relay
+import logging
+import sys
+import warnings
+from pathlib import Path
 
-    # ── Trojan+WS/gRPC+TLS over Cloudflare CDN ──
-    TROJAN_CDN_ENABLED: bool = False
-    TROJAN_CDN_PORT: int = 2083
-    TROJAN_CDN_WS_PATH: str = "/trojan-ws"
-    TROJAN_CDN_GRPC_SERVICE: str = "TrojanService"
-    TROJAN_CDN_GRPC_ENABLED: bool = False
-    TROJAN_CDN_GRPC_PORT: int = 2060
-    TROJAN_CDN_TLS_ENABLED: bool = True
-    TROJAN_CDN_SNI: str = ""
-    TROJAN_CDN_DOMAIN: str = ""  # Cloudflare domain
+warnings.warn(
+    "importing from the root-level `app_config` is deprecated and will be "
+    "removed in a future release. Use `from app.config import settings` "
+    "instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
-    # ── Shadowsocks-2022 ──
-    SS2022_ENABLED: bool = False
-    SS2022_PORT: int = 2056
-    SS2022_METHOD: str = "2022-blake3-aes-128-gcm"
-    SS2022_SERVER_KEY: str = ""
+# Re-export the live `Settings` object so any code that did
+# `from app_config import settings` keeps working — but operators who
+# have rotated SECRET_KEY in their environment will see those values,
+# not whatever used to live in this file.
+try:
+    _project_root = str(Path(__file__).resolve().parent)
+    if _project_root not in sys.path:
+        sys.path.insert(0, _project_root)
+    from app.config import settings  # noqa: E402,F401
+except Exception as _exc:  # noqa: BLE001
+    # A deprecated import that breaks production is worse than a
+    # deprecated import that fails. Log and synthesize a minimal
+    # stand-in so legacy code at least parses.
+    logging.getLogger(__name__).error(
+        "could not import app.config (%s); legacy app_config will be empty", _exc
+    )
 
-    # ── VMess+WS+TLS ──
-    VMESS_ENABLED: bool = True
-    VMESS_PORT: int = 443
-    VMESS_SNI: str = "www.aparat.com"
-    VMESS_WS_PATH: str = "/api/v1/stream"
+    class _Empty:
+        def __getattr__(self, _name):
+            return None
 
-    # ── gRPC ──
-    GRPC_ENABLED: bool = False
-    GRPC_PORT: int = 2054
-    GRPC_SERVICE_NAME: str = "GunService"
-
-    # ── HTTPUpgrade ──
-    HTTPUPGRADE_ENABLED: bool = False
-    HTTPUPGRADE_PORT: int = 2055
-    HTTPUPGRADE_PATH: str = "/httpupgrade"
-
-    # ── VLESS+WS+TLS (CDN compatible) ──
-    VLESS_WS_ENABLED: bool = False
-    VLESS_WS_PORT: int = 2057
-    VLESS_WS_PATH: str = "/vless-ws"
-
-    # ── Fragment (client-side anti-DPI) ──
-    FRAGMENT_ENABLED: bool = False
-    FRAGMENT_PACKETS: str = "tlshello"
-    FRAGMENT_LENGTH: str = "100-200"
-    FRAGMENT_INTERVAL: str = "10-20"
-
-    # ── MUX ──
-    MUX_ENABLED: bool = False
-    MUX_CONCURRENCY: int = 8
-
-    # ── uTLS Fingerprint ──
-    UTLS_FINGERPRINT: str = "chrome"  # chrome / firefox / safari / edge / randomized
-
-    # ── Noise / padding ──
-    NOISE_ENABLED: bool = False
-    NOISE_PACKET: str = "rand:50-100"
-    NOISE_DELAY: str = "10-20"
-
-    # ── DPI Evasion (server-side) ──
-    DPI_TCP_FRAGMENT: bool = False
-    DPI_TLS_FRAGMENT: bool = False
-    DPI_IP_FRAGMENT: bool = False
-    DPI_TCP_KEEPALIVE: bool = False
-    DPI_DNS_TUNNEL: bool = False
-    DPI_ICMP_TUNNEL: bool = False
-    DPI_DOMAIN_FRONT: bool = False
-    DPI_CDN_FRONT: str = ""
-
-    # ═══ Standalone Protocols (Non-Xray) ═══
-
-    # ── Hysteria2+Salamander+port-hop ──
-    HYSTERIA2_ENABLED: bool = False
-    HYSTERIA2_PORT: int = 8443
-    HYSTERIA2_PASSWORD: str = ""
-    HYSTERIA2_SALAMANDER_ENABLED: bool = False
-    HYSTERIA2_SALAMANDER_PASSWORD: str = ""
-    HYSTERIA2_PORT_HOP_ENABLED: bool = False
-    HYSTERIA2_PORT_HOP_PORTS: str = "20000-50000"  # port range for hopping
-    HYSTERIA2_BANDWIDTH_UP: str = "100 mbps"
-    HYSTERIA2_BANDWIDTH_DOWN: str = "200 mbps"
-    HYSTERIA2_QUIC_PORT: int = 8443  # UDP port for QUIC
-
-    # ── TUIC v5 ──
-    TUIC_ENABLED: bool = False
-    TUIC_PORT: int = 8444
-    TUIC_PASSWORD: str = ""
-    TUIC_CONGESTION_CONTROL: str = "cubic"  # cubic / bbr / new_reno
-    TUIC_UDP_RELAY: str = "native"  # native / quic
-    TUIC_ZERO_RTT: bool = False
-    TUIC_CERT_PATH: str = ""
-    TUIC_KEY_PATH: str = ""
-
-    # ── AmneziaWG 2.0 ──
-    AMNEZIAWG_ENABLED: bool = False
-    AMNEZIAWG_PORT: int = 51820
-    AMNEZIAWG_PRIVATE_KEY: str = ""
-    AMNEZIAWG_ADDRESS: str = "10.8.0.1/24"
-    AMNEZIAWG_DNS: str = "1.1.1.1"
-    AMNEZIAWG_JC: int = 4          # Junk packets count
-    AMNEZIAWG_JMIN: int = 50       # Min junk packet size
-    AMNEZIAWG_JMAX: int = 1000     # Max junk packet size
-    AMNEZIAWG_S1: int = 0          # Magic header byte 1
-    AMNEZIAWG_S2: int = 0          # Magic header byte 2
-    AMNEZIAWG_H1: int = 1          # Handshake mask byte 1
-    AMNEZIAWG_H2: int = 2          # Handshake mask byte 2
-    AMNEZIAWG_H3: int = 3          # Handshake mask byte 3
-    AMNEZIAWG_H4: int = 4          # Handshake mask byte 4
-    AMNEZIAWG_MTU: int = 1280      # MTU for WireGuard
-
-    # ── ShadowTLS v3 ──
-    SHADOWTLS_ENABLED: bool = False
-    SHADOWTLS_PORT: int = 8445
-    SHADOWTLS_PASSWORD: str = ""
-    SHADOWTLS_SNI: str = "rubika.ir"
-    SHADOWTLS_VERSION: int = 3
-    SHADOWTLS_BACKEND: str = "127.0.0.1:1080"  # SOCKS5 backend
-    SHADOWTLS_TLS_CERT_PATH: str = ""
-    SHADOWTLS_TLS_KEY_PATH: str = ""
-
-    # ── Mieru ──
-    MIERU_ENABLED: bool = False
-    MIERU_PORT: int = 8446
-    MIERU_PASSWORD: str = ""
-    MIERU_ENCRYPTION: str = "aes-256-gcm"  # aes-256-gcm / chacha20-poly1305
-    MIERU_TRANSPORT: str = "tcp"  # tcp / udp / multiplex
-    MIERU_MUX_ENABLED: bool = True
-    MIERU_MUX_CONCURRENCY: int = 8
-
-    # ── NaiveProxy (official) ──
-    NAIVEPROXY_ENABLED: bool = False
-    NAIVEPROXY_PORT: int = 8447
-    NAIVEPROXY_USER: str = ""
-    NAIVEPROXY_PASSWORD: str = ""
-    NAIVEPROXY_SNI: str = ""
-    NAIVEPROXY_CERT_PATH: str = ""
-    NAIVEPROXY_KEY_PATH: str = ""
-    NAIVEPROXY_CONCURRENCY: int = 4  # Chrome connection concurrency
-
-    # ── Plain WireGuard ──
-    WIREGUARD_ENABLED: bool = False
-    WIREGUARD_PORT: int = 51821
-    WIREGUARD_PRIVATE_KEY: str = ""
-    WIREGUARD_ADDRESS: str = "10.9.0.1/24"
-    WIREGUARD_DNS: str = "1.1.1.1"
-    WIREGUARD_MTU: int = 1280
-    WIREGUARD_PERSISTENT_KEEPALIVE: int = 25
-
-    # ── Plain OpenVPN ──
-    OPENVPN_ENABLED: bool = False
-    OPENVPN_PORT: int = 1194
-    OPENVPN_PROTO: str = "udp"  # udp / tcp
-    OPENVPN_NETWORK: str = "10.10.0.0/24"
-    OPENVPN_DNS: str = "1.1.1.1"
-    OPENVPN_CERT_PATH: str = ""
-    OPENVPN_KEY_PATH: str = ""
-    OPENVPN_DH_PATH: str = ""
-    OPENVPN_TA_PATH: str = ""
-    
-    # Security
-    # SECRET_KEY / JWT_SECRET_KEY MUST be supplied via environment; the module
-    # raises at load time if either is missing or matches a known weak token.
-    SECRET_KEY: str = ""
-    ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
-    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
-
-    # JWT
-    JWT_SECRET_KEY: str = ""
-    JWT_ALGORITHM: str = "HS256"
-    JWT_EXPIRATION: int = 3600
-
-    # TOTP
-    TOTP_ISSUER: str = "Spiritus"
-    TOTP_WINDOW: int = 1
-
-    # Security Headers — no wildcards, no credentials-by-default.
-    CORS_ORIGINS: list = []
-    CORS_CREDENTIALS: bool = False
-    CORS_METHODS: list = ["GET", "POST", "PUT", "PATCH", "DELETE"]
-    CORS_HEADERS: list = ["Authorization", "Content-Type", "X-CSRF-Token"]
-    
-    # Audit
-    AUDIT_LOG_RETENTION_DAYS: int = 90
-    AUDIT_LOG_ENABLED: bool = True
-    
-    # Rate Limiting
-    RATE_LIMIT_REQUESTS: int = 100
-    RATE_LIMIT_PERIOD: int = 60
-    
-    # IP Allowlist
-    ADMIN_IP_ALLOWLIST: list = []
-    ENABLE_GEO_BLOCKING: bool = False
-    BLOCKED_COUNTRIES: list = []
-    
-    # Logging
-    LOG_LEVEL: str = "INFO"
-    LOG_FORMAT: str = "json"  # json or text
-    
-    # Features
-    ENABLE_2FA: bool = True
-    ENABLE_WEBAUTHN: bool = False
-    ENABLE_TELEGRAM_BOT: bool = False
-    TELEGRAM_BOT_TOKEN: Optional[str] = None
-    
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
-
-
-_WEAK_SECRETS = {
-    "",
-    "change-me",
-    "change-me-in-production",
-    "change-me-to-a-random-secret-key",
-    "dev-secret-key-local-only-not-for-production-use-32chars",
-    "secret",
-    "password",
-    "default",
-}
-
-
-def _validate_secrets(s: "Settings") -> None:
-    """Reject empty/weak secrets at module load time."""
-    for name in ("SECRET_KEY", "JWT_SECRET_KEY"):
-        val = getattr(s, name, "") or ""
-        if val.lower() in _WEAK_SECRETS:
-            raise RuntimeError(
-                f"{name} is unset or set to a known weak default. Generate one with "
-                "`python -c \"import secrets; print(secrets.token_urlsafe(48))\"` "
-                "and add it to your .env (chmod 600)."
-            )
-        if len(val) < 32:
-            raise RuntimeError(f"{name} must be at least 32 chars (got {len(val)}).")
-
-
-settings = Settings()
-# Allow legacy modules that don't actually use the secrets (e.g. read-only
-# protocol/config helpers) to import this module even without SECRET_KEY set,
-# unless the strict flag is enabled. Production deployments should set
-# STRICT_CONFIG=1 in the environment to enforce.
-import os as _os
-if _os.environ.get("STRICT_CONFIG", "").lower() in ("1", "true", "yes"):
-    _validate_secrets(settings)
+    settings = _Empty()  # type: ignore[assignment]

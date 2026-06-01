@@ -331,6 +331,10 @@ app.include_router(portal_router, prefix="/api")
 from .api.dpi import router as dpi_router
 app.include_router(dpi_router, prefix="/api")
 
+# Domain & certificate manager
+from .api.domain import router as domain_router
+app.include_router(domain_router, prefix="/api")
+
 # ── Health check ────────────────────────────────────────
 
 @app.get("/api/health", tags=["system"])

@@ -2325,6 +2325,181 @@ function switchSettingsTab(tabName) {
   // Activate corresponding button
   const btn = document.querySelector('.settings-tabs .settings-tab-btn[onclick*="'+tabName+'"]');
   if (btn) btn.classList.add('active');
+  // Domain tab is special: when the operator opens it we
+  // refresh the active-domain card and pre-fill the "set
+  // domain" form. Without this the UI shows the wrong
+  // issuer/expires until the user clicks Refresh manually.
+  if (tabName === 'domain') {
+    domainRefresh().catch(() => {});
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Domain & Certificate tab handlers
+   ─────────────────────────────────────────────────────────────── */
+
+let _domainLoaded = false;
+
+async function domainRefresh() {
+  try {
+    const data = await apiCall(API + '/domain', { method: 'GET' });
+    renderDomainStatus(data);
+    setVal('set-domain-autorenew-days', data.autorenew_days || 30);
+    _domainLoaded = true;
+  } catch (e) { /* apiCall already toasted */ }
+}
+
+function renderDomainStatus(s) {
+  const empty = document.getElementById('domain-empty');
+  const active = document.getElementById('domain-active');
+  const statusPill = document.getElementById('si-domain-status');
+  const statusText = document.getElementById('si-domain-text');
+
+  if (!s || !s.active) {
+    if (empty) empty.style.display = '';
+    if (active) active.style.display = 'none';
+    if (statusPill) {
+      statusPill.className = 's-indicator off';
+      if (statusText) statusText.textContent = 'No domain';
+    }
+    return;
+  }
+
+  if (empty) empty.style.display = 'none';
+  if (active) active.style.display = '';
+  setVal('dom-active-val', s.active);
+  setVal('dom-issuer-val', s.issuer || 'unknown');
+  setVal('dom-expires-val', s.expires_at ? new Date(s.expires_at).toLocaleDateString() : '—');
+  setVal('dom-cert-status-val', _certStatusLabel(s.cert_status));
+
+  if (statusPill && statusText) {
+    let cls = 'on';
+    let label = 'Active';
+    if (s.cert_status === 'expiring_soon') { cls = 'warning'; label = 'Expiring Soon'; }
+    else if (s.cert_status === 'expired')    { cls = 'expired'; label = 'Expired'; }
+    else if (s.cert_status === 'missing')    { cls = 'off';    label = 'No cert'; }
+    else if (s.cert_status === 'invalid')    { cls = 'expired'; label = 'Invalid'; }
+    statusPill.className = 's-indicator ' + cls;
+    statusText.textContent = label;
+  }
+
+  const arText = document.getElementById('si-domain-autorenew-text');
+  const arPill = document.getElementById('si-domain-autorenew');
+  if (arText && arPill) {
+    arPill.className = 's-indicator on';
+    arText.textContent = 'Active — ' + (s.autorenew_days || 30) + 'd window';
+  }
+}
+
+function _certStatusLabel(s) {
+  if (s === 'ok') return '✅ Valid';
+  if (s === 'expiring_soon') return '⚠️ Expiring';
+  if (s === 'expired') return '❌ Expired';
+  if (s === 'missing') return '— No cert';
+  if (s === 'invalid') return '❌ Invalid';
+  return s || '—';
+}
+
+async function domainSet() {
+  const domain = (document.getElementById('set-domain-name').value || '').trim().toLowerCase();
+  const email = (document.getElementById('set-domain-email').value || '').trim();
+  const forceSelfSigned = document.getElementById('set-domain-self-signed').checked;
+  const autorenew = parseInt(document.getElementById('set-domain-autorenew-days').value) || 30;
+  if (!domain) { toast('Enter a domain', 'error'); return; }
+  if (!/^[a-z0-9.-]+$/.test(domain)) {
+    toast('Invalid domain format. Use lowercase letters, digits, dots, dashes only.', 'error');
+    return;
+  }
+  const btn = event?.target;
+  await withBusy(btn, async () => {
+    try {
+      const data = await apiCall(API + '/domain', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          domain,
+          contact_email: email,
+          prefer_self_signed: forceSelfSigned,
+          autorenew_days: autorenew,
+        }),
+      });
+      _renderDomainSetResult(data, domain);
+      if (data.ok) {
+        toast('Domain ' + domain + ' configured');
+        domainRefresh();
+      }
+    } catch (e) { /* apiCall already toasted */ }
+  });
+}
+
+function _renderDomainSetResult(d, domain) {
+  const el = document.getElementById('domain-set-result');
+  if (!el) return;
+  el.style.display = '';
+  if (!d || !d.ok) {
+    el.innerHTML = `<div class="domain-result error"><b>Failed to set domain.</b><br>${esc(d?.error || 'Unknown error')}<br>${esc(d?.detail || '')}</div>`;
+    return;
+  }
+  const steps = (d.steps || []).map(s => `<li>${esc(s)}</li>`).join('');
+  const certPath = d.cert_path || '/etc/v7lthronyx/tls/' + domain + '/fullchain.pem';
+  const keyPath  = d.key_path  || '/etc/v7lthronyx/tls/' + domain + '/privkey.pem';
+  el.innerHTML = `
+    <div class="domain-result success">
+      <b>Domain set successfully / دامنه با موفقیت تنظیم شد.</b><br>
+      <b>Domain:</b> ${esc(d.domain || domain)}<br>
+      <b>Issuer:</b> ${esc(d.issuer || '—')}<br>
+      <b>Cert Path:</b> <code>${esc(certPath)}</code><br>
+      <b>Key Path:</b> <code>${esc(keyPath)}</code>
+      <ul class="domain-steps">${steps}</ul>
+    </div>`;
+}
+
+async function domainDisable() {
+  if (!confirm('Disable the active domain? Cert files stay on disk but every TLS-bearing inbound will fall back to the server IP.')) return;
+  try {
+    const data = await apiCall(API + '/domain', { method: 'DELETE' });
+    if (data.ok) {
+      toast('Domain disabled — TLS inbounds reverted to server IP');
+      domainRefresh();
+    }
+  } catch (e) { /* apiCall already toasted */ }
+}
+
+async function domainRenew() {
+  const btn = event?.target;
+  await withBusy(btn, async () => {
+    try {
+      const data = await apiCall(API + '/domain/renew', { method: 'POST' });
+      if (data.ok) {
+        toast('Certificate renewed');
+        domainRefresh();
+      } else {
+        toast(data.error || 'Renew failed', 'error');
+      }
+    } catch (e) { /* apiCall already toasted */ }
+  });
+}
+
+async function domainCheckOptions() {
+  const btn = event?.target;
+  await withBusy(btn, async () => {
+    try {
+      const data = await apiCall(API + '/domain/options', { method: 'GET' });
+      const lines = [
+        `<b>acme.sh installed:</b> ${data.acme_sh ? '✅ yes' : '❌ no'}`,
+        `<b>certbot installed:</b> ${data.certbot ? '✅ yes' : '❌ no'}`,
+        `<b>Port 80 free (for ACME HTTP-01):</b> ${data.port_80_free ? '✅ yes' : '❌ occupied'}`,
+        `<b>Detected server IP:</b> ${data.server_ip || '?'}`,
+        `<b>DNS resolves to this IP:</b> ${data.dns_resolves ? '✅ yes' : '❌ no'}`,
+      ];
+      const el = document.getElementById('domain-set-result');
+      if (el) {
+        el.style.display = '';
+        const cls = (data.acme_sh || data.certbot) ? 'info' : 'error';
+        el.innerHTML = `<div class="domain-result ${cls}">${lines.map(l => '<div>' + l + '</div>').join('')}</div>`;
+      }
+    } catch (e) { /* apiCall already toasted */ }
+  });
 }
 
 function switchAggressiveTab(tab) {

@@ -213,11 +213,22 @@ class ProtocolConfig(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    agent_id = Column(Integer, ForeignKey("agents.id"), nullable=False)
+    # agent_id is nullable so a fresh install without any registered
+    # agent can still record protocol toggles. The CRUD layer
+    # resolves the first Xray agent at write time; the fallback
+    # path (no agent at all) is exercised in tests and on first-boot
+    # single-node boxes.
+    agent_id = Column(Integer, ForeignKey("agents.id"), nullable=True)
     agent = relationship("Agent", back_populates="protocols")
 
     protocol_key = Column(String(50), nullable=False)  # e.g. "vless_xhttp_reality"
     category = Column(Enum(ProtocolCategory), default=ProtocolCategory.xray)
+
+    # The xray inbound tag this row's protocol renders as. Set by
+    # the sync service on first write; used by `runtime_status` to
+    # match an in-DB protocol against the on-disk xray config
+    # without re-parsing the ProtocolSpec.
+    tag = Column(String(100), nullable=True)
 
     enabled = Column(Boolean, default=False)
     config = Column(JSON, default=dict)  # Protocol-specific settings
@@ -226,6 +237,7 @@ class ProtocolConfig(Base):
     running = Column(Boolean, default=False)
     connections = Column(Integer, default=0)
     last_started_at = Column(DateTime, nullable=True)
+    last_error = Column(Text, nullable=True)
 
     # Timestamps
     created_at = Column(DateTime, server_default=func.now())

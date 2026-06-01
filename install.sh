@@ -396,6 +396,100 @@ setup_tls_cert() {
     print_success "TLS cert ready (${CERT})"
 }
 
+# Detect whether stdin is connected to an interactive terminal. We
+# need this so the domain prompt below doesn't block unattended
+# installs (CI, kickstart, etc.) — an unattended install just
+# skips the prompt and uses the IP-based defaults.
+_is_interactive() {
+    [[ -t 0 ]]
+}
+
+# Ask the operator for a domain. Optional: pressing Enter (or
+# piping /dev/null) means "skip — use the IP-based defaults".
+# We do this BEFORE the panel starts so the very first config
+# render uses the right SNI; a late set_domain() would mean the
+# initial share URLs handed out in the first few minutes had
+# stale SNIs.
+prompt_domain() {
+    if ! _is_interactive; then
+        print_info "Non-interactive install detected — skipping domain prompt."
+        return 1
+    fi
+    print_info "Domain setup (optional — press Enter to use the IP address)"
+    print_info "If you have a domain pointed at this server, we can issue a"
+    print_info "Let's Encrypt cert automatically and set every TLS-bearing"
+    print_info "protocol's SNI to it. The panel UI also has a Domain tab"
+    print_info "where you can change or disable the domain at any time."
+    local input=""
+    read -r -p "$(echo -e "${YELLOW}Domain [leave blank to skip]:${NC} ")" input
+    input="${input// /}"
+    if [[ -z "$input" ]]; then
+        print_info "No domain entered; the panel will use the IP address."
+        return 1
+    fi
+    # Persist immediately so the .env / startup sees the value
+    # even if the panel's set_domain() step fails (operator can
+    # retry from the UI).
+    _env_set "PANEL_DOMAIN" "$input"
+    export PANEL_DOMAIN="$input"
+    return 0
+}
+
+# Run the panel's domain manager once, in --prefer-self-signed
+# mode, to write the Setting rows + cert files BEFORE the
+# systemd unit starts. This way:
+#   - The very first Xray render uses the right SNI (no
+#     share-URL churn on the operator's first batch of users).
+#   - The first request to /api/health sees the cert files
+#     in place, so the TLS-bearing inbounds boot cleanly
+#     instead of Xray logging "cert missing" and falling
+#     back to the panel's IP.
+#
+# If DNS isn't pointed at the server yet, or acme.sh/certbot
+# isn't installed, the panel will silently fall back to a
+# self-signed cert — exactly the same fallback the
+# prefer_self_signed=True path uses in the UI.
+apply_domain_on_install() {
+    local domain="${PANEL_DOMAIN:-}"
+    if [[ -z "$domain" ]]; then return 0; fi
+    cd "$INSTALL_DIR"
+    source venv/bin/activate 2>/dev/null || true
+    print_info "Applying domain '${domain}' to the panel database..."
+    # The DomainManager writes the cert + Setting rows, then
+    # triggers a sync of the Xray config. We don't reload
+    # Xray here (the panel's systemd unit hasn't started
+    # yet on a first install); the first reload happens
+    # when start_panel() runs systemctl restart below.
+    python3 -c "
+import asyncio
+from app.database import AsyncSessionLocal
+from app.domain_manager import set_domain
+
+async def _run():
+    async with AsyncSessionLocal() as db:
+        # prefer_self_signed on first boot: DNS often isn't
+        # pointed yet, and a clean self-signed cert is
+        # better than a half-failed LE attempt. The UI's
+        # 'Renew now' button can re-issue as a real LE
+        # cert later.
+        result = await set_domain(
+            db, '$domain', '',
+            prefer_self_signed=True,
+        )
+        if result.success:
+            print('DOMAIN_APPLIED')
+            for step in result.steps:
+                print(f'  - {step}')
+        else:
+            print(f'DOMAIN_FAILED: {result.error}')
+
+asyncio.run(_run())
+" || {
+        print_warning "Domain setup failed; the panel will use the IP address."
+        print_warning "You can retry from the Domain tab in the UI."
+    }
+}
+
 
 setup_panel_user() {
     print_info "Creating dedicated unprivileged service user..."
@@ -754,6 +848,12 @@ main() {
 
     echo -e "${CYAN}[9/13]${NC} Generating self-signed TLS cert..."
     setup_tls_cert
+
+    echo -e "${CYAN}[10a/13]${NC} Prompting for domain (optional)..."
+    prompt_domain || true
+
+    echo -e "${CYAN}[10b/13]${NC} Applying domain to panel database..."
+    apply_domain_on_install || true
 
     echo -e "${CYAN}[10/13]${NC} Setting up environment config..."
     setup_env
