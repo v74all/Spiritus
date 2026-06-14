@@ -116,11 +116,13 @@ async def _record_failed_login(ip: str) -> None:
 
 
 async def _clear_login_attempts(ip: str) -> None:
+    # Best-effort cleanup after a successful login; the counter also
+    # expires on its own, so a Redis hiccup here is benign — but log it.
     try:
         redis = await get_redis()
         await redis.delete(f"login_attempts:{ip}")
-    except Exception:
-        pass
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("clear login attempts failed (Redis?): %s", exc)
 
 
 async def _check_2fa_lockout(ip: str, username: str) -> None:
@@ -147,8 +149,8 @@ async def _clear_2fa_attempts(ip: str, username: str) -> None:
     try:
         redis = await get_redis()
         await redis.delete(f"2fa_attempts:{ip}:{username}")
-    except Exception:
-        pass
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("clear 2fa attempts failed (Redis?): %s", exc)
 
 
 def _client_ip(req: Request) -> str:

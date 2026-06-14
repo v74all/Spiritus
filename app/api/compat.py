@@ -548,6 +548,66 @@ def _build_share_links(u: VpnUser, server_ip: Optional[str] = None) -> Dict[str,
             logger.warning("Failed to build %s share link", "tuic", exc_info=False)
             links["tuic"] = ""
 
+    # ShadowTLS v3 — encoded as a sing-box-style URI. The password is
+    # the ShadowTLS user password; clients pair it with the handshake SNI.
+    if _settings_state.get("shadowtls_enabled"):
+        try:
+            stls_port = int(_settings_state.get("shadowtls_port") or 8445)
+            stls_password = _settings_state.get("shadowtls_password") or u.uuid
+            stls_sni = _settings_state.get("shadowtls_sni") or sni_host
+            label = urllib.parse.quote(f"V7LTHRONYX-ShadowTLS-{u.name}")
+            params = urllib.parse.urlencode({
+                "security": "tls",
+                "sni": stls_sni,
+                "version": _settings_state.get("shadowtls_version") or "3",
+            })
+            links["shadowtls"] = (
+                f"shadowtls://{stls_password}@{server_ip}:{stls_port}?{params}#{label}"
+            )
+        except Exception:
+            logger.warning("Failed to build %s share link", "shadowtls", exc_info=False)
+            links["shadowtls"] = ""
+
+    # NaiveProxy — naive+https URI (username:password@host:port).
+    if _settings_state.get("naiveproxy_enabled"):
+        try:
+            naive_port = int(_settings_state.get("naiveproxy_port") or 8447)
+            naive_user = _settings_state.get("naiveproxy_user") or u.name
+            naive_password = _settings_state.get("naiveproxy_password") or u.uuid
+            naive_sni = _settings_state.get("naiveproxy_sni") or sni_host
+            label = urllib.parse.quote(f"V7LTHRONYX-Naive-{u.name}")
+            creds = urllib.parse.quote(f"{naive_user}:{naive_password}", safe="")
+            links["naiveproxy"] = (
+                f"naive+https://{creds}@{server_ip}:{naive_port}?sni={urllib.parse.quote(naive_sni)}#{label}"
+            )
+        except Exception:
+            logger.warning("Failed to build %s share link", "naiveproxy", exc_info=False)
+            links["naiveproxy"] = ""
+
+    # Mieru — no universal URI scheme; clients import a JSON profile.
+    # We expose it as a base64-encoded JSON so the frontend can offer it
+    # as a downloadable mieru profile.
+    if _settings_state.get("mieru_enabled"):
+        try:
+            mieru_port = int(_settings_state.get("mieru_port") or 8446)
+            mieru_user = _settings_state.get("mieru_user") or u.name
+            mieru_password = _settings_state.get("mieru_password") or u.uuid
+            from ..protocol_engine import MieruConfigGenerator
+            profile = MieruConfigGenerator.generate_client_profile(
+                username=mieru_user,
+                password=mieru_password,
+                server_ip=server_ip,
+                port=mieru_port,
+                protocol=_settings_state.get("mieru_transport") or "TCP",
+                mtu=int(_settings_state.get("mieru_mtu") or 1400),
+            )
+            links["mieru"] = "mieru://" + base64.urlsafe_b64encode(
+                json.dumps(profile).encode()
+            ).decode()
+        except Exception:
+            logger.warning("Failed to build %s share link", "mieru", exc_info=False)
+            links["mieru"] = ""
+
     # VLESS xHTTP REALITY
     if _settings_state.get("vless_xhttp_enabled") and (_settings_state.get("reality_public_key") or _settings_state.get("vless_xhttp_reality_public_key")):
         try:
@@ -1289,13 +1349,40 @@ async def legacy_reset_traffic(
 async def legacy_user_activity(
     name: str,
     admin: User = Depends(get_current_admin_cookie),
+    db: AsyncSession = Depends(get_async_db),
 ):
+    """Per-user activity view.
+
+    Deep per-connection / per-site analytics need a DPI connection log
+    that this panel does not collect, so those fields stay empty and the
+    verdict is honest ("No deep data"). What we CAN report truthfully is
+    the user's real traffic accounting (up/down/total and last-seen),
+    which the dashboard's summary panel uses.
+    """
+    user = (
+        await db.execute(select(VpnUser).where(VpnUser.name == name))
+    ).scalar_one_or_none()
+
+    if user is None:
+        raise HTTPException(status_code=404, detail="user not found")
+
+    up = int(user.traffic_upload or 0)
+    down = int(user.traffic_download or 0)
+    total = int(user.traffic_used or 0) or (up + down)
+    last_seen = _user_last_seen.get(user.name, 0)
+
+    summary = [
+        {"label": "Upload", "bytes": up},
+        {"label": "Download", "bytes": down},
+        {"label": "Total", "bytes": total},
+    ]
+
     return {
-        "summary": [],
+        "summary": summary,
         "categories": [],
         "services": [],
         "deep": {
-            "verdict": "No data",
+            "verdict": "No deep data (DPI logging disabled)",
             "verdict_level": "safe",
             "total_connections": 0,
             "unique_destinations": 0,
@@ -1305,7 +1392,10 @@ async def legacy_user_activity(
         },
         "sites": [],
         "recent": [],
-        "total": 0,
+        "total": total,
+        "upload": up,
+        "download": down,
+        "last_seen": last_seen,
     }
 
 
@@ -1553,9 +1643,16 @@ async def legacy_live(admin: User = Depends(get_current_admin_cookie)):
 
 @router.get("/server-info")
 async def legacy_server_info(
-    admin: Optional[User] = Depends(get_optional_user_cookie),
+    admin: User = Depends(get_current_admin_cookie),
     db: AsyncSession = Depends(get_async_db),
 ):
+    # Auth required: this exposes the full server topology — every
+    # protocol's port, SNI, REALITY dest/short-id and public keys.
+    # It used to allow unauthenticated access (get_optional_user_cookie),
+    # which handed an anonymous visitor a complete reconnaissance map.
+    # The agent panel uses a separate /agent/server-info route, and the
+    # internal agent call passes its own User object directly, so neither
+    # is affected by tightening the HTTP guard here.
     s = await _load_legacy_settings(db)
     return {
         # VMess (always-on)
@@ -1811,8 +1908,31 @@ async def legacy_online_users(
 async def legacy_traffic_history(
     days: int = Query(30, ge=1, le=365),
     admin: User = Depends(get_current_admin_cookie),
+    db: AsyncSession = Depends(get_async_db),
 ):
-    return []
+    # No time-series log table exists yet, so we approximate daily traffic
+    # by grouping users' current traffic_used by the date their record was
+    # last updated. This won't reflect intra-day changes but gives a real
+    # picture of which days saw user activity rather than an empty chart.
+    cutoff = _utcnow() - timedelta(days=days)
+    result = await db.execute(
+        select(VpnUser).where(VpnUser.updated_at >= cutoff)
+    )
+    users = result.scalars().all()
+
+    # Aggregate traffic by date
+    daily: Dict[str, int] = {}
+    for u in users:
+        if u.updated_at:
+            day = u.updated_at.strftime("%Y-%m-%d")
+            daily[day] = daily.get(day, 0) + (u.traffic_used or 0)
+
+    # Build a full list for the requested date range (0-fill missing days)
+    out = []
+    for i in range(days - 1, -1, -1):
+        d = (_utcnow() - timedelta(days=i)).strftime("%Y-%m-%d")
+        out.append({"date": d, "traffic_bytes": daily.get(d, 0)})
+    return out
 
 
 @router.get("/traffic-history/top")
@@ -2714,13 +2834,29 @@ async def legacy_analytics(
         {"name": u.name, "traffic_used_gb": (u.traffic_used or 0) / (1024**3)}
         for u in top_result.scalars().all()
     ]
-    return {"daily_traffic": [], "top_users": top_users}
+
+    # Approximate daily traffic by grouping users' current usage by the
+    # day their row was last updated (same approach as /traffic-history),
+    # 0-filling the requested window so the chart always has a full series.
+    cutoff = _utcnow() - timedelta(days=days)
+    rows = (await db.execute(select(VpnUser).where(VpnUser.updated_at >= cutoff))).scalars().all()
+    by_day: Dict[str, int] = {}
+    for u in rows:
+        if u.updated_at:
+            d = u.updated_at.strftime("%Y-%m-%d")
+            by_day[d] = by_day.get(d, 0) + (u.traffic_used or 0)
+    daily_traffic = [
+        {"date": (_utcnow() - timedelta(days=i)).strftime("%Y-%m-%d"),
+         "traffic_bytes": by_day.get((_utcnow() - timedelta(days=i)).strftime("%Y-%m-%d"), 0)}
+        for i in range(days - 1, -1, -1)
+    ]
+    return {"daily_traffic": daily_traffic, "top_users": top_users}
 
 
 @router.get("/backup/list")
 async def legacy_backup_list(admin: User = Depends(get_current_admin_cookie)):
     backups: List[Dict[str, Any]] = []
-    backup_dir = "/opt/spiritus/backups"
+    backup_dir = _BACKUP_DIR
     if os.path.isdir(backup_dir):
         for name in sorted(os.listdir(backup_dir), reverse=True):
             path = os.path.join(backup_dir, name)
@@ -2737,17 +2873,139 @@ async def legacy_backup_list(admin: User = Depends(get_current_admin_cookie)):
     return {"backups": backups}
 
 
+_BACKUP_DIR = "/opt/spiritus/backups"
+
+
 @router.post("/backup/create")
-async def legacy_backup_create(admin: User = Depends(get_current_admin_cookie)):
-    return {"ok": True, "message": "Backup queued"}
+async def legacy_backup_create(
+    admin: User = Depends(get_current_admin_cookie),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """Write a JSON snapshot of users + settings to the backup dir.
+
+    This is a logical (not pg_dump) backup: it captures the rows an
+    operator actually needs to recover a panel — every VPN user and
+    every key/value setting — in a portable, restorable form.
+    """
+    try:
+        os.makedirs(_BACKUP_DIR, exist_ok=True)
+
+        users = (await db.execute(select(VpnUser))).scalars().all()
+        settings_rows = (await db.execute(select(Setting))).scalars().all()
+
+        snapshot = {
+            "version": 1,
+            "created_at": _utcnow().isoformat(),
+            "users": [
+                {
+                    "uuid": u.uuid,
+                    "name": u.name,
+                    "traffic_limit": u.traffic_limit,
+                    "traffic_used": u.traffic_used,
+                    "traffic_upload": u.traffic_upload,
+                    "traffic_download": u.traffic_download,
+                    "speed_limit_up": u.speed_limit_up,
+                    "speed_limit_down": u.speed_limit_down,
+                    "expire_at": u.expire_at.isoformat() if u.expire_at else None,
+                    "active": u.active,
+                    "agent_id": u.agent_id,
+                    "note": u.note,
+                }
+                for u in users
+            ],
+            "settings": [
+                {"key": s.key, "value": s.value, "value_type": s.value_type}
+                for s in settings_rows
+            ],
+        }
+
+        fname = f"backup-{_utcnow().strftime('%Y%m%d-%H%M%S')}.json"
+        fpath = os.path.join(_BACKUP_DIR, fname)
+        with open(fpath, "w", encoding="utf-8") as f:
+            json.dump(snapshot, f, ensure_ascii=False, indent=2)
+
+        return {
+            "ok": True,
+            "name": fname,
+            "users": len(snapshot["users"]),
+            "settings": len(snapshot["settings"]),
+            "size": os.path.getsize(fpath),
+        }
+    except OSError as exc:
+        logger.error("backup create failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"backup failed: {exc}")
 
 
 @router.post("/backup/restore")
 async def legacy_backup_restore(
     body: Dict[str, Any],
     admin: User = Depends(get_current_admin_cookie),
+    db: AsyncSession = Depends(get_async_db),
 ):
-    return {"ok": True}
+    """Restore a JSON snapshot: upsert settings and users by key/uuid."""
+    name = (body or {}).get("name", "")
+    if not name or "/" in name or ".." in name:
+        raise HTTPException(status_code=400, detail="invalid backup name")
+    fpath = os.path.join(_BACKUP_DIR, name)
+    if not os.path.isfile(fpath):
+        raise HTTPException(status_code=404, detail="backup not found")
+
+    try:
+        with open(fpath, "r", encoding="utf-8") as f:
+            snapshot = json.load(f)
+    except (OSError, json.JSONDecodeError) as exc:
+        raise HTTPException(status_code=400, detail=f"cannot read backup: {exc}")
+
+    restored_settings = 0
+    for row in snapshot.get("settings", []):
+        key = row.get("key")
+        if not key:
+            continue
+        existing = (
+            await db.execute(select(Setting).where(Setting.key == key))
+        ).scalar_one_or_none()
+        if existing:
+            existing.value = row.get("value")
+            existing.value_type = row.get("value_type", "string")
+        else:
+            db.add(Setting(key=key, value=row.get("value"), value_type=row.get("value_type", "string")))
+        restored_settings += 1
+
+    restored_users = 0
+    for row in snapshot.get("users", []):
+        uuid_val = row.get("uuid")
+        if not uuid_val:
+            continue
+        existing = (
+            await db.execute(select(VpnUser).where(VpnUser.uuid == uuid_val))
+        ).scalar_one_or_none()
+        expire_at = None
+        if row.get("expire_at"):
+            try:
+                expire_at = datetime.fromisoformat(row["expire_at"])
+            except ValueError:
+                expire_at = None
+        fields = dict(
+            name=row.get("name", uuid_val),
+            traffic_limit=row.get("traffic_limit", 0),
+            traffic_used=row.get("traffic_used", 0),
+            traffic_upload=row.get("traffic_upload", 0),
+            traffic_download=row.get("traffic_download", 0),
+            speed_limit_up=row.get("speed_limit_up", 0),
+            speed_limit_down=row.get("speed_limit_down", 0),
+            expire_at=expire_at,
+            active=row.get("active", 1),
+            note=row.get("note", ""),
+        )
+        if existing:
+            for k, v in fields.items():
+                setattr(existing, k, v)
+        else:
+            db.add(VpnUser(uuid=uuid_val, **fields))
+        restored_users += 1
+
+    await db.commit()
+    return {"ok": True, "restored_users": restored_users, "restored_settings": restored_settings}
 
 
 @router.post("/backup/cleanup")
@@ -2755,7 +3013,20 @@ async def legacy_backup_cleanup(
     body: Dict[str, Any],
     admin: User = Depends(get_current_admin_cookie),
 ):
-    return {"ok": True, "removed": 0}
+    """Delete backups older than `keep_days` (default 30)."""
+    keep_days = int((body or {}).get("keep_days", 30))
+    removed = 0
+    if os.path.isdir(_BACKUP_DIR):
+        cutoff = time.time() - keep_days * 86400
+        for name in os.listdir(_BACKUP_DIR):
+            path = os.path.join(_BACKUP_DIR, name)
+            try:
+                if os.path.isfile(path) and os.path.getmtime(path) < cutoff:
+                    os.unlink(path)
+                    removed += 1
+            except OSError:
+                continue
+    return {"ok": True, "removed": removed}
 
 
 # ─────────────────────────────────────────────────────────────────────────────

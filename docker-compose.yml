@@ -49,7 +49,22 @@ services:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-spiritus}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-spiritus}
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set in .env}
-      CORS_ORIGINS: ${CORS_ORIGINS:-*}
+      # Auth/session secrets. Empty values derive from SECRET_KEY at
+      # startup; set them explicitly for key separation in production.
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-}
+      CSRF_SECRET: ${CSRF_SECRET:-}
+      ARGON2_SALT: ${ARGON2_SALT:-}
+      # First-login admin. Cleared after first use — set in .env so the
+      # operator can actually log in to a fresh deployment.
+      ADMIN_BOOTSTRAP_USERNAME: ${ADMIN_BOOTSTRAP_USERNAME:-admin}
+      ADMIN_BOOTSTRAP_PASSWORD: ${ADMIN_BOOTSTRAP_PASSWORD:-}
+      # REALITY keypair for VLESS REALITY protocols (generate: xray x25519).
+      REALITY_PRIVATE_KEY: ${REALITY_PRIVATE_KEY:-}
+      REALITY_PUBLIC_KEY: ${REALITY_PUBLIC_KEY:-}
+      VPN_SERVER_IP: ${VPN_SERVER_IP:-}
+      # CORS: leave empty to disable. "*" is rejected at startup, so we
+      # must NOT default to it (that would crash the app).
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     ports:
       - "38471:38471"

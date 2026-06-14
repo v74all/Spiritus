@@ -158,11 +158,15 @@ async def toggle_reseller(
 # ── Reseller Auth ────────────────────────────────────────
 
 async def _reseller_ip_locked(ip: str) -> bool:
+    # Fail-open on Redis errors (don't lock everyone out if Redis is
+    # down) but LOG it — a silent failure here disables brute-force
+    # protection without anyone noticing.
     try:
         redis = await get_redis()
         val = await redis.get(f"reseller_login:{ip}")
         return bool(val and int(val) >= settings.max_login_attempts)
-    except Exception:
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("reseller rate-limit check failed (Redis?): %s", exc)
         return False
 
 
@@ -173,16 +177,16 @@ async def _record_reseller_failure(ip: str) -> None:
         count = await redis.incr(key)
         if count == 1:
             await redis.expire(key, settings.lockout_seconds)
-    except Exception:
-        pass
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("reseller failure-record failed (Redis?): %s", exc)
 
 
 async def _clear_reseller_attempts(ip: str) -> None:
     try:
         redis = await get_redis()
         await redis.delete(f"reseller_login:{ip}")
-    except Exception:
-        pass
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("reseller attempt-clear failed (Redis?): %s", exc)
 
 
 @router.post("/login")

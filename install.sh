@@ -78,6 +78,101 @@ install_xray() {
     print_success "Xray installed"
 }
 
+install_singbox() {
+    # sing-box hosts the standalone protocols (Hysteria2, TUIC,
+    # ShadowTLS, NaiveProxy) that are not Xray inbounds. The panel
+    # writes /usr/local/etc/sing-box/config.json and reloads this unit.
+    if command -v sing-box &> /dev/null; then
+        print_success "sing-box already installed: $(sing-box version 2>&1 | head -1)"
+        return
+    fi
+
+    print_info "Installing sing-box..."
+    local arch
+    case "$(uname -m)" in
+        x86_64)  arch="amd64" ;;
+        aarch64) arch="arm64" ;;
+        armv7l)  arch="armv7" ;;
+        *)       arch="amd64" ;;
+    esac
+
+    # Resolve the latest release tag, fall back to a known-good version.
+    local ver
+    ver=$(curl -fsSL --max-time 20 https://api.github.com/repos/SagerNet/sing-box/releases/latest 2>/dev/null \
+          | grep -oP '"tag_name":\s*"v\K[^"]+' | head -1)
+    [[ -z "$ver" ]] && ver="1.10.7"
+
+    local url="https://github.com/SagerNet/sing-box/releases/download/v${ver}/sing-box-${ver}-linux-${arch}.tar.gz"
+    local tmp; tmp=$(mktemp -d)
+    if curl -fsSL --max-time 120 -o "$tmp/sb.tar.gz" "$url" && tar xzf "$tmp/sb.tar.gz" -C "$tmp"; then
+        install -m 0755 "$tmp"/sing-box-*/sing-box /usr/local/bin/sing-box
+        mkdir -p /usr/local/etc/sing-box
+        # Minimal valid config so the unit can start before the panel
+        # writes the real one on first protocol sync.
+        if [[ ! -f /usr/local/etc/sing-box/config.json ]]; then
+            echo '{"log":{"level":"warn"},"inbounds":[],"outbounds":[{"type":"direct","tag":"direct"},{"type":"block","tag":"block"}]}' \
+                > /usr/local/etc/sing-box/config.json
+        fi
+        # systemd unit
+        cat > /etc/systemd/system/sing-box.service <<'UNIT'
+[Unit]
+Description=sing-box service
+After=network.target nss-lookup.target
+
+[Service]
+ExecStart=/usr/local/bin/sing-box run -c /usr/local/etc/sing-box/config.json
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=infinity
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+        systemctl daemon-reload
+        systemctl enable sing-box 2>/dev/null || true
+        print_success "sing-box ${ver} installed"
+    else
+        print_warning "sing-box download failed — standalone protocols (Hysteria2/TUIC/ShadowTLS/Naive) will be unavailable until installed"
+    fi
+    rm -rf "$tmp"
+}
+
+install_mieru() {
+    # Mieru ships its own `mita` server daemon. The panel writes a mita
+    # JSON config and applies it via `mita apply config`.
+    if command -v mita &> /dev/null; then
+        print_success "mieru (mita) already installed: $(mita version 2>&1 | head -1)"
+        return
+    fi
+
+    print_info "Installing mieru (mita)..."
+    local arch
+    case "$(uname -m)" in
+        x86_64)  arch="amd64" ;;
+        aarch64) arch="arm64" ;;
+        *)       arch="amd64" ;;
+    esac
+
+    local ver
+    ver=$(curl -fsSL --max-time 20 https://api.github.com/repos/enfein/mieru/releases/latest 2>/dev/null \
+          | grep -oP '"tag_name":\s*"v\K[^"]+' | head -1)
+    [[ -z "$ver" ]] && ver="3.19.0"
+
+    # mieru publishes a .deb for the mita server; fall back to tar.gz.
+    local tmp; tmp=$(mktemp -d)
+    local deb="mita_${ver}_linux_${arch}.deb"
+    local deb_url="https://github.com/enfein/mieru/releases/download/v${ver}/${deb}"
+    if curl -fsSL --max-time 120 -o "$tmp/$deb" "$deb_url" && dpkg -i "$tmp/$deb" >/dev/null 2>&1; then
+        mkdir -p /usr/local/etc/mieru
+        systemctl enable mita 2>/dev/null || true
+        print_success "mieru (mita) ${ver} installed"
+    else
+        print_warning "mieru download failed — Mieru protocol will be unavailable until installed"
+    fi
+    rm -rf "$tmp"
+}
+
 clone_or_update() {
     # The install dir gets chowned to `vpnpanel` later (setup_panel_user).
     # When the operator re-runs this script as root, modern git refuses to
@@ -129,9 +224,38 @@ setup_python() {
     print_success "Python environment configured"
 }
 
+run_migrations() {
+    # Apply Alembic migrations. Two cases must both work:
+    #  1. Fresh DB  → upgrade head runs 001 (create) + 002 (alter).
+    #  2. Existing DB created by the app's Base.metadata.create_all
+    #     (no alembic_version table) → `upgrade head` would fail on
+    #     001's CREATE TABLE ("already exists"); we stamp the base
+    #     revision and then upgrade so only the additive ALTERs run.
+    print_info "Applying database migrations..."
+    cd "$INSTALL_DIR"
+    # shellcheck disable=SC1091
+    source venv/bin/activate
+
+    local err=/tmp/v7-alembic.err
+    if alembic upgrade head 2>"$err"; then
+        print_success "Database migrations applied"
+    elif grep -qiE "already exists|DuplicateTable" "$err"; then
+        print_info "Existing schema detected — stamping baseline then upgrading..."
+        if alembic stamp 001 >/dev/null 2>&1 && alembic upgrade head 2>"$err"; then
+            print_success "Database migrations applied (stamped baseline)"
+        else
+            print_warning "Migration after stamp failed: $(tail -1 "$err" 2>/dev/null)"
+        fi
+    else
+        print_warning "Database migration failed: $(tail -1 "$err" 2>/dev/null)"
+        print_warning "The app will fall back to create_all on startup; manual 'alembic upgrade head' may be needed for schema changes."
+    fi
+    rm -f "$err"
+}
+
 setup_postgresql() {
     print_info "Setting up PostgreSQL..."
-    
+
     if systemctl is-active --quiet postgresql; then
         print_success "PostgreSQL is already running"
     else
@@ -212,18 +336,30 @@ setup_fail2ban() {
         print_success "Fail2ban started"
     fi
     
-    # Install panel-specific filters and jails
+    # Install panel-specific filters and jails. Capture stderr instead
+    # of discarding it — a swallowed failure here used to leave the panel
+    # with NO brute-force protection while the installer claimed success.
     cd "$INSTALL_DIR"
+    # shellcheck disable=SC1091
     source venv/bin/activate 2>/dev/null || true
-    
-    python3 -c "
+
+    local f2b_err=/tmp/v7-fail2ban.err
+    if python3 -c "
 from app.security import fail2ban_manager
 results = fail2ban_manager.install_all()
 print('Fail2ban setup:', results)
-" 2>/dev/null || true
-    
-    systemctl reload fail2ban 2>/dev/null || true
-    print_success "Fail2ban configured"
+" 2>"$f2b_err"; then
+        if systemctl reload fail2ban 2>>"$f2b_err"; then
+            print_success "Fail2ban configured"
+        else
+            print_warning "Fail2ban filters installed but reload failed: $(tail -1 "$f2b_err" 2>/dev/null)"
+        fi
+    else
+        print_warning "Fail2ban filter install failed — panel brute-force jails are NOT active:"
+        print_warning "  $(tail -1 "$f2b_err" 2>/dev/null)"
+        print_warning "  Re-run after fixing, or check 'app.security.fail2ban_manager'."
+    fi
+    rm -f "$f2b_err"
 }
 
 # Idempotent .env upsert. `_env_set KEY value` replaces an existing
@@ -827,7 +963,9 @@ main() {
     
     echo -e "${CYAN}[2/13]${NC} Installing Xray..."
     install_xray
-    
+    install_singbox
+    install_mieru
+
     echo -e "${CYAN}[3/13]${NC} Downloading V7LTHRONYX..."
     clone_or_update
     
@@ -857,6 +995,9 @@ main() {
 
     echo -e "${CYAN}[10/13]${NC} Setting up environment config..."
     setup_env
+
+    echo -e "${CYAN}[10c/13]${NC} Applying database migrations..."
+    run_migrations
 
     echo -e "${CYAN}[11/13]${NC} Configuring services..."
     configure_systemd

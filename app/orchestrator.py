@@ -17,7 +17,9 @@ Features:
 
 import asyncio
 import json
+import os
 import subprocess
+import tempfile
 import time
 import logging
 from typing import Dict, Any, Optional, List
@@ -122,27 +124,37 @@ class XrayBackend:
             logger.error(f"Failed to reload Xray config on {self.agent.name}: {e}")
             return False
 
-    async def get_user_traffic(self, user_uuid: str) -> Dict[str, int]:
-        """Get user traffic from Xray API."""
+    async def get_user_traffic(self, user_email: str) -> Dict[str, int]:
+        """Get a user's traffic via `xray api statsquery`.
+
+        Xray tracks per-user counters as `user>>>{email}>>>traffic>>>uplink`
+        / `...>>>downlink` (the email is the user identity, not the uuid).
+        We query both with one pattern call and sum by direction.
+        """
         try:
-            client = await self.conn.get_client()
-            resp = await client.get(
-                f"/debug/pprof/goroutine?user={user_uuid}"
+            proc = await asyncio.to_thread(
+                subprocess.run,
+                [
+                    self._bin(), "api", "statsquery",
+                    f"--server={self._api_server()}",
+                    f"-pattern=user>>>{user_email}>>>traffic",
+                ],
+                capture_output=True, text=True, timeout=15,
             )
-            # Xray API: Get user stats
-            resp_up = await client.post(
-                "/api/v1/stats",
-                json={"tag": f"user>>>{user_uuid}>>>uplink>>>traffic>>>bytes"}
-            )
-            resp_down = await client.post(
-                "/api/v1/stats",
-                json={"tag": f"user>>>{user_uuid}>>>downlink>>>traffic>>>bytes"}
-            )
-            up = resp_up.json().get("stat", {}).get("value", 0) if resp_up.status_code == 200 else 0
-            down = resp_down.json().get("stat", {}).get("value", 0) if resp_down.status_code == 200 else 0
-            return {"upload": int(up), "download": int(down)}
-        except Exception as e:
-            logger.error(f"Failed to get traffic for {user_uuid}: {e}")
+            if proc.returncode != 0:
+                return {"upload": 0, "download": 0}
+            data = json.loads(proc.stdout or "{}")
+            up = down = 0
+            for stat in data.get("stat", []):
+                name = stat.get("name", "")
+                value = int(stat.get("value", 0) or 0)
+                if name.endswith("uplink"):
+                    up += value
+                elif name.endswith("downlink"):
+                    down += value
+            return {"upload": up, "download": down}
+        except (json.JSONDecodeError, FileNotFoundError, subprocess.TimeoutExpired, ValueError) as e:
+            logger.error("Failed to get traffic for %s: %s", user_email, e)
             return {"upload": 0, "download": 0}
 
     async def deploy_config(self, config: Dict[str, Any]) -> bool:
@@ -154,7 +166,7 @@ class XrayBackend:
 
             # Validate config
             result = subprocess.run(
-                [self.agent.bin_path or "/usr/local/bin/xray", "test", "-config", config_path],
+                [self.agent.bin_path or "/usr/local/bin/xray", "-test", "-config", config_path],
                 capture_output=True, text=True, timeout=10
             )
             if result.returncode != 0:
@@ -167,40 +179,135 @@ class XrayBackend:
             logger.error(f"Failed to deploy Xray config: {e}")
             return False
 
-    async def add_user(self, user: VpnUser, protocol_config: ProtocolConfig) -> bool:
-        """Add a user to Xray via API."""
+    def _api_server(self) -> str:
+        """Xray gRPC API address. The generated config puts the API
+        inbound on 127.0.0.1:<api_port>. There is no separate agent
+        daemon, so even a 'remote' agent's local Xray is reachable
+        only on its own loopback — runtime user ops therefore target
+        the local API server."""
+        from .config import settings as _settings
+        port = self.agent.api_port or getattr(_settings, "api_port", 10085) or 10085
+        return f"127.0.0.1:{port}"
+
+    def _bin(self) -> str:
+        from .config import settings as _settings
+        return self.agent.bin_path or _settings.xray_bin_path or "/usr/local/bin/xray"
+
+    def _read_live_inbounds(self) -> List[Dict[str, Any]]:
+        """Read non-API inbounds from the on-disk Xray config so we can
+        target every enabled protocol when adding/removing a user."""
+        from .config import settings as _settings
+        path = self.agent.config_path or _settings.xray_config_path
         try:
-            client = await self.conn.get_client()
-            resp = await client.post(
-                "/api/v1/inbound/addClient",
-                json={
-                    "id": user.uuid,
-                    "email": user.name,
-                    "limitIp": 0,
-                    "totalGB": user.traffic_limit // (1024 * 1024 * 1024) if user.traffic_limit else 0,
-                    "expiryTime": int(user.expire_at.timestamp() * 1000) if user.expire_at else 0,
-                    "enable": True,
-                    "tgId": "",
-                    "subId": "",
-                }
-            )
-            return resp.status_code == 200
-        except Exception as e:
-            logger.error(f"Failed to add user {user.name} to Xray: {e}")
+            with open(path, "r", encoding="utf-8") as f:
+                cfg = json.load(f)
+        except (OSError, json.JSONDecodeError) as exc:
+            logger.error("xray add_user: cannot read config %s: %s", path, exc)
+            return []
+        return [
+            ib for ib in cfg.get("inbounds", [])
+            if isinstance(ib, dict) and ib.get("protocol") not in ("api", "dokodemo-door")
+        ]
+
+    @staticmethod
+    def _client_entry(protocol: str, user: VpnUser) -> Optional[Dict[str, Any]]:
+        """Build the settings.clients entry for `user` for a given
+        inbound protocol. Returns None for protocols that don't take
+        a per-user credential here."""
+        email = user.name or user.uuid
+        if protocol == "vmess":
+            return {"id": user.uuid, "alterId": 0, "email": email}
+        if protocol == "vless":
+            return {"id": user.uuid, "email": email}
+        if protocol == "trojan":
+            return {"password": user.uuid, "email": email}
+        if protocol == "shadowsocks":
+            # SS-2022 multi-user: per-user PSK lives in clients[].
+            return {"password": user.uuid, "email": email}
+        return None
+
+    async def add_user(self, user: VpnUser, protocol_config: ProtocolConfig) -> bool:
+        """Add a user to every live Xray inbound via `xray api adu`.
+
+        `xray api adu` reads a config-style JSON (an `inbounds` array of
+        complete inbound objects) and injects each inbound's
+        settings.clients into the matching running inbound by tag — no
+        full restart, connections preserved.
+        """
+        inbounds = self._read_live_inbounds()
+        if not inbounds:
+            logger.warning("xray add_user: no live inbounds found; nothing to do")
             return False
 
-    async def remove_user(self, user_uuid: str) -> bool:
-        """Remove a user from Xray via API."""
-        try:
-            client = await self.conn.get_client()
-            resp = await client.post(
-                "/api/v1/inbound/delClient",
-                json={"id": user_uuid}
-            )
-            return resp.status_code == 200
-        except Exception as e:
-            logger.error(f"Failed to remove user {user_uuid} from Xray: {e}")
+        adu_inbounds: List[Dict[str, Any]] = []
+        for ib in inbounds:
+            entry = self._client_entry(ib.get("protocol", ""), user)
+            if entry is None:
+                continue
+            clone = json.loads(json.dumps(ib))  # deep copy
+            clone.setdefault("settings", {})["clients"] = [entry]
+            adu_inbounds.append(clone)
+
+        if not adu_inbounds:
+            logger.info("xray add_user: no inbound accepts a per-user credential")
             return False
+
+        payload = {"inbounds": adu_inbounds}
+        fd, tmp = tempfile.mkstemp(prefix="xray-adu-", suffix=".json")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(payload, f)
+            proc = await asyncio.to_thread(
+                subprocess.run,
+                [self._bin(), "api", "adu", f"--server={self._api_server()}", tmp],
+                capture_output=True, text=True, timeout=15,
+            )
+            ok = proc.returncode == 0 and "result: ok" in (proc.stdout + proc.stderr)
+            if not ok:
+                logger.error(
+                    "xray adu for %s failed: %s",
+                    user.name, (proc.stderr or proc.stdout or "").strip()[:200],
+                )
+            return ok
+        except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+            logger.error("xray adu for %s errored: %s", user.name, exc)
+            return False
+        finally:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+
+    async def remove_user(self, user_uuid: str, email: Optional[str] = None) -> bool:
+        """Remove a user from every live Xray inbound via `xray api rmu`.
+
+        rmu identifies users by email, so we remove `email` from each
+        inbound tag. Falls back to the uuid as the email key when the
+        caller didn't pass one (legacy behaviour)."""
+        ident = email or user_uuid
+        inbounds = self._read_live_inbounds()
+        if not inbounds:
+            return False
+        all_ok = True
+        for ib in inbounds:
+            tag = ib.get("tag", "")
+            if not tag:
+                continue
+            try:
+                proc = await asyncio.to_thread(
+                    subprocess.run,
+                    [self._bin(), "api", "rmu", f"--server={self._api_server()}", f"-tag={tag}", ident],
+                    capture_output=True, text=True, timeout=15,
+                )
+                # rmu exits 0 even when the user wasn't present, so we
+                # treat a non-zero exit (e.g. unknown tag) as a per-tag
+                # miss rather than a hard failure.
+                if proc.returncode != 0:
+                    all_ok = False
+            except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+                logger.error("xray rmu for %s on %s errored: %s", ident, tag, exc)
+                all_ok = False
+        return all_ok
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -237,10 +344,26 @@ class SingboxBackend:
             return False
 
     async def add_user(self, user: VpnUser, protocol_config: ProtocolConfig) -> bool:
-        """Add user to sing-box config and reload."""
-        # sing-box doesn't have a runtime API like Xray
-        # We need to regenerate the full config and reload
-        return await self.restart()
+        """Add a user to the sing-box standalone protocols.
+
+        sing-box has no runtime user-add API (unlike Xray's gRPC adu).
+        In this panel the standalone protocols (Hysteria2/TUIC/ShadowTLS/
+        NaiveProxy) authenticate every client with a single shared,
+        per-protocol credential that is handed out in the user's share
+        link — there is no per-UUID entry to inject. Adding a panel user
+        therefore needs no change to the live sing-box config, so this is
+        intentionally a no-op (we must NOT restart sing-box on every user
+        create — that would drop all active QUIC sessions for nothing).
+
+        The authoritative config is (re)generated by
+        `app.services.protocol_sync._sync_singbox` whenever a protocol's
+        settings change; that path owns writes + validation + reload.
+        """
+        return True
+
+    async def remove_user(self, user_uuid: str) -> bool:
+        """Remove a user — see add_user: shared-credential model, no-op."""
+        return True
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -307,6 +430,18 @@ class WireGuardBackend:
                 capture_output=True, text=True
             )
 
+            # Pull AmneziaWG obfuscation parameters from the protocol
+            # config. These junk-packet knobs (Jc/Jmin/Jmax/S1/S2/H1-H4)
+            # are the entire reason to run AmneziaWG over plain WireGuard
+            # — without them the DPI-evasion is a no-op. They must match
+            # between server and client, so we echo the server's values
+            # into the generated client config.
+            pcfg = (protocol_config.config or {}) if protocol_config else {}
+            is_amnezia = (
+                protocol_config is not None
+                and protocol_config.protocol_key == "amneziawg"
+            )
+
             # Generate client config
             from .protocol_engine import ClientConfigGenerator
             config = ClientConfigGenerator.generate_wg_config(
@@ -315,10 +450,19 @@ class WireGuardBackend:
                 server_public_key=self.agent.wg_public_key or "",
                 server_endpoint=f"{self.agent.address}:{self.agent.wg_listen_port or 51820}",
                 dns=self.agent.wg_dns or "1.1.1.1",
-                mtu=self.agent.wg_mtu or 1280,
+                mtu=int(pcfg.get("mtu", self.agent.wg_mtu or 1280)),
+                jc=int(pcfg.get("jc", 0)) if is_amnezia else 0,
+                jmin=int(pcfg.get("jmin", 0)) if is_amnezia else 0,
+                jmax=int(pcfg.get("jmax", 0)) if is_amnezia else 0,
+                s1=int(pcfg.get("s1", 0)) if is_amnezia else 0,
+                s2=int(pcfg.get("s2", 0)) if is_amnezia else 0,
+                h1=int(pcfg.get("h1", 0)) if is_amnezia else 0,
+                h2=int(pcfg.get("h2", 0)) if is_amnezia else 0,
+                h3=int(pcfg.get("h3", 0)) if is_amnezia else 0,
+                h4=int(pcfg.get("h4", 0)) if is_amnezia else 0,
             )
 
-            return {"config": config, "success": True}
+            return {"config": config, "success": True, "public_key": client_public_key}
         except Exception as e:
             logger.error(f"Failed to add WG peer: {e}")
             return {"config": "", "success": False, "error": str(e)}
@@ -411,8 +555,11 @@ class Orchestrator:
         """Remove a user from the appropriate backend."""
         backend = self._get_backend(agent)
         if isinstance(backend, WireGuardBackend):
-            # Need client public key for WG
+            # WG identifies peers by public key, not email.
             return await backend.remove_user(user.uuid)
+        if isinstance(backend, XrayBackend):
+            # Xray rmu keys off the user's email (== user.name).
+            return await backend.remove_user(user.uuid, email=user.name)
         return await backend.remove_user(user.uuid)
 
     async def deploy_agent_config(
@@ -433,7 +580,8 @@ class Orchestrator:
         """Get user traffic from the backend."""
         backend = self._get_backend(agent)
         if isinstance(backend, XrayBackend):
-            return await backend.get_user_traffic(user.uuid)
+            # Xray stat counters key off the user's email (== user.name).
+            return await backend.get_user_traffic(user.name or user.uuid)
         return {"upload": 0, "download": 0}
 
     async def setup_ech(

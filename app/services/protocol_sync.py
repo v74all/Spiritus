@@ -42,6 +42,7 @@ import shutil
 import subprocess
 import tempfile
 import threading
+import uuid as _uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
@@ -52,7 +53,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from .. import secrets as _secrets
 from ..config import settings
 from ..models import Agent, AgentBackend, AgentStatus, ProtocolConfig
-from ..protocol_engine import PROTOCOLS, ProtocolSpec, XrayConfigGenerator
+from ..protocol_engine import (
+    PROTOCOLS,
+    MieruConfigGenerator,
+    ProtocolSpec,
+    SingboxConfigGenerator,
+    XrayConfigGenerator,
+)
 from ..timeutil import utcnow as _utcnow
 
 logger = logging.getLogger(__name__)
@@ -84,6 +91,13 @@ class SyncResult:
     error: Optional[str] = None
     started_at: str = field(default_factory=lambda: _utcnow().isoformat())
     finished_at: Optional[str] = None
+    # sing-box sync outcome (standalone protocols). None when no
+    # sing-box protocol was enabled, so we never touched sing-box.
+    singbox_synced: Optional[bool] = None
+    singbox_message: str = ""
+    # Mieru (mita) sync outcome. None when Mieru was not enabled.
+    mieru_synced: Optional[bool] = None
+    mieru_message: str = ""
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -227,6 +241,9 @@ def _resolve_reality_keys(protocol_cfg: ProtocolConfig) -> Tuple[str, str, str]:
     needed for server-side Xray config; the public key and short id
     are echoed into client share URLs and (in the case of short id)
     into the server's `shortIds` array.
+
+    Raises ValueError if the private key is empty — an empty key
+    produces an invalid Xray config that will fail at `xray -test`.
     """
     cfg = protocol_cfg.config or {}
     private_key = (
@@ -241,7 +258,18 @@ def _resolve_reality_keys(protocol_cfg: ProtocolConfig) -> Tuple[str, str, str]:
         cfg.get("reality_short_id")
         or cfg.get("short_id")
         or _secrets.reality_short_id()
+        or ""
     )
+    if not private_key:
+        raise ValueError(
+            "REALITY private key is not set. Generate keys via Settings → "
+            "Protocol Config or run: xray x25519"
+        )
+    if not public_key:
+        raise ValueError(
+            "REALITY public key is not set. Generate keys via Settings → "
+            "Protocol Config or run: xray x25519"
+        )
     return private_key, public_key, short_id
 
 
@@ -289,7 +317,17 @@ def _build_inbound_for(
     else:
         cfg = dict(raw_cfg)
 
-    private_key, _, short_id = _resolve_reality_keys(protocol_cfg)
+    # Resolve REALITY keys lazily — only protocols that actually use them
+    # call _resolve_reality_keys(). Calling it unconditionally would break
+    # every non-REALITY protocol when keys are not yet generated.
+    _reality_keys_cache: Optional[Tuple[str, str, str]] = None
+
+    def _get_reality_keys() -> Tuple[str, str, str]:
+        nonlocal _reality_keys_cache
+        if _reality_keys_cache is None:
+            _reality_keys_cache = _resolve_reality_keys(protocol_cfg)
+        return _reality_keys_cache
+
     # We don't have a single global user UUID — pass a placeholder
     # that the Xray API will replace when a real client connects.
     # (Inbound-level `clients` is a template; per-user entries are
@@ -297,22 +335,32 @@ def _build_inbound_for(
     placeholder_uuid = "00000000-0000-0000-0000-000000000000"
 
     if protocol_key == "vless_xhttp_reality":
+        try:
+            pk, _, sid = _get_reality_keys()
+        except ValueError as exc:
+            logger.warning("vless_xhttp_reality skipped: %s", exc)
+            return None
         return XrayConfigGenerator.generate_vless_xhttp_reality(
             user_uuid=placeholder_uuid,
             port=int(cfg.get("port", 2053)),
-            reality_private_key=private_key,
-            reality_short_id=short_id,
+            reality_private_key=pk,
+            reality_short_id=sid,
             reality_dest=cfg.get("reality_dest", "digikala.com:443"),
             reality_sni=cfg.get("reality_sni", "digikala.com"),
             xhttp_path=cfg.get("xhttp_path", "/xhttp-stream"),
             xhttp_mode=cfg.get("xhttp_mode", "auto"),
         )
     if protocol_key == "vless_vision_reality":
+        try:
+            pk, _, sid = _get_reality_keys()
+        except ValueError as exc:
+            logger.warning("vless_vision_reality skipped: %s", exc)
+            return None
         return XrayConfigGenerator.generate_vless_vision_reality(
             user_uuid=placeholder_uuid,
             port=int(cfg.get("port", 2058)),
-            reality_private_key=private_key,
-            reality_short_id=short_id,
+            reality_private_key=pk,
+            reality_short_id=sid,
             reality_dest=cfg.get("reality_dest", "objects.githubusercontent.com:443"),
             reality_sni=cfg.get("reality_sni", "objects.githubusercontent.com"),
             flow=cfg.get("flow", "xtls-rprx-vision"),
@@ -332,17 +380,172 @@ def _build_inbound_for(
             host=cfg.get("host", ""),
         )
     if protocol_key == "ss2022":
+        server_key = cfg.get("server_key", "")
+        user_key = cfg.get("user_key", "")
+        if not server_key or not user_key:
+            logger.warning(
+                "ss2022: server_key or user_key is empty — skipping inbound. "
+                "Set them via the protocol config page."
+            )
+            return None
         return XrayConfigGenerator.generate_ss2022(
-            server_key=cfg.get("server_key", ""),
-            user_key=cfg.get("user_key", ""),
+            server_key=server_key,
+            user_key=user_key,
             port=int(cfg.get("port", 2056)),
             method=cfg.get("method", "2022-blake3-aes-128-gcm"),
         )
-    # Anything else (grpc, httpupgrade, trojan-cdn, hysteria2, tuic,
-    # amneziawg, …) has no first-class inbound builder in
-    # XrayConfigGenerator yet. We log the omission and skip so
-    # enabling such a protocol doesn't fail with a 500.
+    if protocol_key == "vless_reverse_reality":
+        try:
+            pk, _, sid = _get_reality_keys()
+        except ValueError as exc:
+            logger.warning("vless_reverse_reality skipped: %s", exc)
+            return None
+        return XrayConfigGenerator.generate_vless_reverse_reality(
+            user_uuid=placeholder_uuid,
+            port=int(cfg.get("port", 2059)),
+            reality_private_key=pk,
+            reality_short_id=sid,
+            reality_dest=cfg.get("reality_dest", "digikala.com:443"),
+            reality_sni=cfg.get("reality_sni", "digikala.com"),
+            tunnel_port=int(cfg.get("tunnel_port", 0)),
+            backhaul_mode=cfg.get("backhaul_mode", "rathole"),
+        )
+    if protocol_key == "trojan_cdn":
+        return XrayConfigGenerator.generate_trojan_cdn(
+            user_password=placeholder_uuid,
+            port=int(cfg.get("port", 2083)),
+            ws_path=cfg.get("ws_path", "/trojan-ws"),
+            grpc_service=cfg.get("grpc_service", "TrojanService"),
+            grpc_enabled=bool(cfg.get("grpc_enabled", False)),
+            grpc_port=int(cfg.get("grpc_port", 2060)),
+            sni=cfg.get("sni", ""),
+            domain=cfg.get("domain", ""),
+        )
+    if protocol_key == "vless_ws_plain_front":
+        return XrayConfigGenerator.generate_vless_ws_plain(
+            user_uuid=placeholder_uuid,
+            port=int(cfg.get("port", 2052)),
+            ws_path=cfg.get("ws_path", "/"),
+            host=cfg.get("front_domain", cfg.get("host", "")),
+        )
+    if protocol_key == "grpc_transport":
+        return XrayConfigGenerator.generate_vless_grpc(
+            user_uuid=placeholder_uuid,
+            port=int(cfg.get("port", 2054)),
+            service_name=cfg.get("service_name", "GunService"),
+            sni=cfg.get("sni", cfg.get("domain", "")),
+        )
+    if protocol_key == "httpupgrade":
+        return XrayConfigGenerator.generate_vless_httpupgrade(
+            user_uuid=placeholder_uuid,
+            port=int(cfg.get("port", 2055)),
+            path=cfg.get("path", "/httpupgrade"),
+            host=cfg.get("host", ""),
+            sni=cfg.get("sni", cfg.get("domain", "")),
+        )
     logger.info("protocol %r has no inbound builder; skipping Xray sync", protocol_key)
+    return None
+
+
+# ═══════════════════════════════════════════════════════════════
+#  Composing the sing-box config (standalone protocols)
+# ═══════════════════════════════════════════════════════════════
+
+# Which protocol keys are hosted by sing-box rather than Xray.
+SINGBOX_PROTOCOLS = {"hysteria2", "tuic", "shadowtls", "naiveproxy"}
+
+
+def _build_singbox_inbounds_for(
+    protocol_key: str,
+    protocol_cfg: ProtocolConfig,
+    domain_defaults: Optional[Dict[str, str]] = None,
+) -> Optional[List[Dict[str, Any]]]:
+    """Translate a ProtocolConfig row into sing-box inbound dict(s).
+
+    Returns a list of inbounds (ShadowTLS yields two: the camouflage
+    inbound plus its Shadowsocks detour) or None when the protocol
+    has no sing-box builder or is missing required secrets.
+    """
+    raw_cfg = protocol_cfg.config or {}
+    if domain_defaults and (domain_defaults.get("domain") or domain_defaults.get("cert_path")):
+        cfg = _apply_domain_defaults(
+            raw_cfg,
+            domain=domain_defaults.get("domain", ""),
+            cert_path=domain_defaults.get("cert_path", ""),
+            key_path=domain_defaults.get("key_path", ""),
+        )
+    else:
+        cfg = dict(raw_cfg)
+
+    sni = cfg.get("sni") or cfg.get("domain") or ""
+    cert_path = cfg.get("cert_file") or cfg.get("tls_cert_path") or ""
+    key_path = cfg.get("key_file") or cfg.get("tls_key_path") or ""
+
+    if protocol_key == "hysteria2":
+        password = cfg.get("password", "")
+        if not password:
+            logger.warning("hysteria2: password not set — skipping sing-box inbound")
+            return None
+        return SingboxConfigGenerator.generate_hysteria2(
+            password=password,
+            port=int(cfg.get("port", 8443)),
+            sni=sni,
+            cert_path=cert_path,
+            key_path=key_path,
+            salamander_enabled=bool(cfg.get("salamander_enabled", False)),
+            salamander_password=cfg.get("salamander_password", ""),
+            bandwidth_up=cfg.get("bandwidth_up", "100 mbps"),
+            bandwidth_down=cfg.get("bandwidth_down", "200 mbps"),
+        )
+    if protocol_key == "tuic":
+        password = cfg.get("password", "")
+        if not password:
+            logger.warning("tuic: password not set — skipping sing-box inbound")
+            return None
+        tuic_uuid = cfg.get("uuid", "")
+        if not tuic_uuid:
+            # Derive a stable UUID from the protocol row so the same
+            # config renders identically across syncs.
+            tuic_uuid = str(_uuid.uuid5(_uuid.NAMESPACE_DNS, f"tuic-{protocol_cfg.id}-{password}"))
+        return SingboxConfigGenerator.generate_tuic(
+            uuid=tuic_uuid,
+            password=password,
+            port=int(cfg.get("port", 8444)),
+            sni=sni,
+            cert_path=cert_path,
+            key_path=key_path,
+            congestion_control=cfg.get("congestion_control", "cubic"),
+            udp_relay=cfg.get("udp_relay", "native"),
+            zero_rtt=bool(cfg.get("zero_rtt", False)),
+        )
+    if protocol_key == "shadowtls":
+        password = cfg.get("password", "")
+        ss_password = cfg.get("ss_password") or cfg.get("server_key") or password
+        if not password or not ss_password:
+            logger.warning("shadowtls: password/ss_password not set — skipping sing-box inbound")
+            return None
+        return SingboxConfigGenerator.generate_shadowtls(
+            password=password,
+            ss_password=ss_password,
+            port=int(cfg.get("port", 8445)),
+            handshake_server=cfg.get("sni", "chat.deepseek.com"),
+            handshake_port=int(cfg.get("handshake_port", 443)),
+            version=int(cfg.get("version", 3)),
+        )
+    if protocol_key == "naiveproxy":
+        password = cfg.get("password", "")
+        if not password:
+            logger.warning("naiveproxy: password not set — skipping sing-box inbound")
+            return None
+        return SingboxConfigGenerator.generate_naive(
+            username=cfg.get("user", "panel"),
+            password=password,
+            port=int(cfg.get("port", 8447)),
+            sni=sni,
+            cert_path=cert_path,
+            key_path=key_path,
+        )
+    logger.info("protocol %r has no sing-box inbound builder; skipping", protocol_key)
     return None
 
 
@@ -388,8 +591,12 @@ def _validate_xray_config(path: str) -> Tuple[bool, str]:
     """
     bin_path = settings.xray_bin_path or "/usr/local/bin/xray"
     try:
+        # NOTE: the flag is `-test`, not a `test` subcommand. Recent
+        # Xray (run is the default command) rejects `xray test -config`
+        # with "unknown command", which would make every validation
+        # fail. `xray -test -config` is the correct, version-stable form.
         proc = subprocess.run(
-            [bin_path, "test", "-config", path],
+            [bin_path, "-test", "-config", path],
             capture_output=True,
             text=True,
             timeout=15,
@@ -407,6 +614,34 @@ def _validate_xray_config(path: str) -> Tuple[bool, str]:
     output = (proc.stdout or "") + (proc.stderr or "")
     if proc.returncode != 0:
         return False, output.strip() or f"xray -test exited {proc.returncode}"
+    return True, output.strip()
+
+
+def _validate_singbox_config(path: str) -> Tuple[bool, str]:
+    """Run `sing-box check -c <path>` and return (ok, output).
+
+    Mirrors `_validate_xray_config` for the standalone protocols. When
+    the sing-box binary is absent (dev machine), this is a soft failure
+    so the rest of the sync still completes for Xray.
+    """
+    bin_path = settings.singbox_bin_path or "/usr/local/bin/sing-box"
+    try:
+        proc = subprocess.run(
+            [bin_path, "check", "-c", path],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+    except FileNotFoundError:
+        return False, f"sing-box binary not found at {bin_path}"
+    except subprocess.TimeoutExpired:
+        return False, "sing-box check timed out after 15s"
+    except Exception as exc:  # noqa: BLE001
+        return False, f"sing-box check failed to start: {exc}"
+
+    output = (proc.stdout or "") + (proc.stderr or "")
+    if proc.returncode != 0:
+        return False, output.strip() or f"sing-box check exited {proc.returncode}"
     return True, output.strip()
 
 
@@ -545,6 +780,132 @@ async def runtime_status(
 import asyncio  # noqa: E402  (placed here so module loads even on Python <3.10)
 
 
+def _sync_singbox(
+    enabled: List[ProtocolConfig],
+    domain_defaults: Dict[str, str],
+) -> Tuple[Optional[bool], str]:
+    """Render + write + validate + reload the sing-box config.
+
+    Returns (synced, message):
+      - (None, "...")  no sing-box protocol enabled — sing-box untouched
+      - (True, "...")  config written, validated and reloaded
+      - (False, "...") something failed (validation, write, reload)
+
+    This runs alongside the Xray sync but is intentionally independent:
+    a sing-box failure must not roll back a good Xray config and vice
+    versa. Each backend owns its own file and unit.
+    """
+    sb_protocols = [p for p in enabled if p.protocol_key in SINGBOX_PROTOCOLS]
+    if not sb_protocols:
+        return None, "no sing-box protocol enabled"
+
+    target = settings.singbox_config_path
+    if not target:
+        return False, "singbox_config_path is not configured"
+
+    inbounds: List[Dict[str, Any]] = []
+    for proto_cfg in sb_protocols:
+        built = _build_singbox_inbounds_for(
+            proto_cfg.protocol_key, proto_cfg, domain_defaults
+        )
+        if built:
+            inbounds.extend(built)
+
+    if not inbounds:
+        return False, "sing-box protocols enabled but none produced a valid inbound (check passwords/keys)"
+
+    full_config = SingboxConfigGenerator.generate_full_config(inbounds)
+
+    # Back up, write atomically, validate, roll back on failure.
+    backup_path: Optional[str] = None
+    if os.path.isfile(target):
+        backup_path = target + ".bak"
+        try:
+            shutil.copy2(target, backup_path)
+        except OSError:
+            backup_path = None
+
+    try:
+        _write_xray_config(full_config, target)  # generic atomic JSON writer
+    except OSError as exc:
+        return False, f"failed to write sing-box config: {exc}"
+
+    ok, output = _validate_singbox_config(target)
+    if not ok:
+        # Soft-fail when the binary is simply missing (dev box): the
+        # config is still written so a later install picks it up.
+        if "not found" in output:
+            return False, f"sing-box config written but not validated: {output}"
+        if backup_path and os.path.isfile(backup_path):
+            shutil.copy2(backup_path, target)
+        return False, f"sing-box check rejected the config: {output[:200]}"
+
+    reload_ok, reload_msg, _ = _systemd_reload_or_restart(
+        settings.singbox_service_name or "sing-box"
+    )
+    if not reload_ok:
+        return False, f"sing-box config validated but reload failed: {reload_msg}"
+    return True, "sing-box synced and reloaded"
+
+
+def _sync_mieru(enabled: List[ProtocolConfig]) -> Tuple[Optional[bool], str]:
+    """Render + write + apply the Mieru (mita) server config.
+
+    Mieru runs its own daemon configured via `mita apply config <file>`,
+    so the apply step differs from the systemd-reload used by Xray and
+    sing-box. Returns the same (synced, message) tristate as
+    `_sync_singbox`: None means Mieru was not enabled.
+    """
+    mieru_rows = [p for p in enabled if p.protocol_key == "mieru"]
+    if not mieru_rows:
+        return None, "mieru not enabled"
+
+    proto_cfg = mieru_rows[0]
+    cfg = proto_cfg.config or {}
+    password = cfg.get("password", "")
+    if not password:
+        return False, "mieru: password not set — skipping"
+
+    target = settings.mieru_config_path
+    if not target:
+        return False, "mieru_config_path is not configured"
+
+    server_config = MieruConfigGenerator.generate_server_config(
+        username=cfg.get("user", "panel"),
+        password=password,
+        port=int(cfg.get("port", 8446)),
+        protocol=cfg.get("transport", "TCP"),
+        mtu=int(cfg.get("mtu", 1400)),
+    )
+
+    try:
+        _write_xray_config(server_config, target)  # generic atomic JSON writer
+    except OSError as exc:
+        return False, f"failed to write mieru config: {exc}"
+
+    bin_path = settings.mieru_bin_path or "/usr/local/bin/mita"
+    # Apply the config through mita, then (re)start the daemon.
+    try:
+        apply_proc = subprocess.run(
+            [bin_path, "apply", "config", target],
+            capture_output=True, text=True, timeout=15,
+        )
+    except FileNotFoundError:
+        return False, f"mieru config written but mita binary not found at {bin_path}"
+    except subprocess.TimeoutExpired:
+        return False, "mita apply config timed out"
+    if apply_proc.returncode != 0:
+        out = (apply_proc.stderr or apply_proc.stdout or "").strip()
+        return False, f"mita apply config failed: {out[:200]}"
+
+    reload_ok, reload_msg, _ = _systemd_reload_or_restart(
+        settings.mieru_service_name or "mita"
+    )
+    if not reload_ok:
+        return False, f"mieru config applied but service reload failed: {reload_msg}"
+    return True, "mieru synced and reloaded"
+
+
 async def sync_and_reload(
     db: AsyncSession,
     *,
@@ -675,12 +1036,29 @@ async def sync_and_reload(
                     proto_cfg.tag = f"pcfg-{proto_cfg.protocol_key}"
             await db.commit()
 
+            # 6. Sync the standalone (sing-box) protocols. This is
+            # independent of the Xray sync above — a sing-box failure
+            # is surfaced in the result but does not fail the overall
+            # sync, since the Xray config is already live and good.
+            singbox_synced, singbox_message = _sync_singbox(enabled, domain_defaults)
+            if singbox_synced is False:
+                logger.warning("sing-box sync issue: %s", singbox_message)
+
+            # 7. Sync Mieru (mita) — also independent of Xray/sing-box.
+            mieru_synced, mieru_message = _sync_mieru(enabled)
+            if mieru_synced is False:
+                logger.warning("mieru sync issue: %s", mieru_message)
+
             return SyncResult(
                 success=True,
                 config_path=target_path,
                 validator_output=output,
                 reload_method=method,
                 finished_at=_utcnow().isoformat(),
+                singbox_synced=singbox_synced,
+                singbox_message=singbox_message,
+                mieru_synced=mieru_synced,
+                mieru_message=mieru_message,
             )
         except Exception as exc:  # noqa: BLE001
             logger.exception("sync_and_reload failed")

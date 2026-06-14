@@ -70,8 +70,8 @@ async def get_system_status(
         if result.returncode == 0:
             xray_running = True
             xray_version = result.stdout.strip().split('\n')[0]
-    except Exception:
-        pass
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError) as exc:
+        logger.debug("xray version probe failed: %s", exc)
 
     # Uptime
     boot_time = psutil.boot_time()
@@ -124,7 +124,7 @@ async def get_xray_status(admin: User = Depends(get_current_admin)):
         
         # Validate config
         result = subprocess.run(
-            [settings.xray_bin_path, "test", "-config", settings.xray_config_path],
+            [settings.xray_bin_path, "-test", "-config", settings.xray_config_path],
             capture_output=True, text=True, timeout=10
         )
         config_valid = result.returncode == 0

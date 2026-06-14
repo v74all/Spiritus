@@ -723,17 +723,90 @@ class XrayConfigGenerator:
         port: int = 2056,
         method: str = "2022-blake3-aes-128-gcm",
     ) -> Dict[str, Any]:
-        """Generate Shadowsocks-2022 inbound config."""
+        """Generate Shadowsocks-2022 inbound config.
+
+        SS-2022 multi-user form: the inbound carries the server PSK in
+        `settings.password`, and each user gets their own PSK inside the
+        `clients` array. Both must be standalone base64 — concatenating
+        them as ``server:user`` in the top-level password (the previous
+        behaviour) makes Xray try to base64-decode the whole string and
+        fail with "illegal base64 data" at the ':' separator.
+        """
+        settings: Dict[str, Any] = {
+            "method": method,
+            "password": server_key,
+            "network": "tcp,udp",
+        }
+        if user_key:
+            settings["clients"] = [{"password": user_key, "email": "ss2022-user"}]
         return {
             "tag": "ss2022",
             "listen": "0.0.0.0",
             "port": port,
             "protocol": "shadowsocks",
+            "settings": settings,
+        }
+
+    @staticmethod
+    def generate_vless_grpc(
+        user_uuid: str,
+        port: int = 2054,
+        service_name: str = "GunService",
+        sni: str = "",
+    ) -> Dict[str, Any]:
+        """Generate VLESS + gRPC inbound config (CDN compatible)."""
+        stream: Dict[str, Any] = {
+            "network": "grpc",
+            "grpcSettings": {"serviceName": service_name},
+        }
+        if sni:
+            stream["security"] = "tls"
+            stream["tlsSettings"] = {"serverName": sni}
+        else:
+            stream["security"] = "none"
+        return {
+            "tag": "vless-grpc",
+            "listen": "0.0.0.0",
+            "port": port,
+            "protocol": "vless",
             "settings": {
-                "method": method,
-                "password": f"{server_key}:{user_key}",
-                "network": "tcp,udp"
-            }
+                "clients": [{"id": user_uuid}],
+                "decryption": "none",
+            },
+            "streamSettings": stream,
+        }
+
+    @staticmethod
+    def generate_vless_httpupgrade(
+        user_uuid: str,
+        port: int = 2055,
+        path: str = "/httpupgrade",
+        host: str = "",
+        sni: str = "",
+    ) -> Dict[str, Any]:
+        """Generate VLESS + HTTPUpgrade inbound config."""
+        hu_settings: Dict[str, Any] = {"path": path}
+        if host:
+            hu_settings["host"] = host
+        stream: Dict[str, Any] = {
+            "network": "httpupgrade",
+            "httpupgradeSettings": hu_settings,
+        }
+        if sni:
+            stream["security"] = "tls"
+            stream["tlsSettings"] = {"serverName": sni}
+        else:
+            stream["security"] = "none"
+        return {
+            "tag": "vless-httpupgrade",
+            "listen": "0.0.0.0",
+            "port": port,
+            "protocol": "vless",
+            "settings": {
+                "clients": [{"id": user_uuid}],
+                "decryption": "none",
+            },
+            "streamSettings": stream,
         }
 
     @staticmethod
@@ -807,6 +880,239 @@ class XrayConfigGenerator:
                 ]
             }
         }
+
+
+# ═══════════════════════════════════════════════════════════════
+#  sing-box Config Generator
+# ═══════════════════════════════════════════════════════════════
+
+class SingboxConfigGenerator:
+    """Render sing-box inbounds for the standalone (non-Xray) protocols.
+
+    sing-box natively supports Hysteria2, TUIC, ShadowTLS and NaiveProxy
+    as first-class inbounds. Each generator returns a *list* of inbound
+    dicts (ShadowTLS needs a paired Shadowsocks detour inbound, so the
+    list abstraction keeps every protocol uniform).
+
+    All TLS-bearing protocols read `cert_path`/`key_path`; when the
+    panel has an active domain these come from the DomainManager.
+    """
+
+    @staticmethod
+    def _tls_block(sni: str, cert_path: str, key_path: str, alpn: Optional[List[str]] = None) -> Dict[str, Any]:
+        tls: Dict[str, Any] = {"enabled": True}
+        if sni:
+            tls["server_name"] = sni
+        if cert_path and key_path:
+            tls["certificate_path"] = cert_path
+            tls["key_path"] = key_path
+        if alpn:
+            tls["alpn"] = alpn
+        return tls
+
+    @staticmethod
+    def generate_hysteria2(
+        password: str,
+        port: int = 8443,
+        sni: str = "",
+        cert_path: str = "",
+        key_path: str = "",
+        salamander_enabled: bool = False,
+        salamander_password: str = "",
+        bandwidth_up: str = "100 mbps",
+        bandwidth_down: str = "200 mbps",
+        masquerade: str = "https://www.bing.com",
+    ) -> List[Dict[str, Any]]:
+        """Hysteria2 QUIC inbound with optional Salamander obfuscation."""
+        inbound: Dict[str, Any] = {
+            "type": "hysteria2",
+            "tag": "hysteria2-in",
+            "listen": "::",
+            "listen_port": port,
+            "up_mbps": _parse_mbps(bandwidth_up),
+            "down_mbps": _parse_mbps(bandwidth_down),
+            "users": [{"name": "panel", "password": password}],
+            "tls": SingboxConfigGenerator._tls_block(sni, cert_path, key_path, alpn=["h3"]),
+        }
+        if salamander_enabled and salamander_password:
+            inbound["obfs"] = {"type": "salamander", "password": salamander_password}
+        if masquerade:
+            inbound["masquerade"] = masquerade
+        return [inbound]
+
+    @staticmethod
+    def generate_tuic(
+        uuid: str,
+        password: str,
+        port: int = 8444,
+        sni: str = "",
+        cert_path: str = "",
+        key_path: str = "",
+        congestion_control: str = "cubic",
+        udp_relay: str = "native",
+        zero_rtt: bool = False,
+    ) -> List[Dict[str, Any]]:
+        """TUIC v5 QUIC inbound."""
+        inbound: Dict[str, Any] = {
+            "type": "tuic",
+            "tag": "tuic-in",
+            "listen": "::",
+            "listen_port": port,
+            "users": [{"name": "panel", "uuid": uuid, "password": password}],
+            "congestion_control": congestion_control,
+            "zero_rtt_handshake": bool(zero_rtt),
+            "tls": SingboxConfigGenerator._tls_block(sni, cert_path, key_path, alpn=["h3"]),
+        }
+        return [inbound]
+
+    @staticmethod
+    def generate_shadowtls(
+        password: str,
+        ss_password: str,
+        port: int = 8445,
+        handshake_server: str = "chat.deepseek.com",
+        handshake_port: int = 443,
+        version: int = 3,
+        ss_method: str = "2022-blake3-aes-128-gcm",
+    ) -> List[Dict[str, Any]]:
+        """ShadowTLS v3 inbound + the Shadowsocks detour it wraps.
+
+        ShadowTLS only does the TLS-camouflage handshake; the actual
+        proxying happens on a loopback Shadowsocks inbound referenced
+        via `detour`.
+        """
+        detour_tag = "shadowtls-ss-in"
+        shadowtls_in: Dict[str, Any] = {
+            "type": "shadowtls",
+            "tag": "shadowtls-in",
+            "listen": "::",
+            "listen_port": port,
+            "version": version,
+            "users": [{"name": "panel", "password": password}],
+            "handshake": {"server": handshake_server, "server_port": handshake_port},
+            "detour": detour_tag,
+        }
+        ss_detour: Dict[str, Any] = {
+            "type": "shadowsocks",
+            "tag": detour_tag,
+            "listen": "127.0.0.1",
+            "method": ss_method,
+            "password": ss_password,
+            "network": "tcp",
+        }
+        return [shadowtls_in, ss_detour]
+
+    @staticmethod
+    def generate_naive(
+        username: str,
+        password: str,
+        port: int = 8447,
+        sni: str = "",
+        cert_path: str = "",
+        key_path: str = "",
+    ) -> List[Dict[str, Any]]:
+        """NaiveProxy (naive) inbound — HTTP/2 CONNECT over TLS."""
+        inbound: Dict[str, Any] = {
+            "type": "naive",
+            "tag": "naive-in",
+            "listen": "::",
+            "listen_port": port,
+            "users": [{"username": username or "panel", "password": password}],
+            "tls": SingboxConfigGenerator._tls_block(sni, cert_path, key_path, alpn=["h2", "http/1.1"]),
+        }
+        return [inbound]
+
+    @staticmethod
+    def generate_full_config(inbounds: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Wrap rendered inbounds into a complete sing-box config."""
+        return {
+            "log": {"level": "warn", "timestamp": True},
+            "inbounds": inbounds,
+            "outbounds": [
+                {"type": "direct", "tag": "direct"},
+                {"type": "block", "tag": "block"},
+            ],
+        }
+
+
+class MieruConfigGenerator:
+    """Render a Mieru `mita` server config.
+
+    Mieru is neither an Xray nor a sing-box protocol — it ships its own
+    `mita` daemon. The server is configured with a JSON file that is
+    loaded via `mita apply config <file>`. Mieru does its own encryption,
+    so there is no TLS/cert block.
+    """
+
+    @staticmethod
+    def generate_server_config(
+        username: str,
+        password: str,
+        port: int = 8446,
+        protocol: str = "TCP",
+        mtu: int = 1400,
+        logging_level: str = "INFO",
+    ) -> Dict[str, Any]:
+        proto = (protocol or "TCP").upper()
+        if proto not in ("TCP", "UDP"):
+            proto = "TCP"
+        return {
+            "portBindings": [{"port": int(port), "protocol": proto}],
+            "users": [{"name": username or "panel", "password": password}],
+            "loggingLevel": logging_level,
+            "mtu": int(mtu),
+        }
+
+    @staticmethod
+    def generate_client_profile(
+        username: str,
+        password: str,
+        server_ip: str,
+        port: int = 8446,
+        protocol: str = "TCP",
+        mtu: int = 1400,
+        profile_name: str = "v7lthronyx",
+    ) -> Dict[str, Any]:
+        """Mieru has no universal URI scheme; clients import a JSON profile."""
+        proto = (protocol or "TCP").upper()
+        if proto not in ("TCP", "UDP"):
+            proto = "TCP"
+        return {
+            "profiles": [
+                {
+                    "profileName": profile_name,
+                    "user": {"name": username or "panel", "password": password},
+                    "servers": [
+                        {
+                            "ipAddress": server_ip,
+                            "portBindings": [{"port": int(port), "protocol": proto}],
+                        }
+                    ],
+                    "mtu": int(mtu),
+                }
+            ],
+            "activeProfile": profile_name,
+        }
+
+
+def _parse_mbps(value: str) -> int:
+    """Parse a human bandwidth string ("100 mbps", "1 gbps") to int mbps.
+
+    sing-box wants a plain integer megabit value for up_mbps/down_mbps.
+    Falls back to 0 (unlimited) on anything unparseable.
+    """
+    if isinstance(value, (int, float)):
+        return int(value)
+    if not value:
+        return 0
+    s = str(value).strip().lower()
+    try:
+        num = float("".join(c for c in s if (c.isdigit() or c == ".")))
+    except ValueError:
+        return 0
+    if "gbps" in s or "gb" in s:
+        return int(num * 1000)
+    return int(num)
 
 
 # ═══════════════════════════════════════════════════════════════

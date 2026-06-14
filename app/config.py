@@ -108,6 +108,20 @@ class Settings(BaseSettings):
     xray_config_path: str = "/usr/local/etc/xray/config.json"
     xray_bin_path: str = "/usr/local/bin/xray"
 
+    # sing-box — hosts the standalone protocols (Hysteria2, TUIC,
+    # ShadowTLS, NaiveProxy) that are NOT Xray inbounds. Sync writes
+    # a separate config file here and reloads the sing-box unit.
+    singbox_config_path: str = Field("/usr/local/etc/sing-box/config.json", env="SINGBOX_CONFIG_PATH")
+    singbox_bin_path: str = Field("/usr/local/bin/sing-box", env="SINGBOX_BIN_PATH")
+    singbox_service_name: str = Field("sing-box", env="SINGBOX_SERVICE_NAME")
+
+    # Mieru — runs its own `mita` daemon (not Xray, not sing-box). The
+    # panel writes a mita JSON config, applies it via `mita apply config`
+    # and restarts the unit.
+    mieru_config_path: str = Field("/usr/local/etc/mieru/server.json", env="MIERU_CONFIG_PATH")
+    mieru_bin_path: str = Field("/usr/local/bin/mita", env="MIERU_BIN_PATH")
+    mieru_service_name: str = Field("mita", env="MIERU_SERVICE_NAME")
+
     # TLS certificate paths used by all TLS-bearing Xray inbounds.
     # Override via TLS_CERT_FILE / TLS_KEY_FILE for non-standard layouts
     # (e.g. /etc/letsencrypt/live/<domain>/fullchain.pem).
