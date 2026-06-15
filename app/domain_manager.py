@@ -466,11 +466,17 @@ def _issue_letsencrypt_cert(
         env["HOME"] = str(home)
         env["LE_WORKING_DIR"] = str(home)
         try:
+            # Standalone mode: acme.sh runs its OWN temporary listener on
+            # port 80 for the HTTP-01 challenge. We use this rather than
+            # --webroot because the panel binds to its own high port and
+            # there is no nginx/Caddy serving the webroot on :80 — a
+            # webroot challenge would always 404. Standalone needs :80 to
+            # be free (it is on a default single-node install).
             proc = subprocess.run(
                 [
                     "acme.sh", "--issue",
                     "--domain", domain,
-                    "--webroot", str(challenge_dir),
+                    "--standalone",
                     "--keylength", "ec-256",
                     "--accountemail", contact_email,
                     "--httpport", "80",
@@ -504,19 +510,25 @@ def _issue_letsencrypt_cert(
         shutil.copy2(acme_key, paths["key"])
     elif _have_certbot():
         try:
+            # Standalone for the same reason as acme.sh above: certbot
+            # binds :80 itself for the HTTP-01 challenge. `-n` makes it
+            # non-interactive so it never blocks the API request.
+            certbot_args = [
+                "certbot", "certonly", "--standalone",
+                "--http-01-port", "80",
+                "-n",
+                "-d", domain,
+                "--agree-tos",
+                "--no-eff-email",
+                "--key-type", "ecdsa",
+                "--cert-name", f"spiritus-{domain}",
+            ]
+            if contact_email:
+                certbot_args += ["-m", contact_email]
+            else:
+                certbot_args.append("--register-unsafely-without-email")
             proc = subprocess.run(
-                [
-                    "certbot", "certonly", "--webroot",
-                    "-w", str(challenge_dir),
-                    "-d", domain,
-                    "--register-unsafely-without-email" if not contact_email else "",
-                    "--agree-tos",
-                    "--no-eff-email",
-                    "--key-type", "ecdsa",
-                    "--cert-name", f"spiritus-{domain}",
-                ] + (
-                    ["-m", contact_email] if contact_email else []
-                ),
+                certbot_args,
                 capture_output=True, text=True, timeout=180,
             )
         except subprocess.TimeoutExpired:

@@ -23,7 +23,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..auth import User, get_current_admin
+from ..auth import User, get_current_admin_cookie
 from ..database import get_async_db
 from ..domain_manager import (
     DomainSetResult,
@@ -123,7 +123,7 @@ def _status_to_response(status: DomainStatus) -> DomainStatusResponse:
 
 @router.get("", response_model=DomainStatusResponse)
 async def get_domain_status(
-    admin: User = Depends(get_current_admin),
+    admin: User = Depends(get_current_admin_cookie),
     db: AsyncSession = Depends(get_async_db),
 ):
     """Read the current domain state. Used by the Domain tab in
@@ -136,7 +136,7 @@ async def get_domain_status(
 @router.post("", response_model=DomainSetResponse)
 async def set_active_domain(
     payload: DomainSetRequest,
-    admin: User = Depends(get_current_admin),
+    admin: User = Depends(get_current_admin_cookie),
     db: AsyncSession = Depends(get_async_db),
 ):
     """Set (or change) the panel's active domain.
@@ -165,7 +165,7 @@ async def set_active_domain(
 
 @router.delete("", response_model=MessageResponse)
 async def clear_active_domain(
-    admin: User = Depends(get_current_admin),
+    admin: User = Depends(get_current_admin_cookie),
     db: AsyncSession = Depends(get_async_db),
 ):
     """Disable the domain and fall back to the IP address.
@@ -183,7 +183,7 @@ async def clear_active_domain(
 
 @router.post("/renew", response_model=DomainSetResponse)
 async def force_renew_cert(
-    admin: User = Depends(get_current_admin),
+    admin: User = Depends(get_current_admin_cookie),
     db: AsyncSession = Depends(get_async_db),
 ):
     """Force-renew the cert for the active domain.
@@ -202,7 +202,7 @@ async def force_renew_cert(
 
 @router.get("/options", response_model=DomainOptionsResponse)
 async def get_domain_options(
-    admin: User = Depends(get_current_admin),
+    admin: User = Depends(get_current_admin_cookie),
     db: AsyncSession = Depends(get_async_db),
 ):
     """Probe-only: what ACME clients are available, what IP

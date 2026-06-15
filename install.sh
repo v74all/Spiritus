@@ -22,6 +22,10 @@ INSTALL_DIR="/opt/spiritus"
 SERVICE_NAME="spiritus"
 VERSION="1.0.0"
 
+# Web panel port. Override with `--port N` or WEB_PORT=N env. Persisted
+# to .env as VPN_WEB_PORT so the app and the systemd unit agree.
+WEB_PORT="${WEB_PORT:-38471}"
+
 print_banner() { echo -e "${CYAN}${BANNER}${NC}"; }
 print_info() { echo -e "${BLUE}[INFO]${NC} $1"; }
 print_success() { echo -e "${GREEN}[OK]${NC} $1"; }
@@ -56,15 +60,62 @@ check_os() {
 
 install_dependencies() {
     print_info "Installing system dependencies..."
-    
+
     if [[ "$PKG_MANAGER" == "apt" ]]; then
         apt update -y
         apt install -y python3 python3-pip python3-venv curl wget unzip postgresql postgresql-contrib redis-server fail2ban
     elif [[ "$PKG_MANAGER" == "yum" ]]; then
         yum install -y python3 python3-pip curl wget unzip postgresql-server redis fail2ban
     fi
-    
+
     print_success "System dependencies installed"
+}
+
+install_acme() {
+    # The panel's domain manager issues real Let's Encrypt certs via
+    # acme.sh (preferred) or certbot. Detection is `shutil.which("acme.sh")`
+    # / `shutil.which("certbot")`, so the binary MUST be on PATH — the
+    # stock acme.sh installer hides it under ~/.acme.sh, which `which`
+    # never sees. We install it and symlink it onto PATH.
+    if command -v acme.sh &>/dev/null; then
+        print_success "acme.sh already on PATH"
+        return
+    fi
+
+    print_info "Installing acme.sh (Let's Encrypt client)..."
+    local acme_home="/etc/v7lthronyx/acme"   # matches LE_WORKING_DIR used by domain_manager
+    mkdir -p "$acme_home"
+    local tmp; tmp=$(mktemp -d)
+    if curl -fsSL --max-time 60 -o "$tmp/acme-install.sh" https://get.acme.sh 2>/dev/null; then
+        # --nocron: the panel's Celery task handles renewal; --home pins
+        # the working dir to the one domain_manager exports as HOME.
+        if HOME="$acme_home" sh "$tmp/acme-install.sh" --home "$acme_home" --nocron >/dev/null 2>&1 \
+           && [[ -f "$acme_home/acme.sh" ]]; then
+            ln -sf "$acme_home/acme.sh" /usr/local/bin/acme.sh
+            print_success "acme.sh installed (symlinked to /usr/local/bin/acme.sh)"
+        else
+            print_warning "acme.sh install failed — falling back to certbot"
+        fi
+    else
+        print_warning "Could not download acme.sh — falling back to certbot"
+    fi
+    rm -rf "$tmp"
+
+    # certbot as a fallback ACME client (domain_manager uses it if
+    # acme.sh is absent). Best-effort; don't fail the whole install.
+    if ! command -v acme.sh &>/dev/null && ! command -v certbot &>/dev/null; then
+        if [[ "$PKG_MANAGER" == "apt" ]]; then
+            apt install -y certbot >/dev/null 2>&1 || true
+        elif [[ "$PKG_MANAGER" == "yum" ]]; then
+            yum install -y certbot >/dev/null 2>&1 || true
+        fi
+        command -v certbot &>/dev/null && print_success "certbot installed (ACME fallback)"
+    fi
+
+    if ! command -v acme.sh &>/dev/null && ! command -v certbot &>/dev/null; then
+        print_warning "No ACME client available — only self-signed certs will be issued."
+        print_warning "Install acme.sh or certbot, then use the Domain tab to get a real cert."
+    fi
 }
 
 install_xray() {
@@ -465,6 +516,20 @@ while True:
         _env_set HOST "0.0.0.0"
     fi
 
+    # ── Web port ──────────────────────────────────────────────────────
+    # Persist the chosen port so the app's settings.web_port matches the
+    # systemd ExecStart --port. On a re-run that didn't pass --port, honour
+    # the value already in .env (so we don't silently revert an operator's
+    # custom port back to the default).
+    local cur_port; cur_port=$(_env_get VPN_WEB_PORT)
+    if [[ "$WEB_PORT" != "38471" ]]; then
+        _env_set VPN_WEB_PORT "$WEB_PORT"          # explicit --port wins
+    elif [[ -n "$cur_port" ]]; then
+        WEB_PORT="$cur_port"                        # keep existing custom port
+    else
+        _env_set VPN_WEB_PORT "$WEB_PORT"
+    fi
+
     # Server's primary IP (best-effort autodetect; can be overridden).
     local server_ip; server_ip=$(hostname -I | awk '{print $1}')
     if [[ -n "$server_ip" ]] && [[ "$(_env_get VPN_SERVER_IP)" == "" || "$(_env_get VPN_SERVER_IP)" == "your-server-ip" ]]; then
@@ -685,7 +750,7 @@ Environment="PYTHONUNBUFFERED=1"
 Environment="PATH=${INSTALL_DIR}/venv/bin:/usr/local/bin:/usr/bin:/bin"
 # Bind to loopback only. External access goes through a TLS-terminating
 # reverse proxy (nginx/Caddy) on 80/443.
-ExecStart=${INSTALL_DIR}/venv/bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port 38471 --workers 2 --proxy-headers --forwarded-allow-ips='127.0.0.1'
+ExecStart=${INSTALL_DIR}/venv/bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port ${WEB_PORT} --workers 2 --proxy-headers --forwarded-allow-ips='127.0.0.1'
 ExecReload=/bin/kill -HUP \$MAINPID
 Restart=always
 RestartSec=10
@@ -871,7 +936,7 @@ start_panel() {
     # boot, then the env var must be deleted by the operator.
 
     # Open the panel port in the local firewall (idempotent, best-effort).
-    open_firewall_port 38471
+    open_firewall_port "${WEB_PORT}"
 
     systemctl restart ${SERVICE_NAME}
     systemctl restart ${SERVICE_NAME}-worker 2>/dev/null || true
@@ -880,7 +945,7 @@ start_panel() {
     print_info "Waiting for web application to start (this may take up to 20s)..."
     HEALTH_STATUS="Failed"
     for i in $(seq 1 10); do
-        if curl -s http://127.0.0.1:38471/api/health | grep -q "healthy"; then
+        if curl -s "http://127.0.0.1:${WEB_PORT}/api/health" | grep -q "healthy"; then
             HEALTH_STATUS="OK"
             break
         fi
@@ -924,8 +989,8 @@ show_info() {
         HEALTH_MSG="${RED}✖ Web Application Failed to Start (Check logs)${NC}"
     fi
 
-    echo -e "  ${YELLOW}Panel URL:${NC}     http://$(hostname -I | awk '{print $1}'):38471"
-    echo -e "  ${YELLOW}API Docs:${NC}     http://$(hostname -I | awk '{print $1}'):38471/api/docs"
+    echo -e "  ${YELLOW}Panel URL:${NC}     http://$(hostname -I | awk '{print $1}'):${WEB_PORT}"
+    echo -e "  ${YELLOW}API Docs:${NC}     http://$(hostname -I | awk '{print $1}'):${WEB_PORT}/api/docs"
     echo -e "  ${YELLOW}Username:${NC}     admin"
     echo -e "  ${YELLOW}Password:${NC}     ${PANEL_PASSWORD}"
     echo ""
@@ -950,11 +1015,90 @@ show_info() {
     echo -e "${CYAN}═══════════════════════════════════════════════════════════${NC}"
 }
 
+uninstall() {
+    print_banner
+    echo -e "${RED}  V7LTHRONYX v${VERSION} - Uninstaller${NC}"
+    echo ""
+    check_root
+
+    local purge_data=0
+    if [[ "${1:-}" == "--purge" ]]; then
+        purge_data=1
+    fi
+
+    # Confirm unless --yes was passed.
+    if [[ "${UNINSTALL_ASSUME_YES:-0}" != "1" ]]; then
+        echo -e "${YELLOW}This will stop and remove the V7LTHRONYX panel services and files.${NC}"
+        if [[ $purge_data -eq 1 ]]; then
+            echo -e "${RED}--purge: the PostgreSQL database and Redis keys will ALSO be deleted.${NC}"
+        else
+            echo -e "${YELLOW}The database is kept (use --purge to also drop it).${NC}"
+        fi
+        read -r -p "$(echo -e "${YELLOW}Type 'yes' to continue: ${NC}")" confirm
+        [[ "$confirm" == "yes" ]] || { print_info "Aborted."; exit 0; }
+    fi
+
+    print_info "Stopping and disabling services..."
+    for svc in "${SERVICE_NAME}" "${SERVICE_NAME}-worker" "${SERVICE_NAME}-beat"; do
+        systemctl stop "$svc" 2>/dev/null || true
+        systemctl disable "$svc" 2>/dev/null || true
+        rm -f "/etc/systemd/system/${svc}.service"
+    done
+    # sing-box / mita are shared backends — stop the panel-managed units too.
+    systemctl stop sing-box mita 2>/dev/null || true
+
+    # Remove the daily auto-update cron/timer if present.
+    rm -f /etc/cron.d/spiritus-update /etc/systemd/system/spiritus-update.* 2>/dev/null || true
+    systemctl daemon-reload 2>/dev/null || true
+
+    if [[ $purge_data -eq 1 ]]; then
+        print_info "Dropping PostgreSQL database and role..."
+        sudo -u postgres psql -c "DROP DATABASE IF EXISTS ${DB_NAME:-vpnpanel};" 2>/dev/null || true
+        sudo -u postgres psql -c "DROP ROLE IF EXISTS ${DB_USER:-vpnadmin};" 2>/dev/null || true
+        print_info "Flushing Redis keys for the panel..."
+        redis-cli FLUSHDB 2>/dev/null || true
+    fi
+
+    print_info "Removing installed files..."
+    rm -rf "${INSTALL_DIR}"
+    rm -f /usr/local/bin/acme.sh 2>/dev/null || true
+
+    # Best-effort: leave Xray/sing-box/mita binaries in place (operator may
+    # use them elsewhere); only the panel-owned config dirs go.
+    echo ""
+    print_success "V7LTHRONYX uninstalled."
+    if [[ $purge_data -eq 0 ]]; then
+        print_info "Database preserved. Re-run with 'uninstall --purge' to drop it."
+    fi
+    print_info "Xray/sing-box/mita binaries were left installed; remove manually if unwanted."
+}
+
+usage() {
+    cat <<USAGE
+V7LTHRONYX installer v${VERSION}
+
+Usage: $0 [command] [options]
+
+Commands:
+  (no command)        Install or update the panel
+  uninstall           Stop services and remove the panel (keeps the DB)
+  uninstall --purge   Also drop the PostgreSQL DB and flush Redis
+
+Options (install):
+  --port N            Web panel port (default 38471; persisted to .env)
+
+Environment:
+  WEB_PORT=N              Same as --port N
+  UNINSTALL_ASSUME_YES=1  Skip the uninstall confirmation prompt
+USAGE
+}
+
 main() {
     print_banner
     echo -e "${YELLOW}  V7LTHRONYX v${VERSION} - Easy Installer${NC}"
+    echo -e "${YELLOW}  Web port: ${WEB_PORT}${NC}"
     echo ""
-    
+
     check_root
     check_os
     
@@ -965,6 +1109,7 @@ main() {
     install_xray
     install_singbox
     install_mieru
+    install_acme
 
     echo -e "${CYAN}[3/13]${NC} Downloading V7LTHRONYX..."
     clone_or_update
@@ -1011,4 +1156,32 @@ main() {
     show_info
 }
 
-main "$@"
+# ── Argument dispatch ────────────────────────────────────────────────
+COMMAND="install"
+_args=()
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        uninstall|--uninstall)
+            COMMAND="uninstall"; shift ;;
+        --purge)
+            _args+=("--purge"); shift ;;
+        --port)
+            WEB_PORT="${2:?--port needs a value}"; shift 2 ;;
+        --port=*)
+            WEB_PORT="${1#*=}"; shift ;;
+        -h|--help|help)
+            usage; exit 0 ;;
+        *)
+            print_warning "Unknown argument: $1"; shift ;;
+    esac
+done
+
+# Validate port is numeric and in range.
+if ! [[ "$WEB_PORT" =~ ^[0-9]+$ ]] || (( WEB_PORT < 1 || WEB_PORT > 65535 )); then
+    print_error "Invalid --port '$WEB_PORT' (must be 1-65535)"; exit 1
+fi
+
+case "$COMMAND" in
+    uninstall) uninstall "${_args[@]}" ;;
+    *)         main ;;
+esac
