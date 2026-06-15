@@ -119,10 +119,36 @@ bash <(curl -sL https://raw.githubusercontent.com/v74all/Spiritus/main/install.s
 ```
 
 This automatically:
-- Installs all dependencies (Python 3.10+, Xray-core, Redis)
-- Sets up a Python virtual environment
-- Configures systemd service
-- Sets up daily auto-update cron job
+- Installs all dependencies (Python 3.10+, PostgreSQL, Redis, fail2ban)
+- Installs every protocol backend: **Xray-core**, **sing-box** (Hysteria2/TUIC/ShadowTLS/NaiveProxy) and **mieru** (mita)
+- Installs **acme.sh** (with certbot fallback) so the panel can issue real Let's Encrypt certificates
+- Sets up a Python virtual environment and applies database migrations
+- Configures the systemd services and a daily auto-update cron job
+
+#### Install options
+
+```bash
+# Choose a custom web-panel port (default 38471). Persisted to .env as
+# VPN_WEB_PORT so the app and the systemd unit stay in sync.
+sudo ./install.sh --port 8080
+
+# Show all commands and options
+./install.sh --help
+```
+
+### Uninstall
+
+```bash
+# Stop & remove the panel services and files (keeps the PostgreSQL database)
+sudo ./install.sh uninstall
+
+# Also drop the PostgreSQL database and flush Redis
+sudo ./install.sh uninstall --purge
+```
+
+The uninstaller asks for confirmation; set `UNINSTALL_ASSUME_YES=1` to skip the
+prompt in automation. Xray/sing-box/mita binaries are left installed (remove
+manually if unwanted).
 
 ### Manual Install
 
@@ -180,6 +206,21 @@ sudo systemctl start vpn-panel
 URL: http://your-server-ip:38471
 Default Password: Found in vpn-panel-password file after first run
 ```
+
+### Domain & TLS certificates
+
+Open the **🌍 Domain & TLS** tab in the panel to attach a domain and get a real
+certificate — no shell access needed:
+
+- **Set a domain** → the panel issues a **Let's Encrypt** certificate via acme.sh
+  (or certbot) using a standalone HTTP-01 challenge on port 80, then re-renders
+  every TLS-bearing protocol's SNI to that domain.
+- **Renew now** → force-renews the certificate (a daily task also auto-renews).
+- **Disable** → reverts to the server IP and a self-signed certificate.
+
+> Requirements: the domain's DNS **A record must point at this server** and
+> **port 80 must be reachable** for the challenge. If either is missing, the panel
+> falls back to a self-signed certificate and tells you why.
 
 ### Auto-Update
 
@@ -572,10 +613,43 @@ bash <(curl -sL https://raw.githubusercontent.com/v74all/Spiritus/main/install.s
 ```
 
 این دستور به‌صورت خودکار:
-- وابستگی‌ها (Python 3.10+، Xray-core، Redis) رو نصب می‌کنه
-- محیط مجازی Python راه‌اندازی می‌کنه
-- سرویس systemd رو تنظیم می‌کنه
-- کرون‌جاب آپدیت خودکار روزانه تنظیم می‌کنه
+- وابستگی‌ها (Python 3.10+، PostgreSQL، Redis، fail2ban) رو نصب می‌کنه
+- همه‌ی بک‌اندهای پروتکل رو نصب می‌کنه: **Xray-core**، **sing-box** (Hysteria2/TUIC/ShadowTLS/NaiveProxy) و **mieru** (mita)
+- **acme.sh** (با fallback به certbot) رو نصب می‌کنه تا پنل بتونه گواهی واقعی Let's Encrypt صادر کنه
+- محیط مجازی Python می‌سازه و migration های دیتابیس رو اعمال می‌کنه
+- سرویس‌های systemd و کرون‌جاب آپدیت روزانه رو تنظیم می‌کنه
+
+#### گزینه‌های نصب
+
+```bash
+# انتخاب پورت دلخواه پنل (پیش‌فرض 38471). در .env به‌صورت VPN_WEB_PORT ذخیره می‌شه
+# تا اپ و سرویس systemd هماهنگ بمونن.
+sudo ./install.sh --port 8080
+
+# نمایش همه دستورها و گزینه‌ها
+./install.sh --help
+```
+
+#### حذف (Uninstall)
+
+```bash
+# توقف و حذف سرویس‌ها و فایل‌های پنل (دیتابیس حفظ می‌شه)
+sudo ./install.sh uninstall
+
+# حذف کامل به‌همراه drop دیتابیس PostgreSQL و پاک‌سازی Redis
+sudo ./install.sh uninstall --purge
+```
+
+برای رد کردن تأیید در حالت خودکار: `UNINSTALL_ASSUME_YES=1`. باینری‌های Xray/sing-box/mita حذف نمی‌شن (در صورت نیاز دستی پاک کنید).
+
+#### دامنه و گواهی TLS
+
+از تب **🌍 Domain & TLS** در پنل می‌تونید بدون دسترسی شل، دامنه وصل کنید و گواهی واقعی بگیرید:
+- **تنظیم دامنه** → پنل با acme.sh (یا certbot) و چالش standalone روی پورت ۸۰، گواهی **Let's Encrypt** صادر می‌کنه و SNI همه پروتکل‌های TLS رو روی اون دامنه ست می‌کنه.
+- **تمدید** → گواهی رو دستی تمدید می‌کنه (یک تسک روزانه هم خودکار تمدید می‌کنه).
+- **غیرفعال‌سازی** → به آی‌پی سرور و گواهی self-signed برمی‌گرده.
+
+> پیش‌نیاز: رکورد A دامنه باید به این سرور اشاره کنه و پورت ۸۰ در دسترس باشه. در غیر این صورت پنل به گواهی self-signed برمی‌گرده و دلیلش رو نشون می‌ده.
 
 #### نصب دستی
 
