@@ -381,7 +381,7 @@ groups:
 
 
 def generate_grafana_provisioning(
-    output_dir: str = "/opt/spiritus/grafana",
+    output_dir: str = "/opt/v7lthronyx/grafana",
 ) -> Dict[str, str]:
     """Generate Grafana provisioning configuration files."""
     import json

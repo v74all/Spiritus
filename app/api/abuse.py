@@ -16,10 +16,10 @@ import logging
 
 from ..auth import get_current_admin, User
 from ..abuse_prevention import (
-    apply_egress_filtering, remove_egress_filtering,
     generate_egress_iptables_rules, BLOCKED_PORTS,
     anomaly_detector, port_scan_detector, AnomalyAlert
 )
+from ..privileged_helper import helper_request, PrivilegedHelperError
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/abuse", tags=["abuse-prevention"])
@@ -48,14 +48,20 @@ async def get_abuse_status(admin: User = Depends(get_current_admin)):
 @router.post("/egress-filtering/apply")
 async def apply_egress(admin: User = Depends(get_current_admin)):
     """Apply egress filtering to block dangerous ports."""
-    results = apply_egress_filtering()
-    return {"results": results, "success": True}
+    try:
+        response = await helper_request("firewall.egress.apply")
+    except PrivilegedHelperError as exc:
+        return {"results": [], "success": False, "message": str(exc)}
+    return {"results": response.data or {}, "success": response.ok, "message": response.message}
 
 @router.post("/egress-filtering/remove")
 async def remove_egress(admin: User = Depends(get_current_admin)):
     """Remove egress filtering rules."""
-    results = remove_egress_filtering()
-    return {"results": results, "success": True}
+    try:
+        response = await helper_request("firewall.egress.remove")
+    except PrivilegedHelperError as exc:
+        return {"results": [], "success": False, "message": str(exc)}
+    return {"results": response.data or {}, "success": response.ok, "message": response.message}
 
 @router.get("/anomalies")
 async def get_anomalies(

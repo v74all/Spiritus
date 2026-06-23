@@ -44,47 +44,17 @@ def generate_egress_iptables_rules() -> List[str]:
 
 def apply_egress_filtering():
     """Apply egress filtering iptables rules."""
-    import subprocess
-    applied = []
-    for port, reason in BLOCKED_PORTS.items():
-        try:
-            # Check if rule already exists
-            check = subprocess.run(
-                ["iptables", "-C", "OUTPUT", "-p", "tcp", "--dport", str(port), "-j", "DROP"],
-                capture_output=True, text=True
-            )
-            if check.returncode != 0:
-                subprocess.run(
-                    ["iptables", "-A", "OUTPUT", "-p", "tcp", "--dport", str(port), "-j", "DROP"],
-                    capture_output=True, text=True
-                )
-                subprocess.run(
-                    ["iptables", "-A", "OUTPUT", "-p", "udp", "--dport", str(port), "-j", "DROP"],
-                    capture_output=True, text=True
-                )
-            applied.append({"port": port, "reason": reason, "status": "applied"})
-        except Exception as e:
-            applied.append({"port": port, "reason": reason, "status": f"error: {e}"})
-    return applied
+    from .privileged_helper import helper_request_sync
+    response = helper_request_sync("firewall.egress.apply")
+    status = "applied" if response.ok else f"error: {response.message}"
+    return [{"port": port, "reason": reason, "status": status} for port, reason in BLOCKED_PORTS.items()]
 
 def remove_egress_filtering():
     """Remove egress filtering iptables rules."""
-    import subprocess
-    removed = []
-    for port, reason in BLOCKED_PORTS.items():
-        try:
-            subprocess.run(
-                ["iptables", "-D", "OUTPUT", "-p", "tcp", "--dport", str(port), "-j", "DROP"],
-                capture_output=True, text=True
-            )
-            subprocess.run(
-                ["iptables", "-D", "OUTPUT", "-p", "udp", "--dport", str(port), "-j", "DROP"],
-                capture_output=True, text=True
-            )
-            removed.append({"port": port, "status": "removed"})
-        except Exception as e:
-            removed.append({"port": port, "status": f"error: {e}"})
-    return removed
+    from .privileged_helper import helper_request_sync
+    response = helper_request_sync("firewall.egress.remove")
+    status = "removed" if response.ok else f"error: {response.message}"
+    return [{"port": port, "status": status} for port in BLOCKED_PORTS]
 
 # ═══════════════════════════════════════════════════════════════
 #  Anomaly Detection

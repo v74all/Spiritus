@@ -34,6 +34,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from .models import Agent, AgentBackend, AgentStatus, ProtocolConfig, VpnUser
 from .protocol_engine import XrayConfigGenerator, ech_mgr
+from .privileged_helper import helper_request, PrivilegedHelperError
 
 logger = logging.getLogger(__name__)
 
@@ -103,24 +104,22 @@ class XrayBackend:
     async def restart(self) -> bool:
         """Restart Xray service on the agent."""
         try:
-            subprocess.run(
-                ["systemctl", "restart", self.agent.service_name or "xray"],
-                capture_output=True, text=True, timeout=30
+            result = await helper_request(
+                "service.restart", {"service": self.agent.service_name or "xray"}, timeout=35
             )
-            return True
-        except Exception as e:
+            return result.ok
+        except PrivilegedHelperError as e:
             logger.error(f"Failed to restart Xray on {self.agent.name}: {e}")
             return False
 
     async def reload_config(self) -> bool:
         """Reload Xray configuration."""
         try:
-            subprocess.run(
-                ["systemctl", "reload", self.agent.service_name or "xray"],
-                capture_output=True, text=True, timeout=30
+            result = await helper_request(
+                "service.reload", {"service": self.agent.service_name or "xray"}, timeout=35
             )
-            return True
-        except Exception as e:
+            return result.ok
+        except PrivilegedHelperError as e:
             logger.error(f"Failed to reload Xray config on {self.agent.name}: {e}")
             return False
 
@@ -160,20 +159,22 @@ class XrayBackend:
     async def deploy_config(self, config: Dict[str, Any]) -> bool:
         """Deploy Xray configuration to agent."""
         try:
-            config_path = self.agent.config_path or "/usr/local/etc/xray/config.json"
-            with open(config_path, 'w') as f:
-                json.dump(config, f, indent=2)
-
-            # Validate config
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as candidate:
+                json.dump(config, candidate, indent=2)
+                candidate_path = candidate.name
             result = subprocess.run(
-                [self.agent.bin_path or "/usr/local/bin/xray", "-test", "-config", config_path],
+                [self.agent.bin_path or "/usr/local/bin/xray", "-test", "-config", candidate_path],
                 capture_output=True, text=True, timeout=10
             )
+            os.unlink(candidate_path)
             if result.returncode != 0:
                 logger.error(f"Xray config validation failed: {result.stderr}")
                 return False
-
-            # Reload
+            installed = await helper_request(
+                "config.install", {"target": "xray", "content": json.dumps(config, indent=2)}
+            )
+            if not installed.ok:
+                return False
             return await self.reload_config()
         except Exception as e:
             logger.error(f"Failed to deploy Xray config: {e}")
@@ -323,21 +324,22 @@ class SingboxBackend:
 
     async def restart(self) -> bool:
         try:
-            subprocess.run(
-                ["systemctl", "restart", self.agent.service_name or "sing-box"],
-                capture_output=True, text=True, timeout=30
+            result = await helper_request(
+                "service.restart", {"service": self.agent.service_name or "sing-box"}, timeout=35
             )
-            return True
-        except Exception as e:
+            return result.ok
+        except PrivilegedHelperError as e:
             logger.error(f"Failed to restart sing-box on {self.agent.name}: {e}")
             return False
 
     async def deploy_config(self, config: Dict[str, Any]) -> bool:
         """Deploy sing-box configuration."""
         try:
-            config_path = self.agent.config_path or "/usr/local/etc/sing-box/config.json"
-            with open(config_path, 'w') as f:
-                json.dump(config, f, indent=2)
+            installed = await helper_request(
+                "config.install", {"target": "sing-box", "content": json.dumps(config, indent=2)}
+            )
+            if not installed.ok:
+                return False
             return await self.restart()
         except Exception as e:
             logger.error(f"Failed to deploy sing-box config: {e}")
@@ -471,16 +473,12 @@ class WireGuardBackend:
         """Remove a WireGuard peer."""
         try:
             interface = self.agent.wg_interface or "wg0"
-            subprocess.run(
-                ["wg", "set", interface, "peer", client_public_key, "remove"],
-                capture_output=True, text=True
+            result = await helper_request(
+                "wireguard.remove_peer",
+                {"interface": interface, "public_key": client_public_key},
             )
-            subprocess.run(
-                ["wg-quick", "save", interface],
-                capture_output=True, text=True
-            )
-            return True
-        except Exception as e:
+            return result.ok
+        except PrivilegedHelperError as e:
             logger.error(f"Failed to remove WG peer: {e}")
             return False
 

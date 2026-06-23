@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Azeret+Mono:wght@400;500;600;700&family=Fira+Sans:wght@300;400;500;600;700;800&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/panel.css') }}">
-<style>
+<style nonce="{{ csp_nonce }}">
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:var(--font-body);background:var(--bg0);color:var(--t1);min-height:100vh;overflow-x:hidden}
 ::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:var(--bg1)}::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:3px}
@@ -306,7 +306,7 @@ input,button,textarea,select{font-family:inherit;font-size:inherit}
       padding:6px 14px;cursor:pointer;font-size:12px;white-space:nowrap;
     ">&#1576;&#1587;&#1578;&#1606; &#10005;</button>
   </div>
-  <style>
+  <style nonce="{{ csp_nonce }}">
     @keyframes bannerPulse {
       0%,100%{border-color:#f59e0b}
       50%{border-color:#fbbf24;box-shadow:0 0 20px rgba(245,158,11,0.15)}
@@ -1240,7 +1240,7 @@ function openBulkInNewTab() {
   w.document.open();
   w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>VIP Agent Panel</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <style>
+  <style nonce="${window.__CSP_NONCE__||''}">
     body{margin:0;background:#0b1020;color:#e6edf3;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}
     .bar{position:sticky;top:0;background:#0d1117;border-bottom:1px solid #2d333b;padding:10px 12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;z-index:10}
     button{background:#1f6feb;border:none;color:#fff;border-radius:10px;padding:8px 12px;font-weight:800;cursor:pointer}
@@ -1604,5 +1604,6 @@ function toast(msg, type) {
   document.getElementById('login-user').focus();
 })();
 </script>
+<script src="{{ url_for('static', filename='js/csp-events.js') }}"></script>
 </body>
 </html>

@@ -39,6 +39,7 @@ class VerifyPaymentRequest(BaseModel):
     gateway: str = "zarinpal"
     authority: Optional[str] = None
     gateway_id: Optional[str] = None
+    tx_hash: Optional[str] = Field(None, min_length=32, max_length=128)
 
 class PaymentResponse(BaseModel):
     id: int
@@ -121,6 +122,7 @@ async def verify_payment(
         gateway=data.gateway,
         authority=data.authority,
         gateway_id=data.gateway_id,
+        tx_hash=data.tx_hash,
     )
     return result
 

@@ -2016,7 +2016,7 @@ window.__CSP_NONCE__ = "{{ csp_nonce }}";
 </script>
 <script src="{{ url_for('static', filename='js/qrcode.js') }}?v={{ asset_v }}"></script>
 <script src="{{ url_for('static', filename='js/panel.js') }}?v={{ asset_v }}"></script>
-<script>
+<script nonce="{{ csp_nonce }}">
 function toggleDrawer() {
   var d = document.getElementById('nav-drawer');
   var o = document.getElementById('nav-overlay');
@@ -2287,5 +2287,6 @@ document.addEventListener('keydown', function(e) {
   </div>
 </div>
 
+<script src="{{ url_for('static', filename='js/csp-events.js') }}?v={{ asset_v }}"></script>
 </body>
 </html>

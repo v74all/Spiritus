@@ -897,7 +897,7 @@ function openBulkInNewTab() {
   w.document.open();
   w.document.write(`<!doctype html><html><head><meta charset=\"utf-8\"><title>VIP Premium Panel</title>
   <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">
-  <style>
+  <style nonce=\"${window.__CSP_NONCE__||''}\">
     body{margin:0;background:#0b1020;color:#e6edf3;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}
     .bar{position:sticky;top:0;background:#0d1117;border-bottom:1px solid #2d333b;padding:10px 12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;z-index:10}
     button{background:#1f6feb;border:none;color:#fff;border-radius:10px;padding:8px 12px;font-weight:800;cursor:pointer}
@@ -1305,8 +1305,8 @@ function renderConfigTab() {
   // Append host header spoofing info if active. Every serverInfo.* field
   // below is operator-controlled (lives in the settings table) so it can
   // contain arbitrary text — esc() it because the result is innerHTML'd
-  // below at line ~1283. With CSP rolled back to 'unsafe-inline', any
-  // unescaped HTML here is a one-click admin→admin XSS.
+  // below at line ~1283. Even with nonce-only script CSP, unescaped HTML
+  // here would still create admin-controlled markup in a privileged screen.
   if (serverInfo.dpi_http_host_spoof_enabled) {
     info += `\n<span class="ck" style="color:var(--purple)">Host Spoof</span><span class="cv" style="color:var(--purple)">HTTP → ${esc(serverInfo.dpi_http_host_spoof_domain) || '?'}</span>`;
   }

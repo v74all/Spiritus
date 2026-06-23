@@ -67,6 +67,7 @@ import os
 import re
 import shutil
 import socket
+import ipaddress
 import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -122,9 +123,8 @@ EXPIRY_HARD_FLOOR_DAYS = 7
 # IP (which is what the SSRF guard catches in
 # app/main.py:_resolve_and_validate_url).
 _DOMAIN_RE = re.compile(
-    r"^(?=.{1,253}$)([A-Za-z0-9_]"           # first char
-    r"(?:[A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?"  # mid labels
-    r"\.?)+$"                                # trailing dot optional
+    r"^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+"
+    r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.?$"
 )
 
 
@@ -278,31 +278,14 @@ def _validate_domain(domain: str) -> Optional[str]:
         info = socket.getaddrinfo(domain, None, type=socket.SOCK_STREAM)
     except socket.gaierror as exc:
         return f"DNS resolution failed: {exc}"
-    for fam, *_rest, sockaddr in info:
-        if fam == socket.AF_INET:
-            ip = sockaddr[0]
-            # 192.168.0.0/16 is private regardless of the
-            # second-octet range — that range check below is
-            # for 172.16.0.0/12 only. Treating 192.168.1.1 as
-            # "not private" because 168 > 31 was a real bug
-            # caught by the test suite.
-            if (
-                ip.startswith("127.")
-                or ip.startswith("10.")
-                or ip.startswith("192.168.")
-                or ip.startswith("169.254.")
-            ):
-                return f"domain resolves to private IP {ip}"
-            if ip.startswith("172."):
-                # 172.16.0.0/12 — second octet in 16..31.
-                try:
-                    octet = int(ip.split(".")[1])
-                except (ValueError, IndexError):
-                    octet = 0
-                if 16 <= octet <= 31:
-                    return f"domain resolves to private IP {ip}"
-            if ip == "0.0.0.0":
-                return "domain resolves to 0.0.0.0"
+    for _fam, *_rest, sockaddr in info:
+        ip = sockaddr[0].split("%", 1)[0]
+        try:
+            address = ipaddress.ip_address(ip)
+        except ValueError:
+            return f"DNS returned invalid address {ip}"
+        if not address.is_global:
+            return f"domain resolves to private or non-public IP {ip}"
     return None
 
 
@@ -806,8 +789,7 @@ async def set_domain(
       2. Try Let's Encrypt (acme.sh → certbot) unless
          `prefer_self_signed=True` (used in tests and in the
          "I haven't pointed DNS yet" path).
-      3. On LE failure, fall back to self-signed so the panel
-         is never stranded without a cert.
+      3. Never silently downgrade an ACME request to self-signed.
       4. Persist (domain, cert, key, expires, issuer, contact)
          atomically. Either all five land or none do.
       5. Trigger a sync of the Xray config so every
@@ -826,40 +808,27 @@ async def set_domain(
     if err:
         return DomainSetResult(success=False, domain=domain, error=err)
 
-    steps: List[str] = []
-    if prefer_self_signed or not (_have_acme_sh() or _have_certbot()):
-        result = _generate_self_signed_cert(domain)
-        if not result.success:
-            return result
-        steps.extend(result.steps)
-        issuer = "self-signed"
-        expires_at = ""
-    else:
-        result = _issue_letsencrypt_cert(domain, contact_email)
-        if not result.success:
-            # Soft-fail: try a self-signed cert so the panel
-            # still boots, but record the LE error so the UI
-            # can show "DNS A record isn't pointing at this
-            # server; issued a temporary self-signed cert".
-            fallback = _generate_self_signed_cert(domain)
-            steps.append(f"LE issue failed: {result.error}")
-            if fallback.success:
-                steps.extend(fallback.steps)
-                issuer = "self-signed"
-                expires_at = ""
-            else:
-                return DomainSetResult(
-                    success=False, domain=domain,
-                    error=result.error,
-                    steps=steps,
-                )
-        else:
-            steps.extend(result.steps)
-            issuer = "letsencrypt"
-            # Probe the cert we just wrote to find the expiry.
-            cp = _tls_paths_for(domain)["cert"]
-            exp = _parse_cert_expiry(cp)
-            expires_at = exp.isoformat() if exp else ""
+    from .privileged_helper import helper_request, PrivilegedHelperError
+    issuer = "self-signed" if prefer_self_signed else "letsencrypt"
+    try:
+        result = await helper_request(
+            "certificate.issue",
+            {
+                "domain": domain,
+                "contact_email": contact_email,
+                "mode": "self-signed" if prefer_self_signed else "acme",
+                "force_renew": force_renew,
+            },
+            timeout=180,
+        )
+    except PrivilegedHelperError as exc:
+        return DomainSetResult(success=False, domain=domain, error=str(exc))
+    if not result.ok:
+        return DomainSetResult(success=False, domain=domain, error=result.message)
+    steps = list((result.data or {}).get("steps") or [])
+    cp = _tls_paths_for(domain)["cert"]
+    exp = _parse_cert_expiry(cp)
+    expires_at = exp.isoformat() if exp else ""
 
     # Compute canonical paths and persist atomically.
     paths = _tls_paths_for(domain)
@@ -871,7 +840,7 @@ async def set_domain(
         KEY_DOMAIN_ISSUER: issuer,
         KEY_DOMAIN_CONTACT_EMAIL: contact_email,
         KEY_DOMAIN_LAST_CHECK: _utcnow().isoformat(),
-        KEY_DOMAIN_LAST_ERROR: "" if issuer == "letsencrypt" or prefer_self_signed else "LE failed; using self-signed",
+        KEY_DOMAIN_LAST_ERROR: "",
     })
 
     # Re-render the Xray config so every TLS-bearing inbound

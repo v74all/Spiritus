@@ -1,0 +1,21 @@
+# Reproducible security-sensitive core. Update through a reviewed dependency PR.
+fastapi==0.136.1
+uvicorn==0.46.0
+jinja2==3.1.6
+pydantic==2.13.3
+pydantic-settings==2.14.0
+sqlalchemy==2.0.49
+alembic==1.18.4
+asyncpg==0.31.0
+redis==7.4.0
+argon2-cffi==25.1.0
+pyotp==2.9.0
+python-jose==3.5.0
+cryptography==47.0.0
+pycryptodome==3.23.0
+passlib==1.7.4
+celery==5.6.3
+psutil==7.2.2
+requests==2.33.1
+httpx==0.28.1
+pyyaml==6.0.3

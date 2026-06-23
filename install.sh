@@ -18,7 +18,7 @@ BANNER='
 '
 
 REPO_URL="https://github.com/v74all/Spiritus.git"
-INSTALL_DIR="/opt/spiritus"
+INSTALL_DIR="/opt/v7lthronyx"
 SERVICE_NAME="spiritus"
 VERSION="1.0.0"
 
@@ -276,12 +276,8 @@ setup_python() {
 }
 
 run_migrations() {
-    # Apply Alembic migrations. Two cases must both work:
-    #  1. Fresh DB  → upgrade head runs 001 (create) + 002 (alter).
-    #  2. Existing DB created by the app's Base.metadata.create_all
-    #     (no alembic_version table) → `upgrade head` would fail on
-    #     001's CREATE TABLE ("already exists"); we stamp the base
-    #     revision and then upgrade so only the additive ALTERs run.
+    # 001 uses checkfirst and later revisions inspect existing columns, so the
+    # same command handles both fresh databases and pre-Alembic installations.
     print_info "Applying database migrations..."
     cd "$INSTALL_DIR"
     # shellcheck disable=SC1091
@@ -290,16 +286,10 @@ run_migrations() {
     local err=/tmp/v7-alembic.err
     if alembic upgrade head 2>"$err"; then
         print_success "Database migrations applied"
-    elif grep -qiE "already exists|DuplicateTable" "$err"; then
-        print_info "Existing schema detected — stamping baseline then upgrading..."
-        if alembic stamp 001 >/dev/null 2>&1 && alembic upgrade head 2>"$err"; then
-            print_success "Database migrations applied (stamped baseline)"
-        else
-            print_warning "Migration after stamp failed: $(tail -1 "$err" 2>/dev/null)"
-        fi
     else
-        print_warning "Database migration failed: $(tail -1 "$err" 2>/dev/null)"
-        print_warning "The app will fall back to create_all on startup; manual 'alembic upgrade head' may be needed for schema changes."
+        print_error "Database migration failed: $(tail -1 "$err" 2>/dev/null)"
+        rm -f "$err"
+        return 1
     fi
     rm -f "$err"
 }
@@ -711,12 +701,8 @@ setup_panel_user() {
         chown "${PANEL_USER}:${PANEL_USER}" "${INSTALL_DIR}/${_log}" 2>/dev/null || true
         chmod 640 "${INSTALL_DIR}/${_log}" 2>/dev/null || true
     done
-    # Allow ONLY the narrow systemctl restart needed for live config push.
-    cat > /etc/sudoers.d/${PANEL_USER} <<EOF
-${PANEL_USER} ALL=(root) NOPASSWD: /bin/systemctl restart xray, /bin/systemctl reload xray, /bin/systemctl status xray
-EOF
-    chmod 440 /etc/sudoers.d/${PANEL_USER}
-    print_success "Service user '${PANEL_USER}' created with minimal sudo"
+    rm -f /etc/sudoers.d/${PANEL_USER}
+    print_success "Service user '${PANEL_USER}' created without sudo access"
 
     # Grant the panel user write access to the xray config directory so it
     # can push updated configs without running as root.
@@ -738,8 +724,8 @@ configure_systemd() {
     cat > /etc/systemd/system/${SERVICE_NAME}.service << EOF
 [Unit]
 Description=V7LTHRONYX VPN Management Panel
-After=network.target xray.service postgresql.service redis-server.service
-Wants=xray.service postgresql.service redis-server.service
+After=network.target xray.service postgresql.service redis-server.service v7lthronyx-helper.service
+Wants=xray.service postgresql.service redis-server.service v7lthronyx-helper.service
 
 [Service]
 Type=simple
@@ -750,7 +736,7 @@ Environment="PYTHONUNBUFFERED=1"
 Environment="PATH=${INSTALL_DIR}/venv/bin:/usr/local/bin:/usr/bin:/bin"
 # Bind to loopback only. External access goes through a TLS-terminating
 # reverse proxy (nginx/Caddy) on 80/443.
-ExecStart=${INSTALL_DIR}/venv/bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port ${WEB_PORT} --workers 2 --proxy-headers --forwarded-allow-ips='127.0.0.1'
+ExecStart=${INSTALL_DIR}/venv/bin/python3 -m uvicorn app.main:app --host 127.0.0.1 --port ${WEB_PORT} --workers 2 --proxy-headers --forwarded-allow-ips='127.0.0.1'
 ExecReload=/bin/kill -HUP \$MAINPID
 Restart=always
 RestartSec=10
@@ -785,6 +771,43 @@ LimitNOFILE=65536
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=v7lthronyx
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    cat > /etc/systemd/system/v7lthronyx-helper.service << EOF
+[Unit]
+Description=V7LTHRONYX restricted privileged helper
+After=network.target
+Before=${SERVICE_NAME}.service
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=${INSTALL_DIR}
+EnvironmentFile=${INSTALL_DIR}/.env
+Environment="PATH=${INSTALL_DIR}/venv/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=${INSTALL_DIR}/venv/bin/python3 -m app.privileged_helper_daemon
+Restart=on-failure
+RestartSec=3
+UMask=0027
+PrivateTmp=true
+PrivateDevices=true
+ProtectHome=true
+ProtectSystem=strict
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+RestrictNamespaces=true
+RestrictRealtime=true
+LockPersonality=true
+CapabilityBoundingSet=CAP_DAC_OVERRIDE CAP_NET_ADMIN CAP_NET_RAW
+AmbientCapabilities=CAP_DAC_OVERRIDE CAP_NET_ADMIN CAP_NET_RAW
+ReadWritePaths=/run/v7lthronyx /etc/v7lthronyx /etc/letsencrypt /etc/fail2ban /usr/local/etc /var/www /var/log/xray
 
 [Install]
 WantedBy=multi-user.target
@@ -864,6 +887,7 @@ EOF
     systemctl enable ${SERVICE_NAME}
     systemctl enable ${SERVICE_NAME}-worker 2>/dev/null || true
     systemctl enable ${SERVICE_NAME}-beat 2>/dev/null || true
+    systemctl enable v7lthronyx-helper 2>/dev/null || true
     print_success "Systemd services configured"
 }
 
@@ -879,7 +903,7 @@ EOF
     cat > "${INSTALL_DIR}/scripts/auto-update.sh" << 'UPDATEEOF'
 #!/bin/bash
 set -e
-INSTALL_DIR="/opt/spiritus"
+INSTALL_DIR="/opt/v7lthronyx"
 SERVICE_NAME="spiritus"
 LOG_FILE="${INSTALL_DIR}/update.log"
 
@@ -938,6 +962,7 @@ start_panel() {
     # Open the panel port in the local firewall (idempotent, best-effort).
     open_firewall_port "${WEB_PORT}"
 
+    systemctl restart v7lthronyx-helper
     systemctl restart ${SERVICE_NAME}
     systemctl restart ${SERVICE_NAME}-worker 2>/dev/null || true
     systemctl restart ${SERVICE_NAME}-beat 2>/dev/null || true
@@ -1135,9 +1160,6 @@ main() {
     echo -e "${CYAN}[10a/13]${NC} Prompting for domain (optional)..."
     prompt_domain || true
 
-    echo -e "${CYAN}[10b/13]${NC} Applying domain to panel database..."
-    apply_domain_on_install || true
-
     echo -e "${CYAN}[10/13]${NC} Setting up environment config..."
     setup_env
 
@@ -1146,6 +1168,10 @@ main() {
 
     echo -e "${CYAN}[11/13]${NC} Configuring services..."
     configure_systemd
+
+    systemctl restart v7lthronyx-helper
+    echo -e "${CYAN}[11b/13]${NC} Applying domain to panel database..."
+    apply_domain_on_install || true
 
     echo -e "${CYAN}[12/13]${NC} Setting up auto-update..."
     setup_auto_update

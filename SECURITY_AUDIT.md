@@ -89,7 +89,7 @@ local files deleted; **do not push until explicitly authorised**.
 
 1. **Rotate exposed credentials**: the previous `.env` shipped `dev-secret-key-local-only-not-for-production-use-32chars` and `Telegram/Zarinpal/IDPay/USDT` keys — anything that was ever populated needs rotation upstream.
 2. **Reverse-proxy TLS**: app now binds `127.0.0.1`. Production needs nginx/Caddy terminating TLS on 80/443. HSTS preload is shipped — make sure you can keep HTTPS up before submitting to the preload list.
-3. **WebAuthn**: the placeholder verifier remains disabled. A full COSE/CBOR signature verification using `cbor2` + `cryptography` is needed before flipping `ENABLE_WEBAUTHN=true`.
-4. **Inline event handlers**: CSP still allows `'unsafe-inline'` for `script-src` because `panel.html` has `onclick="..."` attributes. Migrating those to `addEventListener` lets us drop `'unsafe-inline'` entirely.
+3. **WebAuthn rollout**: placeholder credentials are invalidated. Production still needs a controlled enrollment window with `WEBAUTHN_RP_ID` and `WEBAUTHN_ORIGINS` set to the reverse-proxy hostname.
+4. **Legacy UI cleanup**: CSP is nonce-only for scripts and styles. The compatibility binder still migrates old event/style attributes at runtime, so the next UI cleanup should replace those attributes with first-class classes and listeners.
 5. **Audit log persistence**: structured login/2FA/logout events are emitted to the Python logger. Wiring them into the `Audit` model (already present) is a small follow-up.
 6. **`STRICT_CONFIG=1`** should be set in production `.env` to enforce weak-secret rejection on the legacy `app_config.py` import path as well.

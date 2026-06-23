@@ -26,6 +26,7 @@ from enum import Enum
 
 import httpx
 from sqlalchemy import select, and_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from .database import safe_refresh
 
@@ -294,8 +295,9 @@ class USDTGateway:
 
     async def check_payment(
         self,
-        expected_amount: float,
+        expected_amount_micro: int,
         since_timestamp: int = 0,
+        tx_hash: str = "",
     ) -> Dict[str, Any]:
         """Check for incoming USDT TRC-20 payments."""
         headers = {}
@@ -311,22 +313,48 @@ class USDTGateway:
                         "contract_address": "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t",  # USDT contract
                         "limit": 50,
                         "min_timestamp": since_timestamp,
+                        "only_confirmed": "true",
                     },
                     headers=headers,
                 )
                 data = resp.json()
 
                 for tx in data.get("data", []):
-                    value = int(tx.get("value", 0)) / 1_000_000  # USDT has 6 decimals
+                    value_micro = int(tx.get("value", 0))
                     to_addr = tx.get("to", "")
+                    candidate_hash = tx.get("transaction_id", "")
 
-                    if to_addr == self.wallet_address and abs(value - expected_amount) < 0.01:
+                    if (
+                        to_addr == self.wallet_address
+                        and value_micro == expected_amount_micro
+                        and (not tx_hash or candidate_hash == tx_hash)
+                    ):
+                        info_response = await client.post(
+                            f"{self.TRON_GRID_URL}/wallet/gettransactioninfobyid",
+                            json={"value": candidate_hash},
+                            headers=headers,
+                        )
+                        head_response = await client.post(
+                            f"{self.TRON_GRID_URL}/wallet/getnowblock",
+                            json={},
+                            headers=headers,
+                        )
+                        info_response.raise_for_status()
+                        head_response.raise_for_status()
+                        tx_block = int(info_response.json().get("blockNumber", 0))
+                        head_block = int(
+                            head_response.json().get("block_header", {}).get("raw_data", {}).get("number", 0)
+                        )
+                        confirmations = head_block - tx_block + 1 if tx_block and head_block >= tx_block else 0
+                        if confirmations < settings.usdt_min_confirmations:
+                            continue
                         return {
                             "success": True,
-                            "tx_hash": tx.get("transaction_id", ""),
-                            "amount": value,
+                            "tx_hash": candidate_hash,
+                            "amount": value_micro / 1_000_000,
                             "from": tx.get("from", ""),
                             "timestamp": tx.get("block_timestamp", 0),
+                            "confirmations": confirmations,
                         }
 
                 return {"success": False, "error": "No matching payment found"}
@@ -336,13 +364,8 @@ class USDTGateway:
             return {"success": False, "error": str(e)}
 
     async def generate_payment_address(self) -> str:
-        """Generate a unique payment address or memo.
-
-        In production, you'd generate a unique TRON address per payment
-        using a HD wallet. For now, return the main wallet with a memo.
-        """
-        memo = secrets.token_hex(8)
-        return f"{self.wallet_address}?memo={memo}"
+        """Return the configured wallet; invoice uniqueness is in the amount."""
+        return self.wallet_address
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -434,12 +457,31 @@ class PaymentManager:
         elif gateway == "usdt_trc20":
             address = await gw.generate_payment_address()
             payment.usdt_wallet_address = address
-            await db.commit()
+            # TRC-20 has six decimals. A small per-invoice suffix prevents a
+            # public transaction with the plan's common round amount from
+            # being claimed by another pending invoice.
+            payment.expired_at = _utcnow() + timedelta(minutes=30)
+            payment_row_id = payment.id
+            for _ in range(10):
+                payment.usdt_expected_amount_micro = (
+                    int(round(plan.price_usdt * 1_000_000)) + secrets.randbelow(900) + 100
+                )
+                try:
+                    await db.commit()
+                    break
+                except IntegrityError:
+                    await db.rollback()
+                    payment = await db.get(Payment, payment_row_id)
+                    if payment is None:
+                        return {"success": False, "error": "Invoice allocation failed"}
+            else:
+                return {"success": False, "error": "Could not allocate a unique invoice amount"}
             return {
                 "success": True,
                 "payment_id": payment.id,
                 "wallet_address": address,
-                "amount_usdt": plan.price_usdt,
+                "amount_usdt": payment.usdt_expected_amount_micro / 1_000_000,
+                "expires_at": payment.expired_at.isoformat(),
             }
 
         return {"success": False, "error": "Unknown gateway"}
@@ -453,7 +495,7 @@ class PaymentManager:
     ) -> Dict[str, Any]:
         """Verify and complete a payment."""
         result = await db.execute(
-            select(Payment).where(Payment.id == payment_id)
+            select(Payment).where(Payment.id == payment_id).with_for_update()
         )
         payment = result.scalar_one_or_none()
 
@@ -462,6 +504,14 @@ class PaymentManager:
 
         if payment.status == PaymentStatus.paid:
             return {"success": True, "message": "Already paid"}
+        if payment.status == PaymentStatus.expired or (
+            payment.expired_at and payment.expired_at < _utcnow()
+        ):
+            payment.status = PaymentStatus.expired
+            await db.commit()
+            return {"success": False, "error": "Payment expired"}
+        if payment.gateway.value != gateway:
+            return {"success": False, "error": "Payment gateway mismatch"}
 
         gw = self._gateways.get(gateway)
         if not gw:
@@ -479,14 +529,30 @@ class PaymentManager:
                 order_id=str(payment.id),
             )
         elif gateway == "usdt_trc20":
+            if not payment.usdt_expected_amount_micro:
+                return {"success": False, "error": "Invoice has no unique USDT amount"}
             verify_result = await gw.check_payment(
-                expected_amount=payment.amount / 100,
+                expected_amount_micro=payment.usdt_expected_amount_micro,
                 since_timestamp=int(payment.created_at.timestamp() * 1000) if payment.created_at else 0,
+                tx_hash=str(kwargs.get("tx_hash") or ""),
             )
         else:
             return {"success": False, "error": "Unknown gateway"}
 
         if verify_result.get("success"):
+            tx_hash = str(verify_result.get("tx_hash") or "")
+            if gateway == "usdt_trc20":
+                if not tx_hash:
+                    return {"success": False, "error": "Gateway returned no transaction hash"}
+                duplicate = await db.execute(
+                    select(Payment.id).where(
+                        Payment.usdt_tx_hash == tx_hash,
+                        Payment.id != payment.id,
+                    )
+                )
+                if duplicate.scalar_one_or_none() is not None:
+                    return {"success": False, "error": "Transaction already claimed"}
+                payment.usdt_tx_hash = tx_hash
             payment.status = PaymentStatus.paid
             payment.paid_at = _utcnow()
             payment.gateway_ref_id = str(verify_result.get("ref_id") or verify_result.get("track_id") or verify_result.get("tx_hash", ""))
@@ -519,7 +585,11 @@ class PaymentManager:
                     commission = int(payment.amount * reseller.commission_rate / 100)
                     reseller.balance += commission
 
-            await db.commit()
+            try:
+                await db.commit()
+            except IntegrityError:
+                await db.rollback()
+                return {"success": False, "error": "Transaction already claimed"}
 
             return {
                 "success": True,
@@ -527,9 +597,10 @@ class PaymentManager:
                 "ref_id": payment.gateway_ref_id,
             }
 
-        # Mark as failed
-        payment.status = PaymentStatus.failed
-        await db.commit()
+        # A missing crypto transfer is still pending until invoice expiry.
+        if gateway != "usdt_trc20":
+            payment.status = PaymentStatus.failed
+            await db.commit()
 
         return verify_result
 

@@ -221,11 +221,8 @@ def get_or_generate(name: str, generator) -> str:
 def reality_private_key() -> str:
     """The server's REALITY X25519 private key.
 
-    Generated on first read by shelling out to `xray x25519`. Falls
-    back to a CSPRNG base64 key if the xray binary is not present
-    (the xray config validator will then reject the config and the
-    operator gets a clear error — better than silently using a
-    mismatched pair).
+    Generated on first read by shelling out to `xray x25519`. Failure is
+    explicit: a random placeholder is never persisted as a private key.
     """
     def _gen() -> str:
         xray_bin = os.environ.get("XRAY_BIN_PATH", "/usr/local/bin/xray")
@@ -241,14 +238,11 @@ def reality_private_key() -> str:
                 for line in proc.stdout.splitlines():
                     if "Private key:" in line:
                         return line.split(":", 1)[1].strip()
-        except FileNotFoundError:
-            pass
+        except FileNotFoundError as exc:
+            raise RuntimeError(f"xray binary not found at {xray_bin}") from exc
         except Exception as exc:  # noqa: BLE001
-            logger.warning("xray x25519 failed (%s); using CSPRNG placeholder", exc)
-        # CSPRNG fallback — xray will reject the config at startup, so
-        # the operator sees the error immediately rather than silently
-        # running with a broken key.
-        return _py_secrets.token_urlsafe(32)
+            raise RuntimeError(f"xray x25519 failed: {type(exc).__name__}") from exc
+        raise RuntimeError("xray x25519 did not return a private key")
 
     return get_or_generate("reality_private_key", _gen)
 

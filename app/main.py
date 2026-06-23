@@ -13,6 +13,7 @@ from contextlib import asynccontextmanager
 from jinja2 import Environment, FileSystemLoader
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+import asyncio
 import base64
 import json
 import logging
@@ -26,6 +27,7 @@ from .database import get_async_db, init_db, shutdown_db
 from .models import VpnUser
 from .redis_client import close_redis
 from .observability import setup_opentelemetry, prometheus_metrics
+from .privileged_helper import helper_request, PrivilegedHelperError
 
 # Configure logging — stderr is always wired; the file handler is best-effort
 # so the panel can still start under tightened systemd profiles where the
@@ -195,6 +197,23 @@ if _allowed_origins:
         max_age=600,
     )
 
+# ── Request body size limit (anti-DoS) ───────────────────────────────────────
+# Reject oversized bodies early, before they are buffered into memory. The JSON
+# admin API only ever needs a few KB; bulk-import endpoints stay well under the
+# 2 MiB default. Streams without Content-Length are capped while reading.
+_MAX_BODY = int(getattr(settings, "max_request_body_bytes", 0) or 0)
+if _MAX_BODY > 0:
+    @app.middleware("http")
+    async def _limit_body_size(request: Request, call_next):
+        cl = request.headers.get("content-length")
+        if cl is not None:
+            try:
+                if int(cl) > _MAX_BODY:
+                    return JSONResponse({"detail": "Request entity too large"}, status_code=413)
+            except ValueError:
+                return JSONResponse({"detail": "Invalid Content-Length"}, status_code=400)
+        return await call_next(request)
+
 # ── Rate limit (global) ──────────────────────────────────────────────────────
 from .middleware.rate_limit import RateLimitMiddleware
 app.add_middleware(RateLimitMiddleware)
@@ -202,6 +221,20 @@ app.add_middleware(RateLimitMiddleware)
 # ── CSRF (double-submit cookie) ──────────────────────────────────────────────
 from .middleware.csrf import CSRFMiddleware
 app.add_middleware(CSRFMiddleware)
+
+# ── Trusted Host allowlist (defence-in-depth vs Host-header poisoning) ────────
+# Enforced only when ALLOWED_HOSTS is configured, so existing deployments keep
+# working. Starlette validates the Host header against this list and returns a
+# 400 for anything else — neutralising Host/BadHost-style spoofing regardless
+# of how downstream code reads the host.
+_allowed_hosts = [h.strip() for h in (settings.allowed_hosts or "").split(",") if h.strip()]
+if _allowed_hosts:
+    from starlette.middleware.trustedhost import TrustedHostMiddleware
+    # Always permit localhost so health checks / the privileged helper still work.
+    for _lh in ("127.0.0.1", "localhost", "[::1]"):
+        if _lh not in _allowed_hosts:
+            _allowed_hosts.append(_lh)
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=_allowed_hosts)
 
 
 # ── Security headers ─────────────────────────────────────────────────────────
@@ -222,28 +255,20 @@ async def add_security_headers(request: Request, call_next):
     # max-age + preload eligibility.
     response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains; preload"
 
-    # CSP: drop 'unsafe-eval' entirely. 'unsafe-inline' is retained for
-    # legacy inline event handlers in panel.html — eliminating that requires
-    # rewriting all the onclick=… attributes into addEventListener, which is
-    # tracked separately. The nonce is still injected so future inline scripts
-    # can adopt a stricter policy without further server changes.
+    # CSP: inline script execution is nonce-only. Legacy event attributes are
+    # rebound by static/js/csp-events.js and removed before interaction, so the
+    # browser does not need to execute onclick/onchange attribute JavaScript.
     # CSP layout:
-    # - script-src 'self' 'unsafe-inline':  same-origin scripts + inline
-    #   <script>/onclick handlers. The panel templates carry ~240 legacy
-    #   inline onclick= attributes; the strict nonce-only CSP combined
-    #   with script-src-attr 'unsafe-inline' (CSP-3) only works on
-    #   Chrome 86+/Firefox 105+/Safari 15.4+. On anything older every
-    #   button silently does nothing.
-    # - 'unsafe-eval' is kept OFF — that's the genuinely-dangerous
-    #   directive (lets injected scripts JIT-compile new code at runtime).
-    # - The per-request nonce is still computed and exposed in
-    #   request.state.csp_nonce so future refactors that delete the inline
-    #   onclicks can flip this back to a strict nonce CSP without server
-    #   changes.
+    # - script-src: same-origin scripts + nonce'd template scripts.
+    # - script-src-attr 'none': inline event attributes are not executable.
+    # - style-src/style-src-attr: inline CSS blocks are nonce'd; legacy style
+    #   attributes are migrated to CSSOM by csp-events.js and then removed.
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline'; "
-        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        f"script-src 'self' 'nonce-{nonce}'; "
+        "script-src-attr 'none'; "
+        f"style-src 'self' 'nonce-{nonce}' https://fonts.googleapis.com; "
+        "style-src-attr 'none'; "
         "font-src 'self' https://fonts.gstatic.com; "
         "img-src 'self' data: blob:; "
         "connect-src 'self'; "
@@ -312,11 +337,14 @@ from .api.agents import router as agents_router
 from .api.payments import router as payments_router
 from .api.resellers import router as resellers_router, portal_router
 from .api.compat import router as compat_router
+from .api.mobile_auth import router as mobile_auth_router, session_router as mobile_session_router
 
 # Legacy panel routes must be registered first so cookie-auth compatibility
 # handlers win over the bearer-token resource routers on shared paths.
 app.include_router(compat_router, prefix="/api")
 app.include_router(auth_router, prefix="/api")
+app.include_router(mobile_auth_router, prefix="/api")
+app.include_router(mobile_session_router, prefix="/api")
 app.include_router(users_router, prefix="/api")
 app.include_router(system_router, prefix="/api")
 app.include_router(protocols_router, prefix="/api")
@@ -343,8 +371,43 @@ async def health_check():
     return {"status": "healthy", "service": "v7lthronyx-vpn-panel", "version": "2.0.0"}
 
 @app.get("/api/ready", tags=["system"])
-async def readiness_check():
-    """Readiness probe for Kubernetes."""
+async def readiness_check(db: AsyncSession = Depends(get_async_db)):
+    """Check mandatory production dependencies without leaking internals."""
+    from sqlalchemy import text
+    from .redis_client import get_redis
+
+    unavailable = []
+    if not settings.debug and not str(settings.database_url).startswith("postgresql+"):
+        unavailable.append("database_backend")
+    try:
+        await db.execute(text("SELECT 1"))
+    except Exception:
+        unavailable.append("database")
+    try:
+        redis = await get_redis()
+        await redis.ping()
+    except Exception:
+        unavailable.append("redis")
+    if not os.path.isfile(settings.xray_config_path):
+        unavailable.append("xray_config")
+    else:
+        try:
+            validated = await asyncio.to_thread(
+                subprocess.run,
+                [settings.xray_bin_path, "-test", "-config", settings.xray_config_path],
+                capture_output=True,
+                timeout=10,
+                check=False,
+            )
+            if validated.returncode != 0:
+                unavailable.append("xray_config")
+        except (OSError, subprocess.SubprocessError):
+            unavailable.append("xray_core")
+    if unavailable:
+        return JSONResponse(
+            status_code=503,
+            content={"status": "not_ready", "unavailable": unavailable},
+        )
     return {"status": "ready"}
 
 @app.get("/api/live", tags=["system"])
@@ -669,6 +732,25 @@ async def subscription_page(
     return HTMLResponse(content=html)
 
 
+def _subscription_userinfo_header(user: VpnUser) -> str:
+    """Build the standard Subscription-Userinfo header value.
+
+    Clients (v2rayN/NekoBox/V7L app) read this to render traffic and expiry.
+    `expire` is a Unix timestamp in seconds; omitted (0) when the user never
+    expires.
+    """
+    expire_ts = 0
+    if user.expire_at is not None:
+        try:
+            expire_ts = int(user.expire_at.timestamp())
+        except (OSError, OverflowError, ValueError):
+            expire_ts = 0
+    return (
+        f"upload=0; download={int(user.traffic_used or 0)}; "
+        f"total={int(user.traffic_limit or 0)}; expire={expire_ts}"
+    )
+
+
 @app.get("/sub-api/{user_uuid}")
 async def subscription_api(
     user_uuid: str,
@@ -689,12 +771,35 @@ async def subscription_api(
                 re.sub(r"[^\w\-.]", "_", user.name)
             ),
             "Profile-Update-Interval": "6",
-            "Subscription-Userinfo": (
-                f"upload=0; download={int(user.traffic_used or 0)}; "
-                f"total={int(user.traffic_limit or 0)}"
-            ),
+            "Subscription-Userinfo": _subscription_userinfo_header(user),
         },
     )
+
+
+@app.get("/sub-info/{user_uuid}")
+async def subscription_info(
+    user_uuid: str,
+    request: Request,
+    db: AsyncSession = Depends(get_async_db),
+):
+    """Return public JSON user metadata (name, traffic, expiry, links).
+
+    The V7L mobile client queries this first to render the traffic gauge and
+    expiry. It reuses the same shape as /api/users so the client's UserDto
+    deserializes it unchanged.
+    """
+    from .api.compat import _user_to_legacy
+
+    user = await _subscription_user(user_uuid, db)
+    if not user.active:
+        raise HTTPException(status_code=404, detail="Not found")
+    server_ip = _public_server_ip(request)
+    data = _user_to_legacy(user, server_ip=server_ip)
+    # The mobile client's UserDto types `online_ips` as an integer count,
+    # whereas the legacy panel shape returns a list. Normalise to the count
+    # so strict client-side deserialization succeeds.
+    data["online_ips"] = int(data.get("online_ip_count") or 0)
+    return JSONResponse(content=data)
 
 
 def _subscription_json_config(
@@ -1496,18 +1601,21 @@ async def sync_xray_config(
         elif proto == "trojan":
             inbound.setdefault("settings", {})["clients"] = trojan_clients
 
-    # Write config to disk
-    config_path = settings.xray_config_path
     try:
-        with open(config_path, "w") as f:
-            json.dump(config, f, indent=2)
-        # Restart Xray to apply
-        subprocess.run(["systemctl", "restart", "xray"], capture_output=True, timeout=10)
+        installed = await helper_request(
+            "config.install",
+            {"target": "xray", "content": json.dumps(config, indent=2)},
+        )
+        if not installed.ok:
+            raise RuntimeError(installed.message or "config install failed")
+        restarted = await helper_request("service.restart", {"service": "xray"}, timeout=35)
+        if not restarted.ok:
+            raise RuntimeError(restarted.message or "Xray restart failed")
         n_clients = len(vmess_clients)
         n_inbounds = len(config.get("inbounds", []))
         logger.info(f"Xray config synced: {n_inbounds} inbounds, {n_clients} clients")
         return {"ok": True, "message": f"Xray config applied: {n_inbounds} inbounds, {n_clients} clients"}
-    except Exception as e:
+    except (PrivilegedHelperError, RuntimeError) as e:
         logger.error(f"Failed to sync Xray config: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to sync Xray config: {str(e)}")
 

@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 from typing import Optional, List
 import logging
 
-from ..auth import get_current_admin, get_current_user, User, create_access_token
+from ..auth import get_current_admin, get_current_user, User, create_access_token, validate_password_strength
 from ..config import settings
 from ..database import get_async_db
 from ..models import Reseller
@@ -32,7 +32,7 @@ router = APIRouter(prefix="/resellers", tags=["resellers"])
 
 class ResellerCreate(BaseModel):
     username: str = Field(..., min_length=3, max_length=100)
-    password: str = Field(..., min_length=6, max_length=100)
+    password: str = Field(..., min_length=12, max_length=100)
     commission_rate: float = Field(10.0, ge=0, le=100)
     max_users: int = Field(100, ge=1)
     max_traffic_gb: float = Field(1000, ge=1)
@@ -96,6 +96,9 @@ async def create_reseller(
     db: AsyncSession = Depends(get_async_db),
 ):
     """Create a new reseller."""
+    password_error = validate_password_strength(data.password)
+    if password_error:
+        raise HTTPException(status_code=422, detail=password_error)
     result = await reseller_manager.create_reseller(
         db=db,
         username=data.username,
@@ -158,16 +161,14 @@ async def toggle_reseller(
 # ── Reseller Auth ────────────────────────────────────────
 
 async def _reseller_ip_locked(ip: str) -> bool:
-    # Fail-open on Redis errors (don't lock everyone out if Redis is
-    # down) but LOG it — a silent failure here disables brute-force
-    # protection without anyone noticing.
+    # Auth paths fail closed when rate-limit state cannot be verified.
     try:
         redis = await get_redis()
         val = await redis.get(f"reseller_login:{ip}")
         return bool(val and int(val) >= settings.max_login_attempts)
     except Exception as exc:  # noqa: BLE001
-        logger.warning("reseller rate-limit check failed (Redis?): %s", exc)
-        return False
+        logger.error("reseller rate-limit check failed (Redis?): %s", exc)
+        raise HTTPException(status_code=503, detail="Auth service temporarily unavailable") from exc
 
 
 async def _record_reseller_failure(ip: str) -> None:
@@ -178,7 +179,8 @@ async def _record_reseller_failure(ip: str) -> None:
         if count == 1:
             await redis.expire(key, settings.lockout_seconds)
     except Exception as exc:  # noqa: BLE001
-        logger.warning("reseller failure-record failed (Redis?): %s", exc)
+        logger.error("reseller failure-record failed (Redis?): %s", exc)
+        raise HTTPException(status_code=503, detail="Auth service temporarily unavailable") from exc
 
 
 async def _clear_reseller_attempts(ip: str) -> None:

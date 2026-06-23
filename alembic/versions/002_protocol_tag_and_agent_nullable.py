@@ -40,18 +40,18 @@ def upgrade() -> None:
     The SQLite variant needs `batch_alter_table` because SQLite
     doesn't support `ALTER COLUMN` directly.
     """
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    if "protocol_configs" not in inspector.get_table_names():
+        return
+    columns = {column["name"]: column for column in inspector.get_columns("protocol_configs")}
     with op.batch_alter_table("protocol_configs") as batch_op:
-        batch_op.add_column(
-            sa.Column("tag", sa.String(length=100), nullable=True),
-        )
-        batch_op.add_column(
-            sa.Column("last_error", sa.Text(), nullable=True),
-        )
-        batch_op.alter_column(
-            "agent_id",
-            existing_type=sa.Integer(),
-            nullable=True,
-        )
+        if "tag" not in columns:
+            batch_op.add_column(sa.Column("tag", sa.String(length=100), nullable=True))
+        if "last_error" not in columns:
+            batch_op.add_column(sa.Column("last_error", sa.Text(), nullable=True))
+        if "agent_id" in columns and not columns["agent_id"].get("nullable", True):
+            batch_op.alter_column("agent_id", existing_type=sa.Integer(), nullable=True)
 
 
 def downgrade() -> None:

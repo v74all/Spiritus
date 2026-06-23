@@ -13,9 +13,12 @@ full panel boot. Tests assert:
 from starlette.applications import Starlette
 from starlette.responses import JSONResponse
 from starlette.routing import Route
-from starlette.testclient import TestClient
+from httpx import ASGITransport, AsyncClient
+import pytest
 
 from app.middleware.csrf import CSRFMiddleware
+
+pytestmark = pytest.mark.asyncio
 
 
 async def _echo(request):
@@ -28,55 +31,49 @@ def _build():
         Route("/api/users", _echo, methods=["GET", "POST"]),
     ])
     app.add_middleware(CSRFMiddleware)
-    return TestClient(app)
+    return app
 
 
-def test_get_sets_csrf_cookie():
-    c = _build()
-    r = c.get("/api/users")
-    assert r.status_code == 200
-    assert "csrf_token" in r.cookies
+def _client():
+    return AsyncClient(transport=ASGITransport(app=_build()), base_url="https://testserver")
 
 
-def test_post_without_token_is_rejected():
-    c = _build()
-    # Prime the cookie first.
-    c.get("/api/users")
-    r = c.post("/api/users", json={})
-    assert r.status_code == 403
+async def test_get_sets_csrf_cookie():
+    async with _client() as c:
+        r = await c.get("/api/users")
+        assert r.status_code == 200
+        assert "csrf_token" in r.cookies
 
 
-def test_post_with_matching_token_passes():
-    c = _build()
-    g = c.get("/api/users")
-    token = g.cookies["csrf_token"]
-    # The cookie is set with Secure=True (because DEBUG is false in this test
-    # env), so TestClient on http://testserver won't auto-resend it. Pass it
-    # explicitly to verify the matching-cookie-and-header path.
-    r = c.post(
-        "/api/users",
-        json={},
-        headers={"X-CSRF-Token": token},
-        cookies={"csrf_token": token},
-    )
-    assert r.status_code == 200
+async def test_post_without_token_is_rejected():
+    async with _client() as c:
+        await c.get("/api/users")
+        r = await c.post("/api/users", json={})
+        assert r.status_code == 403
 
 
-def test_post_with_wrong_token_is_rejected():
-    c = _build()
-    c.get("/api/users")
-    r = c.post("/api/users", json={}, headers={"X-CSRF-Token": "not-the-real-one"})
-    assert r.status_code == 403
+async def test_post_with_matching_token_passes():
+    async with _client() as c:
+        g = await c.get("/api/users")
+        token = g.cookies["csrf_token"]
+        r = await c.post("/api/users", json={}, headers={"X-CSRF-Token": token})
+        assert r.status_code == 200
 
 
-def test_bearer_request_bypasses_csrf():
-    c = _build()
-    # No CSRF cookie needed — Authorization header signals API client.
-    r = c.post("/api/users", json={}, headers={"Authorization": "Bearer dummy"})
-    assert r.status_code == 200
+async def test_post_with_wrong_token_is_rejected():
+    async with _client() as c:
+        await c.get("/api/users")
+        r = await c.post("/api/users", json={}, headers={"X-CSRF-Token": "not-the-real-one"})
+        assert r.status_code == 403
 
 
-def test_login_endpoint_is_exempt():
-    c = _build()
-    r = c.post("/api/auth/login", json={"u": "x"})
-    assert r.status_code == 200
+async def test_bearer_request_bypasses_csrf():
+    async with _client() as c:
+        r = await c.post("/api/users", json={}, headers={"Authorization": "Bearer dummy"})
+        assert r.status_code == 200
+
+
+async def test_login_endpoint_is_exempt():
+    async with _client() as c:
+        r = await c.post("/api/auth/login", json={"u": "x"})
+        assert r.status_code == 200

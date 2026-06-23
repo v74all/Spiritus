@@ -228,4 +228,5 @@ cython_debug/
 !INSTALL.md
 !CHANGELOG.md
 !LICENSE
+.unban_token
 .unban_token_last

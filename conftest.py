@@ -16,15 +16,17 @@ import secrets
 # The app's strict validators refuse weak/default secrets, so we
 # override the env here rather than in the conftest under each
 # subdirectory.
-os.environ.setdefault("SECRET_KEY", secrets.token_urlsafe(48))
-os.environ.setdefault("JWT_SECRET_KEY", secrets.token_urlsafe(48))
-os.environ.setdefault("CSRF_SECRET", secrets.token_urlsafe(32))
-os.environ.setdefault("ARGON2_SALT", secrets.token_hex(16))
-os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
-os.environ.setdefault("CORS_ORIGINS", "")
-os.environ.setdefault("DEBUG", "false")
-os.environ.setdefault("HOST", "127.0.0.1")
-os.environ.setdefault("ADMIN_BOOTSTRAP_PASSWORD", "")  # disable bootstrap
+os.environ["SECRET_KEY"] = secrets.token_urlsafe(48)
+os.environ["JWT_SECRET_KEY"] = secrets.token_urlsafe(48)
+os.environ["CSRF_SECRET"] = secrets.token_urlsafe(32)
+os.environ["ARGON2_SALT"] = secrets.token_hex(16)
+os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///:memory:"
+os.environ["REDIS_URL"] = "redis://localhost:6379/15"
+os.environ["CORS_ORIGINS"] = ""
+os.environ["DEBUG"] = "false"
+os.environ["HOST"] = "127.0.0.1"
+os.environ["ADMIN_BOOTSTRAP_PASSWORD"] = ""
+os.environ["METRICS_BEARER_TOKEN"] = "m" * 48
 
 # Force the package's submodules to be imported once so that
 # `monkeypatch.setattr("app.api.protocols.X", ...)` can find them

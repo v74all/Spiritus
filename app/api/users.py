@@ -12,17 +12,22 @@ Endpoints:
 - GET    /users/{user_id}/qr - Get QR code
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime
 import uuid as uuid_lib
 import logging
+import base64
+from urllib.parse import urlencode
+from pathlib import Path
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes
 
 from ..auth import get_current_admin, User
 from ..config import settings
 from ..database import get_async_db, safe_refresh
-from ..models import VpnUser, Agent
+from ..models import VpnUser, Agent, Setting
 from ..orchestrator import orchestrator
 from ..protocol_engine import ClientConfigGenerator, PROTOCOLS
 
@@ -31,6 +36,23 @@ from sqlalchemy import select, func
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/users", tags=["users"])
+
+
+async def _mobile_profile_uri(user: VpnUser, request: Request, db: AsyncSession) -> str:
+    result = await db.execute(
+        select(Setting).where(Setting.key.in_(["domain_cert_path", "domain_issuer"]))
+    )
+    values = {row.key: row.value for row in result.scalars().all()}
+    pin = ""
+    cert_path = Path(values.get("domain_cert_path") or "")
+    if cert_path.is_file():
+        cert = x509.load_pem_x509_certificate(cert_path.read_bytes())
+        pin = "sha256/" + base64.b64encode(cert.fingerprint(hashes.SHA256())).decode("ascii")
+    server = f"{request.url.scheme}://{request.url.netloc}"
+    query = {"server": server, "role": "subscriber", "uuid": user.uuid}
+    if pin:
+        query["pin"] = pin
+    return "v7l://import?" + urlencode(query)
 
 # Models
 class UserCreate(BaseModel):
@@ -322,6 +344,7 @@ async def get_user_config(
 @router.get("/{user_id}/qr")
 async def get_user_qr(
     user_id: int,
+    request: Request,
     protocol: str = Query("vless_vision_reality", description="Protocol type"),
     admin: User = Depends(get_current_admin),
     db: AsyncSession = Depends(get_async_db),
@@ -334,4 +357,22 @@ async def get_user_qr(
 
     # Reuse config endpoint logic
     config_result = await get_user_config(user_id, protocol, admin, db)
-    return {"qr_data": config_result.get("config", ""), "protocol": protocol}
+    return {
+        "qr_data": config_result.get("config", ""),
+        "protocol": protocol,
+        "mobile_profile": await _mobile_profile_uri(user, request, db),
+    }
+
+
+@router.get("/{user_id}/mobile-profile")
+async def get_mobile_profile(
+    user_id: int,
+    request: Request,
+    admin: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_async_db),
+):
+    result = await db.execute(select(VpnUser).where(VpnUser.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"profile_uri": await _mobile_profile_uri(user, request, db)}

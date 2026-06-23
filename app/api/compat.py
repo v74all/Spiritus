@@ -44,6 +44,11 @@ from ..config import settings
 from ..database import get_async_db, safe_refresh
 from ..models import Admin, Agent, Setting, VpnUser
 from ..security import fail2ban_manager
+from ..privileged_helper import (
+    helper_request,
+    helper_request_sync,
+    PrivilegedHelperError,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["compat"])
@@ -903,66 +908,7 @@ def _default_legacy_settings() -> Dict[str, Any]:
     }
 
 
-async def _auto_unban_on_deploy(db: AsyncSession) -> None:
-    """
-    Clear all fail2ban bans when a new deploy is detected.
-    Uses .unban_token file — each deploy includes a fresh token.
-    When the token changes, all IP bans are cleared.
-    """
-    token_path = os.path.join(os.getcwd(), ".unban_token")
-    stored_path = os.path.join(os.getcwd(), ".unban_token_last")
-
-    new_token = ""
-    if os.path.exists(token_path):
-        try:
-            with open(token_path) as f:
-                new_token = f.read().strip()
-        except Exception:
-            return
-
-    if not new_token:
-        return
-
-    old_token = ""
-    if os.path.exists(stored_path):
-        try:
-            with open(stored_path) as f:
-                old_token = f.read().strip()
-        except Exception:
-            pass
-
-    if new_token == old_token:
-        return  # No deploy detected
-
-    # New deploy — clear all bans
-    try:
-        from sqlalchemy import delete
-        from ..models import Fail2banBan
-        result = await db.execute(delete(Fail2banBan))
-        await db.commit()
-        count = result.rowcount
-        if count:
-            logger.info(f"Auto-unban: cleared {count} IP bans (new deploy detected)")
-    except Exception as exc:
-        logger.warning(f"Auto-unban failed: {exc}")
-
-    # Save current token
-    try:
-        with open(stored_path, "w") as f:
-            f.write(new_token)
-    except Exception:
-        pass
-
-
-_unban_checked = False
-
-
 async def _load_legacy_settings(db: AsyncSession) -> Dict[str, Any]:
-    global _unban_checked
-    if not _unban_checked:
-        await _auto_unban_on_deploy(db)
-        _unban_checked = True
-
     file_settings: Dict[str, Any] = {}
     settings_path = os.path.join(os.getcwd(), _LEGACY_SETTINGS_FILE)
     if os.path.exists(settings_path):
@@ -2580,12 +2526,15 @@ async def _sync_xray_config_async():
         vmess_clients, vless_clients, trojan_clients = await _fetch_clients_async()
 
         config = _generate_xray_server_config(vmess_clients, vless_clients, trojan_clients)
-        config_path = settings.xray_config_path
-
-        with open(config_path, "w") as f:
-            json.dump(config, f, indent=2)
-
-        subprocess.run(["systemctl", "restart", "xray"], capture_output=True, timeout=10)
+        installed = await helper_request(
+            "config.install",
+            {"target": "xray", "content": json.dumps(config, indent=2)},
+        )
+        if not installed.ok:
+            raise RuntimeError(installed.message or "config install failed")
+        restarted = await helper_request("service.restart", {"service": "xray"}, timeout=35)
+        if not restarted.ok:
+            raise RuntimeError(restarted.message or "Xray restart failed")
         logger.info("Xray config auto-synced (%d inbounds, %d users)",
                     len(config.get("inbounds", [])), len(vmess_clients))
     except Exception as e:
@@ -2598,10 +2547,15 @@ def _sync_xray_config_now():
         import time
         time.sleep(0.5)
         config = _generate_xray_server_config()
-        config_path = settings.xray_config_path
-        with open(config_path, "w") as f:
-            json.dump(config, f, indent=2)
-        subprocess.run(["systemctl", "restart", "xray"], capture_output=True, timeout=10)
+        installed = helper_request_sync(
+            "config.install",
+            {"target": "xray", "content": json.dumps(config, indent=2)},
+        )
+        if not installed.ok:
+            raise RuntimeError(installed.message or "config install failed")
+        restarted = helper_request_sync("service.restart", {"service": "xray"}, timeout=35)
+        if not restarted.ok:
+            raise RuntimeError(restarted.message or "Xray restart failed")
         logger.info(f"Xray config synced ({len(config.get('inbounds', []))} inbounds)")
     except Exception as e:
         logger.warning(f"Xray sync failed: {e}")
@@ -2873,7 +2827,7 @@ async def legacy_backup_list(admin: User = Depends(get_current_admin_cookie)):
     return {"backups": backups}
 
 
-_BACKUP_DIR = "/opt/spiritus/backups"
+_BACKUP_DIR = "/opt/v7lthronyx/backups"
 
 
 @router.post("/backup/create")

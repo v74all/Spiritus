@@ -25,6 +25,7 @@ import secrets
 import subprocess
 import time
 import logging
+import re
 from typing import Dict, Any, Optional, List, Tuple
 from datetime import datetime, timedelta, timezone
 from .timeutil import utcnow as _utcnow
@@ -33,6 +34,21 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .models import Admin, Fail2banBan
+from .config import settings
+from .redis_client import get_redis
+
+try:
+    from webauthn import (
+        generate_authentication_options as _wa_generate_authentication_options,
+        generate_registration_options as _wa_generate_registration_options,
+        options_to_json as _wa_options_to_json,
+        verify_authentication_response as _wa_verify_authentication_response,
+        verify_registration_response as _wa_verify_registration_response,
+    )
+    from webauthn.helpers import base64url_to_bytes, bytes_to_base64url
+    from webauthn.helpers.structs import PublicKeyCredentialDescriptor
+except ImportError:  # pragma: no cover - surfaced as a controlled 503 at runtime
+    _wa_generate_authentication_options = None
 
 logger = logging.getLogger(__name__)
 
@@ -42,206 +58,153 @@ logger = logging.getLogger(__name__)
 # ═══════════════════════════════════════════════════════════════
 
 class WebAuthnManager:
-    """WebAuthn/FIDO2 passkey management.
+    """Standards-based WebAuthn ceremonies with Redis one-time challenges."""
 
-    Implements the WebAuthn registration and authentication ceremonies
-    using the py_webauthn library patterns.
-    """
+    def _configured(self) -> None:
+        if _wa_generate_authentication_options is None:
+            raise RuntimeError("webauthn package is not installed")
+        if not settings.webauthn_rp_id or not settings.webauthn_origins:
+            raise RuntimeError("WEBAUTHN_RP_ID and WEBAUTHN_ORIGINS must be configured")
 
-    def __init__(self, rp_name: str = "V7LTHRONYX", rp_id: str = ""):
-        self.rp_name = rp_name
-        self.rp_id = rp_id  # Domain, e.g. "panel.example.com"
-        self._challenges: Dict[str, Tuple[str, float]] = {}  # username -> (challenge, timestamp)
+    @staticmethod
+    async def _store_challenge(kind: str, username: str, challenge: bytes) -> None:
+        redis = await get_redis()
+        await redis.setex(f"webauthn:{kind}:{username}", 300, bytes_to_base64url(challenge))
 
-    def generate_registration_options(
-        self,
-        username: str,
-        existing_credentials: List[Dict] = None,
+    @staticmethod
+    async def _take_challenge(kind: str, username: str) -> bytes:
+        redis = await get_redis()
+        key = f"webauthn:{kind}:{username}"
+        raw = await redis.eval(
+            "local v=redis.call('get',KEYS[1]); if v then redis.call('del',KEYS[1]); end; return v",
+            1,
+            key,
+        )
+        if not raw:
+            raise ValueError("challenge expired, missing, or already used")
+        return base64url_to_bytes(raw)
+
+    @staticmethod
+    def _valid_credentials(credentials: List[Dict] | None) -> List[Dict]:
+        return [c for c in (credentials or []) if c.get("version") == 1 and c.get("public_key")]
+
+    async def generate_registration_options(self, username: str, existing_credentials=None) -> Dict[str, Any]:
+        self._configured()
+        exclude = [
+            PublicKeyCredentialDescriptor(id=base64url_to_bytes(c["id"]))
+            for c in self._valid_credentials(existing_credentials)
+        ]
+        options = _wa_generate_registration_options(
+            rp_id=settings.webauthn_rp_id,
+            rp_name=settings.webauthn_rp_name,
+            user_id=hashlib.sha256(username.encode("utf-8")).digest(),
+            user_name=username,
+            user_display_name=username,
+            exclude_credentials=exclude,
+        )
+        await self._store_challenge("register", username, options.challenge)
+        return {"publicKey": json.loads(_wa_options_to_json(options))}
+
+    async def verify_registration(
+        self, username: str, client_data_json: str, attestation_object: str,
+        credential_id: str, transports: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
-        """Generate WebAuthn registration options (server → client)."""
-        challenge = secrets.token_urlsafe(32)
-        self._challenges[username] = (challenge, time.time())
-
-        exclude_credentials = []
-        if existing_credentials:
-            for cred in existing_credentials:
-                exclude_credentials.append({
-                    "id": cred.get("id", ""),
-                    "type": "public-key",
-                    "transports": cred.get("transports", ["internal"]),
-                })
-
-        return {
-            "publicKey": {
-                "rp": {
-                    "name": self.rp_name,
-                    "id": self.rp_id,
-                },
-                "user": {
-                    "id": base64.urlsafe_b64encode(
-                        hashlib.sha256(username.encode()).digest()
-                    ).decode().rstrip("="),
-                    "name": username,
-                    "displayName": username,
-                },
-                "challenge": base64.urlsafe_b64encode(
-                    challenge.encode()
-                ).decode().rstrip("="),
-                "pubKeyCredParams": [
-                    {"type": "public-key", "alg": -7},   # ES256 (ECDSA w/ SHA-256)
-                    {"type": "public-key", "alg": -257},  # RS256 (RSASSA-PKCS1-v1_5 w/ SHA-256)
-                ],
-                "timeout": 60000,
-                "attestation": "direct",
-                "excludeCredentials": exclude_credentials,
-                "authenticatorSelection": {
-                    "authenticatorAttachment": "cross-platform",
-                    "userVerification": "preferred",
-                    "residentKey": "preferred",
-                },
-            }
-        }
-
-    def verify_registration(
-        self,
-        username: str,
-        client_data_json: str,
-        attestation_object: str,
-        credential_id: str,
-    ) -> Dict[str, Any]:
-        """Verify WebAuthn registration response (client → server)."""
-        # Check challenge
-        if username not in self._challenges:
-            return {"success": False, "error": "No pending registration"}
-
-        stored_challenge, timestamp = self._challenges[username]
-        if time.time() - timestamp > 120:  # 2 minute timeout
-            del self._challenges[username]
-            return {"success": False, "error": "Challenge expired"}
-
-        # Decode client data
-        try:
-            client_data = json.loads(base64.urlsafe_b64decode(
-                client_data_json + "=="  # Add padding
-            ))
-        except Exception as e:
-            return {"success": False, "error": f"Invalid client data: {e}"}
-
-        # Verify challenge matches
-        received_challenge = client_data.get("challenge", "")
-        expected_challenge = base64.urlsafe_b64encode(
-            stored_challenge.encode()
-        ).decode().rstrip("=")
-
-        if received_challenge != expected_challenge:
-            return {"success": False, "error": "Challenge mismatch"}
-
-        # Verify origin
-        if client_data.get("type") != "webauthn.create":
-            return {"success": False, "error": "Invalid client data type"}
-
-        # Clean up challenge
-        del self._challenges[username]
-
-        # Store credential (in production, parse attestation object properly)
+        self._configured()
+        challenge = await self._take_challenge("register", username)
         credential = {
             "id": credential_id,
-            "public_key": attestation_object,  # Simplified - should extract actual public key
-            "transports": ["internal", "hybrid"],
-            "sign_count": 0,
-            "registered_at": _utcnow().isoformat(),
-            "aaguid": "",  # Authenticator Attestation GUID
+            "rawId": credential_id,
+            "type": "public-key",
+            "response": {
+                "clientDataJSON": client_data_json,
+                "attestationObject": attestation_object,
+                "transports": transports or [],
+            },
         }
-
-        return {
-            "success": True,
-            "credential": credential,
-            "credential_id": credential_id,
-        }
-
-    def generate_authentication_options(
-        self,
-        username: str,
-        credentials: List[Dict],
-    ) -> Dict[str, Any]:
-        """Generate WebAuthn authentication options (server → client)."""
-        challenge = secrets.token_urlsafe(32)
-        self._challenges[username] = (challenge, time.time())
-
-        allow_credentials = []
-        for cred in credentials:
-            allow_credentials.append({
-                "id": cred.get("id", ""),
-                "type": "public-key",
-                "transports": cred.get("transports", ["internal"]),
-            })
-
-        return {
-            "publicKey": {
-                "rpId": self.rp_id,
-                "challenge": base64.urlsafe_b64encode(
-                    challenge.encode()
-                ).decode().rstrip("="),
-                "allowCredentials": allow_credentials,
-                "timeout": 60000,
-                "userVerification": "preferred",
-            }
-        }
-
-    def verify_authentication(
-        self,
-        username: str,
-        credential_id: str,
-        client_data_json: str,
-        authenticator_data: str,
-        signature: str,
-        stored_credentials: List[Dict],
-    ) -> Dict[str, Any]:
-        """Verify WebAuthn authentication response (client → server)."""
-        if username not in self._challenges:
-            return {"success": False, "error": "No pending authentication"}
-
-        stored_challenge, timestamp = self._challenges[username]
-        if time.time() - timestamp > 120:
-            del self._challenges[username]
-            return {"success": False, "error": "Challenge expired"}
-
-        # Find matching credential
-        matched_cred = None
-        for cred in stored_credentials:
-            if cred.get("id") == credential_id:
-                matched_cred = cred
+        last_error = None
+        verification = None
+        for origin in [o.strip() for o in settings.webauthn_origins.split(",") if o.strip()]:
+            try:
+                verification = _wa_verify_registration_response(
+                    credential=credential,
+                    expected_challenge=challenge,
+                    expected_rp_id=settings.webauthn_rp_id,
+                    expected_origin=origin,
+                    require_user_verification=True,
+                )
                 break
-
-        if not matched_cred:
-            return {"success": False, "error": "Unknown credential"}
-
-        # Verify client data
-        try:
-            client_data = json.loads(base64.urlsafe_b64decode(
-                client_data_json + "=="
-            ))
-        except Exception:
-            return {"success": False, "error": "Invalid client data"}
-
-        if client_data.get("type") != "webauthn.get":
-            return {"success": False, "error": "Invalid client data type"}
-
-        # Clean up
-        del self._challenges[username]
-
-        # In production: verify signature against stored public key
-        # For now, trust the response
-        sign_count = int.from_bytes(
-            base64.urlsafe_b64decode(authenticator_data + "==")[-4:],
-            byteorder="big"
-        ) if authenticator_data else 0
-
+            except Exception as exc:  # library raises typed verification errors
+                last_error = exc
+        if verification is None:
+            raise ValueError(f"registration verification failed: {type(last_error).__name__}")
         return {
-            "success": True,
-            "credential_id": credential_id,
-            "sign_count": sign_count,
+            "id": bytes_to_base64url(verification.credential_id),
+            "public_key": bytes_to_base64url(verification.credential_public_key),
+            "sign_count": int(verification.sign_count),
+            "transports": transports or [],
+            "device_type": str(verification.credential_device_type),
+            "backed_up": bool(verification.credential_backed_up),
+            "registered_at": _utcnow().isoformat(),
+            "version": 1,
         }
+
+    async def generate_authentication_options(self, username: str, credentials: List[Dict]) -> Dict[str, Any]:
+        self._configured()
+        valid = self._valid_credentials(credentials)
+        if not valid:
+            raise ValueError("no valid passkeys are registered")
+        options = _wa_generate_authentication_options(
+            rp_id=settings.webauthn_rp_id,
+            allow_credentials=[
+                PublicKeyCredentialDescriptor(id=base64url_to_bytes(c["id"])) for c in valid
+            ],
+        )
+        await self._store_challenge("authenticate", username, options.challenge)
+        return {"publicKey": json.loads(_wa_options_to_json(options))}
+
+    async def verify_authentication(
+        self, username: str, credential_id: str, client_data_json: str,
+        authenticator_data: str, signature: str, stored_credentials: List[Dict],
+        user_handle: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        self._configured()
+        challenge = await self._take_challenge("authenticate", username)
+        matched = next(
+            (c for c in self._valid_credentials(stored_credentials) if c["id"] == credential_id),
+            None,
+        )
+        if matched is None:
+            raise ValueError("unknown credential")
+        credential = {
+            "id": credential_id,
+            "rawId": credential_id,
+            "type": "public-key",
+            "response": {
+                "clientDataJSON": client_data_json,
+                "authenticatorData": authenticator_data,
+                "signature": signature,
+                "userHandle": user_handle,
+            },
+        }
+        verification = None
+        last_error = None
+        for origin in [o.strip() for o in settings.webauthn_origins.split(",") if o.strip()]:
+            try:
+                verification = _wa_verify_authentication_response(
+                    credential=credential,
+                    expected_challenge=challenge,
+                    expected_rp_id=settings.webauthn_rp_id,
+                    expected_origin=origin,
+                    credential_public_key=base64url_to_bytes(matched["public_key"]),
+                    credential_current_sign_count=int(matched.get("sign_count", 0)),
+                    require_user_verification=True,
+                )
+                break
+            except Exception as exc:
+                last_error = exc
+        if verification is None:
+            raise ValueError(f"authentication verification failed: {type(last_error).__name__}")
+        return {"credential_id": credential_id, "sign_count": int(verification.new_sign_count)}
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -257,9 +220,9 @@ class MTLSManager:
 
     def __init__(
         self,
-        ca_cert_path: str = "/opt/spiritus/mtls/ca.crt",
-        ca_key_path: str = "/opt/spiritus/mtls/ca.key",
-        certs_dir: str = "/opt/spiritus/mtls/clients",
+        ca_cert_path: str = "/opt/v7lthronyx/mtls/ca.crt",
+        ca_key_path: str = "/opt/v7lthronyx/mtls/ca.key",
+        certs_dir: str = "/opt/v7lthronyx/mtls/clients",
     ):
         self.ca_cert_path = ca_cert_path
         self.ca_key_path = ca_key_path
@@ -299,6 +262,8 @@ class MTLSManager:
         days: int = 365,
     ) -> Dict[str, str]:
         """Generate a client certificate for an admin user."""
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}", username):
+            raise ValueError("username contains unsafe certificate filename characters")
         os.makedirs(self.certs_dir, exist_ok=True)
 
         cn = f"v7lthronyx-admin-{username}"
@@ -308,13 +273,15 @@ class MTLSManager:
         p12_path = os.path.join(self.certs_dir, f"{username}.p12")
 
         # Generate client key
-        subprocess.run(
+        result = subprocess.run(
             ["openssl", "genrsa", "-out", key_path, "2048"],
             capture_output=True, text=True, timeout=10
         )
+        if result.returncode != 0:
+            raise RuntimeError("failed to generate client private key")
 
         # Generate CSR
-        subprocess.run(
+        result = subprocess.run(
             [
                 "openssl", "req", "-new",
                 "-key", key_path,
@@ -323,9 +290,11 @@ class MTLSManager:
             ],
             capture_output=True, text=True, timeout=10
         )
+        if result.returncode != 0:
+            raise RuntimeError("failed to generate client certificate request")
 
         # Sign with CA
-        subprocess.run(
+        result = subprocess.run(
             [
                 "openssl", "x509", "-req",
                 "-in", csr_path,
@@ -337,10 +306,12 @@ class MTLSManager:
             ],
             capture_output=True, text=True, timeout=10
         )
+        if result.returncode != 0:
+            raise RuntimeError("failed to sign client certificate")
 
         # Create PKCS#12 bundle (for browser import)
         p12_password = secrets.token_urlsafe(16)
-        subprocess.run(
+        result = subprocess.run(
             [
                 "openssl", "pkcs12", "-export",
                 "-out", p12_path,
@@ -351,6 +322,8 @@ class MTLSManager:
             ],
             capture_output=True, text=True, timeout=10
         )
+        if result.returncode != 0:
+            raise RuntimeError("failed to generate PKCS#12 bundle")
 
         # Clean up CSR
         os.remove(csr_path)
@@ -367,6 +340,8 @@ class MTLSManager:
 
     def revoke_client_cert(self, username: str) -> bool:
         """Revoke a client certificate."""
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}", username):
+            return False
         cert_path = os.path.join(self.certs_dir, f"{username}.crt")
         if not os.path.exists(cert_path):
             return False
@@ -391,11 +366,11 @@ server {{
     server_name _;
 
     # Server TLS
-    ssl_certificate     /opt/spiritus/mtls/server.crt;
-    ssl_certificate_key /opt/spiritus/mtls/server.key;
+    ssl_certificate     /opt/v7lthronyx/mtls/server.crt;
+    ssl_certificate_key /opt/v7lthronyx/mtls/server.key;
 
     # Client certificate verification
-    ssl_client_certificate /opt/spiritus/mtls/ca.crt;
+    ssl_client_certificate /opt/v7lthronyx/mtls/ca.crt;
     ssl_verify_client optional;
     ssl_verify_depth 2;
 
@@ -497,7 +472,7 @@ ignoreregex =
             "panel": {
                 "filter": self.PANEL_FILTER_NAME,
                 "port": port,
-                "log_path": "/opt/spiritus/vpn-panel.log",
+                "log_path": "/opt/v7lthronyx/vpn-panel.log",
             },
             "ssh": {
                 "filter": "sshd",

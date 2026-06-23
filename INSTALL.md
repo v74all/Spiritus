@@ -11,8 +11,8 @@ sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/v74all/Spiritus/mai
 ### Step 1: Clone & Install
 
 ```bash
-sudo git clone https://github.com/v74all/Spiritus.git /opt/spiritus
-cd /opt/spiritus
+sudo git clone https://github.com/v74all/Spiritus.git /opt/v7lthronyx
+cd /opt/v7lthronyx
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
@@ -51,7 +51,7 @@ Spiritus automatically checks for updates daily at 4:00 AM.
 
 To manually update:
 ```bash
-cd /opt/spiritus
+cd /opt/v7lthronyx
 git pull origin main
 pip install -r requirements.txt
 sudo systemctl restart spiritus

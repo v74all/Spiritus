@@ -43,6 +43,9 @@ import subprocess
 import tempfile
 import threading
 import uuid as _uuid
+import asyncio
+import secrets
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
@@ -61,6 +64,8 @@ from ..protocol_engine import (
     XrayConfigGenerator,
 )
 from ..timeutil import utcnow as _utcnow
+from ..privileged_helper import helper_request, PrivilegedHelperError
+from ..redis_client import get_redis
 
 logger = logging.getLogger(__name__)
 
@@ -108,6 +113,28 @@ class SyncResult:
 # through an asyncio.Lock where they make filesystem changes, so
 # this is the belt; the asyncio lock is the braces.
 _xray_sync_lock = threading.RLock()
+_xray_async_lock = asyncio.Lock()
+
+
+@asynccontextmanager
+async def _distributed_sync_lock():
+    """Serialize config deployment across all uvicorn workers."""
+    token = secrets.token_urlsafe(24)
+    redis = await get_redis()
+    acquired = await redis.set("lock:protocol-sync", token, ex=120, nx=True)
+    if not acquired:
+        raise RuntimeError("another protocol sync is already running")
+    try:
+        async with _xray_async_lock:
+            yield
+    finally:
+        await redis.eval(
+            "if redis.call('get', KEYS[1]) == ARGV[1] then "
+            "return redis.call('del', KEYS[1]) else return 0 end",
+            1,
+            "lock:protocol-sync",
+            token,
+        )
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -645,7 +672,7 @@ def _validate_singbox_config(path: str) -> Tuple[bool, str]:
     return True, output.strip()
 
 
-def _reload_or_restart_xray(agent: Optional[Agent]) -> Tuple[bool, str, Optional[str]]:
+async def _reload_or_restart_xray(agent: Optional[Agent]) -> Tuple[bool, str, Optional[str]]:
     """Apply the new config to the running Xray.
 
     Returns (ok, message, method). `method` is "reload" if we
@@ -662,23 +689,19 @@ def _reload_or_restart_xray(agent: Optional[Agent]) -> Tuple[bool, str, Optional
         # it so all reload-style actions go through the same audit
         # trail.
         from .orchestrator import orchestrator  # local import — avoids cycle
+        if agent.address in ("127.0.0.1", "localhost", "::1"):
+            return await _systemd_reload_or_restart(agent.service_name or "xray")
         try:
-            ok = asyncio.get_event_loop().run_until_complete(
-                orchestrator.restart_agent(agent)
-            )
-        except RuntimeError:
-            # No running event loop — fall back to sync reload via
-            # systemctl if it's the local node.
-            if agent.address in ("127.0.0.1", "localhost"):
-                return _systemd_reload_or_restart(agent.service_name or "xray")
-            return False, f"remote agent {agent.name} sync reload not yet supported", None
+            ok = await orchestrator.restart_agent(agent)
+        except Exception as exc:  # noqa: BLE001
+            return False, f"remote agent restart failed: {type(exc).__name__}", None
         return ok, "ok", "restart"
 
     # Local Xray.
-    return _systemd_reload_or_restart("xray")
+    return await _systemd_reload_or_restart("xray")
 
 
-def _systemd_reload_or_restart(unit: str) -> Tuple[bool, str, Optional[str]]:
+async def _systemd_reload_or_restart(unit: str) -> Tuple[bool, str, Optional[str]]:
     """Try `systemctl reload <unit>` first; fall back to `restart`.
 
     `reload` (which sends SIGHUP) is preferred because it preserves
@@ -686,35 +709,17 @@ def _systemd_reload_or_restart(unit: str) -> Tuple[bool, str, Optional[str]]:
     ExecReload though, so we try and fall back.
     """
     try:
-        reload_proc = subprocess.run(
-            ["systemctl", "reload", unit],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-    except FileNotFoundError:
-        return False, "systemctl not available; cannot reload Xray", None
-    except subprocess.TimeoutExpired:
-        return False, f"systemctl reload {unit} timed out", None
-
-    if reload_proc.returncode == 0:
+        response = await helper_request("service.reload", {"service": unit}, timeout=35)
+    except PrivilegedHelperError as exc:
+        return False, str(exc), None
+    if response.ok:
         return True, "reloaded", "reload"
-
-    # Reload failed — usually because the unit has no ExecReload
-    # line. Try a full restart.
     try:
-        restart_proc = subprocess.run(
-            ["systemctl", "restart", unit],
-            capture_output=True,
-            text=True,
-            timeout=60,
-        )
-    except subprocess.TimeoutExpired:
-        return False, f"systemctl restart {unit} timed out", None
-
-    if restart_proc.returncode != 0:
-        msg = (restart_proc.stderr or restart_proc.stdout or "").strip()
-        return False, msg or f"systemctl restart {unit} failed", None
+        response = await helper_request("service.restart", {"service": unit}, timeout=65)
+    except PrivilegedHelperError as exc:
+        return False, str(exc), None
+    if not response.ok:
+        return False, response.message or f"restart {unit} failed", None
     return True, "restarted (no reload support on this unit)", "restart"
 
 
@@ -777,10 +782,7 @@ async def runtime_status(
 #  Orchestration: the entrypoint called by the API
 # ═══════════════════════════════════════════════════════════════
 
-import asyncio  # noqa: E402  (placed here so module loads even on Python <3.10)
-
-
-def _sync_singbox(
+async def _sync_singbox(
     enabled: List[ProtocolConfig],
     domain_defaults: Dict[str, str],
 ) -> Tuple[Optional[bool], str]:
@@ -816,31 +818,36 @@ def _sync_singbox(
 
     full_config = SingboxConfigGenerator.generate_full_config(inbounds)
 
-    # Back up, write atomically, validate, roll back on failure.
-    backup_path: Optional[str] = None
-    if os.path.isfile(target):
-        backup_path = target + ".bak"
-        try:
-            shutil.copy2(target, backup_path)
-        except OSError:
-            backup_path = None
-
+    fd, candidate_path = tempfile.mkstemp(prefix=".singbox-candidate-", suffix=".json")
+    os.close(fd)
     try:
-        _write_xray_config(full_config, target)  # generic atomic JSON writer
+        _write_xray_config(full_config, candidate_path)
     except OSError as exc:
         return False, f"failed to write sing-box config: {exc}"
 
-    ok, output = _validate_singbox_config(target)
+    ok, output = _validate_singbox_config(candidate_path)
     if not ok:
-        # Soft-fail when the binary is simply missing (dev box): the
-        # config is still written so a later install picks it up.
-        if "not found" in output:
-            return False, f"sing-box config written but not validated: {output}"
-        if backup_path and os.path.isfile(backup_path):
-            shutil.copy2(backup_path, target)
+        try:
+            os.unlink(candidate_path)
+        except OSError:
+            pass
         return False, f"sing-box check rejected the config: {output[:200]}"
+    try:
+        os.unlink(candidate_path)
+    except OSError:
+        pass
 
-    reload_ok, reload_msg, _ = _systemd_reload_or_restart(
+    try:
+        installed = await helper_request(
+            "config.install",
+            {"target": "sing-box", "content": json.dumps(full_config, indent=2)},
+        )
+    except PrivilegedHelperError as exc:
+        return False, str(exc)
+    if not installed.ok:
+        return False, f"failed to install sing-box config: {installed.message}"
+
+    reload_ok, reload_msg, _ = await _systemd_reload_or_restart(
         settings.singbox_service_name or "sing-box"
     )
     if not reload_ok:
@@ -848,7 +855,7 @@ def _sync_singbox(
     return True, "sing-box synced and reloaded"
 
 
-def _sync_mieru(enabled: List[ProtocolConfig]) -> Tuple[Optional[bool], str]:
+async def _sync_mieru(enabled: List[ProtocolConfig]) -> Tuple[Optional[bool], str]:
     """Render + write + apply the Mieru (mita) server config.
 
     Mieru runs its own daemon configured via `mita apply config <file>`,
@@ -879,26 +886,19 @@ def _sync_mieru(enabled: List[ProtocolConfig]) -> Tuple[Optional[bool], str]:
     )
 
     try:
-        _write_xray_config(server_config, target)  # generic atomic JSON writer
-    except OSError as exc:
-        return False, f"failed to write mieru config: {exc}"
-
-    bin_path = settings.mieru_bin_path or "/usr/local/bin/mita"
-    # Apply the config through mita, then (re)start the daemon.
-    try:
-        apply_proc = subprocess.run(
-            [bin_path, "apply", "config", target],
-            capture_output=True, text=True, timeout=15,
+        installed = await helper_request(
+            "config.install",
+            {"target": "mieru", "content": json.dumps(server_config, indent=2)},
         )
-    except FileNotFoundError:
-        return False, f"mieru config written but mita binary not found at {bin_path}"
-    except subprocess.TimeoutExpired:
-        return False, "mita apply config timed out"
-    if apply_proc.returncode != 0:
-        out = (apply_proc.stderr or apply_proc.stdout or "").strip()
-        return False, f"mita apply config failed: {out[:200]}"
+        if not installed.ok:
+            return False, f"failed to install mieru config: {installed.message}"
+        applied = await helper_request("mieru.apply", timeout=35)
+    except PrivilegedHelperError as exc:
+        return False, str(exc)
+    if not applied.ok:
+        return False, f"mita apply config failed: {applied.message[:200]}"
 
-    reload_ok, reload_msg, _ = _systemd_reload_or_restart(
+    reload_ok, reload_msg, _ = await _systemd_reload_or_restart(
         settings.mieru_service_name or "mita"
     )
     if not reload_ok:
@@ -937,8 +937,8 @@ async def sync_and_reload(
             error="xray_config_path is not configured (set XRAY_CONFIG_PATH)",
         )
 
-    with _xray_sync_lock:
-        try:
+    try:
+        async with _distributed_sync_lock():
             # Pull the active domain + cert paths ONCE so every
             # inbound sees the same defaults. Reloading this per-
             # protocol would be 14 redundant DB hits on a full
@@ -966,6 +966,7 @@ async def sync_and_reload(
                     )
                     if inbound is not None:
                         inbounds.append(inbound)
+                        proto_cfg.tag = str(inbound.get("tag") or "") or None
                 full_config = XrayConfigGenerator.generate_full_config(
                     inbounds=inbounds,
                     api_port=int(getattr(settings, "api_port", 10085) or 10085),
@@ -978,15 +979,10 @@ async def sync_and_reload(
                     validator_output="dry-run: config not written",
                 )
 
-            # 1. Back up the current config so we can roll back.
-            backup_path: Optional[str] = None
-            if os.path.isfile(target_path):
-                backup_path = target_path + ".bak"
-                shutil.copy2(target_path, backup_path)
-
-            # 2. Write the new config atomically.
+            fd, candidate_path = tempfile.mkstemp(prefix=".xray-candidate-", suffix=".json")
+            os.close(fd)
             try:
-                _write_xray_config(full_config, target_path)
+                _write_xray_config(full_config, candidate_path)
             except OSError as exc:
                 return SyncResult(
                     success=False,
@@ -994,26 +990,40 @@ async def sync_and_reload(
                     error=f"failed to write config: {exc}",
                 )
 
-            # 3. Validate.
-            ok, output = _validate_xray_config(target_path)
+            ok, output = _validate_xray_config(candidate_path)
             if not ok:
-                # Roll back to the previous good config so the running
-                # Xray isn't stranded with a broken file on its next
-                # reload.
-                if backup_path and os.path.isfile(backup_path):
-                    shutil.copy2(backup_path, target_path)
+                try:
+                    os.unlink(candidate_path)
+                except OSError:
+                    pass
                 return SyncResult(
                     success=False,
                     config_path=target_path,
                     validator_output=output,
-                    rolled_back=bool(backup_path and os.path.isfile(backup_path)),
                     error=f"xray -test rejected the new config: {output[:200]}",
+                )
+            try:
+                os.unlink(candidate_path)
+            except OSError:
+                pass
+
+            try:
+                installed = await helper_request(
+                    "config.install",
+                    {"target": "xray", "content": json.dumps(full_config, indent=2)},
+                )
+            except PrivilegedHelperError as exc:
+                return SyncResult(success=False, config_path=target_path, error=str(exc))
+            if not installed.ok:
+                return SyncResult(
+                    success=False,
+                    config_path=target_path,
+                    error=f"failed to install config: {installed.message}",
                 )
 
             # 4. Reload.
-            reload_ok, reload_msg, method = _reload_or_restart_xray(
-                _load_agent_for(db, enabled[0]) if enabled else None
-            )
+            agent = await _load_agent_for(db, enabled[0]) if enabled else None
+            reload_ok, reload_msg, method = await _reload_or_restart_xray(agent)
             if not reload_ok:
                 return SyncResult(
                     success=False,
@@ -1032,20 +1042,18 @@ async def sync_and_reload(
                 # Tag is stored on the row so `runtime_status` can
                 # match it against the rendered Xray config without
                 # parsing the spec by hand.
-                if not proto_cfg.tag:
-                    proto_cfg.tag = f"pcfg-{proto_cfg.protocol_key}"
             await db.commit()
 
             # 6. Sync the standalone (sing-box) protocols. This is
             # independent of the Xray sync above — a sing-box failure
             # is surfaced in the result but does not fail the overall
             # sync, since the Xray config is already live and good.
-            singbox_synced, singbox_message = _sync_singbox(enabled, domain_defaults)
+            singbox_synced, singbox_message = await _sync_singbox(enabled, domain_defaults)
             if singbox_synced is False:
                 logger.warning("sing-box sync issue: %s", singbox_message)
 
             # 7. Sync Mieru (mita) — also independent of Xray/sing-box.
-            mieru_synced, mieru_message = _sync_mieru(enabled)
+            mieru_synced, mieru_message = await _sync_mieru(enabled)
             if mieru_synced is False:
                 logger.warning("mieru sync issue: %s", mieru_message)
 
@@ -1060,11 +1068,11 @@ async def sync_and_reload(
                 mieru_synced=mieru_synced,
                 mieru_message=mieru_message,
             )
-        except Exception as exc:  # noqa: BLE001
-            logger.exception("sync_and_reload failed")
-            return SyncResult(
-                success=False,
-                config_path=target_path,
-                error=f"{type(exc).__name__}: {exc}",
-                finished_at=_utcnow().isoformat(),
-            )
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("sync_and_reload failed")
+        return SyncResult(
+            success=False,
+            config_path=target_path,
+            error=f"{type(exc).__name__}: {exc}",
+            finished_at=_utcnow().isoformat(),
+        )

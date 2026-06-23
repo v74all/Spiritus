@@ -17,7 +17,7 @@ What changed:
 
 Migration:
     # systemd unit ExecStart
-    ExecStart=/opt/spiritus/venv/bin/uvicorn app.main:app \\
+    ExecStart=/opt/v7lthronyx/venv/bin/uvicorn app.main:app \\
         --host 127.0.0.1 --port 38471
 """
 

@@ -12,10 +12,12 @@ from pydantic import BaseModel, Field
 from typing import Optional, List
 import logging
 
-from ..auth import get_current_admin, get_current_user, User
+from ..auth import get_current_admin, get_current_user, create_access_token, User
+from ..config import settings
 from ..database import get_async_db
 from ..security import webauthn_manager, mtls_manager, fail2ban_manager
 from ..models import Admin
+from ..privileged_helper import helper_request, PrivilegedHelperError
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -34,6 +36,7 @@ class WebAuthnRegistrationFinish(BaseModel):
     client_data_json: str
     attestation_object: str
     credential_id: str
+    transports: List[str] = Field(default_factory=list)
 
 class WebAuthnAuthStart(BaseModel):
     username: str
@@ -44,6 +47,7 @@ class WebAuthnAuthFinish(BaseModel):
     client_data_json: str
     authenticator_data: str
     signature: str
+    user_handle: Optional[str] = None
 
 class MTLSGenerateCert(BaseModel):
     username: str = Field(..., min_length=1, max_length=100)
@@ -67,16 +71,20 @@ async def get_webauthn_registration_options(
     db: AsyncSession = Depends(get_async_db),
 ):
     """Get WebAuthn registration options for a user."""
+    if admin.username != username:
+        raise HTTPException(status_code=403, detail="Passkeys can only be registered for the current account")
     # Get existing credentials
     result = await db.execute(select(Admin).where(Admin.username == username))
     admin_user = result.scalar_one_or_none()
     existing_creds = admin_user.webauthn_credentials if admin_user else []
 
-    options = webauthn_manager.generate_registration_options(
-        username=username,
-        existing_credentials=existing_creds,
-    )
-    return options
+    try:
+        return await webauthn_manager.generate_registration_options(
+            username=username,
+            existing_credentials=existing_creds,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @router.post("/webauthn/register")
@@ -86,18 +94,18 @@ async def complete_webauthn_registration(
     db: AsyncSession = Depends(get_async_db),
 ):
     """Complete WebAuthn registration."""
-    result = webauthn_manager.verify_registration(
-        username=data.username,
-        client_data_json=data.client_data_json,
-        attestation_object=data.attestation_object,
-        credential_id=data.credential_id,
-    )
-
-    if not result.get("success"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=result.get("error", "Registration failed")
+    if admin.username != data.username:
+        raise HTTPException(status_code=403, detail="Passkeys can only be registered for the current account")
+    try:
+        credential = await webauthn_manager.verify_registration(
+            username=data.username,
+            client_data_json=data.client_data_json,
+            attestation_object=data.attestation_object,
+            credential_id=data.credential_id,
+            transports=data.transports,
         )
+    except (RuntimeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     # Save credential to admin
     db_result = await db.execute(select(Admin).where(Admin.username == data.username))
@@ -105,11 +113,12 @@ async def complete_webauthn_registration(
 
     if admin_user:
         creds = admin_user.webauthn_credentials or []
-        creds.append(result["credential"])
+        creds = [c for c in creds if c.get("id") != credential["id"]]
+        creds.append(credential)
         admin_user.webauthn_credentials = creds
         await db.commit()
 
-    return {"success": True, "credential_id": result.get("credential_id")}
+    return {"success": True, "credential_id": credential["id"]}
 
 
 @router.post("/webauthn/authenticate")
@@ -127,11 +136,53 @@ async def webauthn_authenticate_start(
             detail="No passkeys registered for this user"
         )
 
-    options = webauthn_manager.generate_authentication_options(
-        username=data.username,
-        credentials=admin_user.webauthn_credentials,
+    try:
+        return await webauthn_manager.generate_authentication_options(
+            username=data.username,
+            credentials=admin_user.webauthn_credentials,
+        )
+    except (RuntimeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/webauthn/authenticate/complete")
+async def webauthn_authenticate_complete(
+    data: WebAuthnAuthFinish,
+    db: AsyncSession = Depends(get_async_db),
+):
+    """Verify the assertion and issue the same revocable JWT used by password login."""
+    result = await db.execute(select(Admin).where(Admin.username == data.username))
+    admin_user = result.scalar_one_or_none()
+    if not admin_user:
+        raise HTTPException(status_code=401, detail="Authentication failed")
+    try:
+        verified = await webauthn_manager.verify_authentication(
+            username=data.username,
+            credential_id=data.credential_id,
+            client_data_json=data.client_data_json,
+            authenticator_data=data.authenticator_data,
+            signature=data.signature,
+            user_handle=data.user_handle,
+            stored_credentials=admin_user.webauthn_credentials or [],
+        )
+    except (RuntimeError, ValueError) as exc:
+        logger.warning("webauthn authentication rejected for %s: %s", data.username, type(exc).__name__)
+        raise HTTPException(status_code=401, detail="Authentication failed") from exc
+
+    credentials = list(admin_user.webauthn_credentials or [])
+    for credential in credentials:
+        if credential.get("id") == verified["credential_id"]:
+            credential["sign_count"] = verified["sign_count"]
+    admin_user.webauthn_credentials = credentials
+    await db.commit()
+    token = create_access_token(
+        {"sub": admin_user.username, "user_id": admin_user.id, "is_admin": True, "role": "admin"}
     )
-    return options
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "expires_in": settings.session_lifetime_hours * 3600,
+    }
 
 
 # ── mTLS Endpoints ────────────────────────────────────────
@@ -181,8 +232,13 @@ async def install_fail2ban(
     admin: User = Depends(get_current_admin),
 ):
     """Install fail2ban filters and jails."""
-    results = fail2ban_manager.install_all()
-    return {"results": results}
+    try:
+        result = await helper_request("fail2ban.install", {})
+    except PrivilegedHelperError as exc:
+        raise HTTPException(status_code=503, detail="Privileged helper unavailable") from exc
+    if not result.ok:
+        raise HTTPException(status_code=500, detail="Fail2ban installation failed")
+    return {"results": result.data or {"installed": True}}
 
 
 @router.get("/fail2ban/bans")
@@ -202,6 +258,15 @@ async def unban_ip(
     db: AsyncSession = Depends(get_async_db),
 ):
     """Remove a ban for an IP address."""
+    jail = f"v7lthronyx-{data.service}" if data.service in {"panel", "xray"} else data.service
+    try:
+        result = await helper_request(
+            "fail2ban.unban", {"jail": jail, "address": data.ip_address}
+        )
+    except PrivilegedHelperError as exc:
+        raise HTTPException(status_code=503, detail="Privileged helper unavailable") from exc
+    if not result.ok:
+        return MessageResponse(message="Failed to unban IP", success=False)
     success = await fail2ban_manager.unban(data.ip_address, data.service, db)
     if not success:
         raise HTTPException(status_code=404, detail="Ban not found")

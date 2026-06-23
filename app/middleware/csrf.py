@@ -62,6 +62,9 @@ _EXEMPT_PATH_PREFIXES: tuple[str, ...] = (
     "/api/auth/login/2fa",
     "/api/login",                 # legacy compat login
     "/api/agent/login",           # agent login
+    "/api/mobile/auth/login",     # token-based mobile login
+    "/api/mobile/auth/2fa",       # one-time mobile 2FA challenge
+    "/api/security/webauthn/authenticate",  # passkey login has no session yet
     "/api/payments/callback/",    # signed webhooks
     "/api/payments/webhook",
     "/sub/", "/sub-api/", "/sub-json/",

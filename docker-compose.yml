@@ -10,8 +10,6 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
       POSTGRES_DB: ${POSTGRES_DB:-spiritus}
       POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
-    ports:
-      - "5432:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
     healthcheck:
@@ -26,8 +24,6 @@ services:
   redis:
     image: redis:7-alpine
     container_name: spiritus-redis
-    ports:
-      - "6379:6379"
     command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD must be set in .env}
     volumes:
       - redis_data:/data
@@ -65,10 +61,11 @@ services:
       # CORS: leave empty to disable. "*" is rejected at startup, so we
       # must NOT default to it (that would crash the app).
       CORS_ORIGINS: ${CORS_ORIGINS:-}
+      METRICS_BEARER_TOKEN: ${METRICS_BEARER_TOKEN:?METRICS_BEARER_TOKEN must be set in .env}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     ports:
-      - "38471:38471"
-      - "10085:10085"
+      - "127.0.0.1:38471:38471"
+      - "127.0.0.1:10085:10085"
     depends_on:
       db:
         condition: service_healthy
@@ -89,13 +86,15 @@ services:
 
   # Prometheus for Monitoring
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v2.54.1
     container_name: spiritus-prometheus
     ports:
-      - "9090:9090"
+      - "127.0.0.1:9090:9090"
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
+    secrets:
+      - metrics_bearer_token
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
       - "--storage.tsdb.path=/prometheus"
@@ -104,10 +103,10 @@ services:
 
   # Grafana for Dashboards
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:11.2.2
     container_name: spiritus-grafana
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     environment:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD must be set in .env}
       GF_SECURITY_ALLOW_EMBED_INITIATION: "true"
@@ -127,3 +126,7 @@ volumes:
 networks:
   spiritus-net:
     driver: bridge
+
+secrets:
+  metrics_bearer_token:
+    environment: METRICS_BEARER_TOKEN

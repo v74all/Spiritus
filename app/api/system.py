@@ -10,18 +10,21 @@ Endpoints:
 - GET  /system/metrics - Prometheus metrics
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
 import psutil
 import subprocess
 import os
 import logging
+import hmac
 
 from ..auth import get_current_admin, User
 from ..config import settings
 from ..database import get_async_db
 from ..models import VpnUser
+from ..privileged_helper import helper_request, PrivilegedHelperError
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -142,14 +145,13 @@ async def get_xray_status(admin: User = Depends(get_current_admin)):
 async def restart_xray(admin: User = Depends(get_current_admin)):
     """Restart Xray service."""
     try:
-        subprocess.run(
-            ["systemctl", "restart", "xray"],
-            capture_output=True, text=True, timeout=30
-        )
-        return MessageResponse(message="Xray restarted successfully")
-    except Exception as e:
-        logger.error(f"Error restarting Xray: {e}")
-        return MessageResponse(message=f"Failed to restart Xray: {e}", success=False)
+        result = await helper_request("service.restart", {"service": "xray"}, timeout=35)
+        if result.ok:
+            return MessageResponse(message="Xray restarted successfully")
+        return MessageResponse(message="Xray restart failed", success=False)
+    except PrivilegedHelperError:
+        logger.error("privileged helper unavailable during Xray restart")
+        return MessageResponse(message="Privileged helper unavailable", success=False)
 
 @router.get("/logs")
 async def get_logs(
@@ -181,8 +183,19 @@ async def get_logs(
         return {"logs": [], "error": "Failed to read log"}
 
 @router.get("/metrics")
-async def get_metrics():
+async def get_metrics(request: Request):
     """Prometheus-compatible metrics endpoint."""
+    configured = settings.metrics_bearer_token
+    auth = request.headers.get("authorization", "")
+    supplied = auth[7:].strip() if auth.lower().startswith("bearer ") else ""
+    if not configured:
+        raise HTTPException(status_code=404, detail="Metrics endpoint disabled")
+    if not supplied or not hmac.compare_digest(supplied, configured):
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid metrics token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     import psutil
     cpu = psutil.cpu_percent(interval=0)
     mem = psutil.virtual_memory()
@@ -209,4 +222,7 @@ vpn_panel_memory_available_bytes {mem.available}
     from ..observability import prometheus_metrics
     custom_metrics = prometheus_metrics.generate_metrics()
 
-    return {"metrics": system_metrics + custom_metrics}
+    return PlainTextResponse(
+        system_metrics + custom_metrics,
+        media_type="text/plain; version=0.0.4; charset=utf-8",
+    )

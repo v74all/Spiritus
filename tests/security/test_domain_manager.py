@@ -9,7 +9,6 @@ Let's Encrypt.
 
 from __future__ import annotations
 
-import asyncio
 import os
 import socket as _socket
 from pathlib import Path
@@ -17,6 +16,7 @@ from typing import Any, Dict
 from unittest import mock
 
 import pytest
+import pytest_asyncio
 
 # conftest at the parent level wires the env. We do the rest
 # here because the domain tests need a fully-bootstrapped
@@ -53,8 +53,8 @@ from app.services.protocol_sync import _apply_domain_defaults  # noqa: E402
 #  Fixtures
 # ═══════════════════════════════════════════════════════════════
 
-@pytest.fixture(autouse=True)
-def fresh_db():
+@pytest_asyncio.fixture(autouse=True)
+async def fresh_db():
     """Initialise the schema on the engine the app actually
     uses, AND clear it between tests so domain state doesn't
     leak from one test to the next.
@@ -70,17 +70,14 @@ def fresh_db():
     from app.database import async_engine
     from app.models import Base
 
-    async def _setup():
-        async with async_engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-        # Wipe between tests so state from test_set_domain_*
-        # doesn't leak into test_get_status_when_no_domain_set.
-        from sqlalchemy import text
-        async with async_engine.begin() as conn:
-            await conn.execute(text("DELETE FROM settings"))
-
-    asyncio.run(_setup())
+    await async_engine.dispose()
+    async with async_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    from sqlalchemy import text
+    async with async_engine.begin() as conn:
+        await conn.execute(text("DELETE FROM settings"))
     yield
+    await async_engine.dispose()
 
 
 @pytest.fixture
@@ -225,7 +222,8 @@ def test_generate_self_signed_cert_creates_files(isolated_tls_root):
 #  Status / persistence round-trip
 # ═══════════════════════════════════════════════════════════════
 
-def test_set_domain_writes_atomic_settings(tmp_path, monkeypatch):
+@pytest.mark.asyncio
+async def test_set_domain_writes_atomic_settings(tmp_path, monkeypatch):
     """set_domain persists all six Setting rows. We monkey-
     patch the self-signed cert path so the test never tries
     to invoke openssl (which may not be present in CI)."""
@@ -235,72 +233,68 @@ def test_set_domain_writes_atomic_settings(tmp_path, monkeypatch):
         _socket, "getaddrinfo",
         lambda *a, **k: [(2, 1, 6, "", ("93.184.216.34", 0))],
     )
-    monkeypatch.setattr(
-        _domain_module, "_generate_self_signed_cert",
-        lambda domain: type("R", (), {"success": True, "domain": domain, "steps": []})(),
-    )
+    from app.privileged_helper import HelperResponse
+    import app.privileged_helper as _helper_module
+    import app.services.protocol_sync as _sync_module
+    async def _issued(*args, **kwargs):
+        return HelperResponse(ok=True, data={"steps": [], "issuer": "self-signed"})
+    async def _synced(*args, **kwargs):
+        return None
+    monkeypatch.setattr(_helper_module, "helper_request", _issued)
+    monkeypatch.setattr(_sync_module, "sync_and_reload", _synced)
 
-    async def _run():
-        async with AsyncSessionLocal() as db:
-            result = await set_domain(
-                db, "atomic-test.example.com",
-                contact_email="ops@example.com",
-                prefer_self_signed=True,
-            )
-            assert result.success, result.error
+    async with AsyncSessionLocal() as db:
+        result = await set_domain(
+            db, "atomic-test.example.com",
+            contact_email="ops@example.com",
+            prefer_self_signed=True,
+        )
+        assert result.success, result.error
 
-            from sqlalchemy import select
-            from app.models import Setting
-            rows = (await db.execute(
-                select(Setting).where(Setting.key.in_([
-                    KEY_DOMAIN_ACTIVE, KEY_DOMAIN_CERT_PATH, KEY_DOMAIN_KEY_PATH,
-                    KEY_DOMAIN_EXPIRES_AT, KEY_DOMAIN_ISSUER, KEY_DOMAIN_CONTACT_EMAIL,
-                ]))
-            )).scalars().all()
-            keys = {row.key: row.value for row in rows}
-            assert keys[KEY_DOMAIN_ACTIVE] == "atomic-test.example.com"
-            assert keys[KEY_DOMAIN_CONTACT_EMAIL] == "ops@example.com"
-            assert keys[KEY_DOMAIN_ISSUER] == "self-signed"
-            assert keys[KEY_DOMAIN_CERT_PATH].startswith("/")
-            assert keys[KEY_DOMAIN_KEY_PATH].startswith("/")
-
-    asyncio.run(_run())
-
-
-def test_get_status_when_no_domain_set():
-    async def _run():
-        async with AsyncSessionLocal() as db:
-            status = await get_status(db)
-            assert status.enabled is False
-            assert status.active_domain == ""
-
-    asyncio.run(_run())
+        from sqlalchemy import select
+        from app.models import Setting
+        rows = (await db.execute(
+            select(Setting).where(Setting.key.in_([
+                KEY_DOMAIN_ACTIVE, KEY_DOMAIN_CERT_PATH, KEY_DOMAIN_KEY_PATH,
+                KEY_DOMAIN_EXPIRES_AT, KEY_DOMAIN_ISSUER, KEY_DOMAIN_CONTACT_EMAIL,
+            ]))
+        )).scalars().all()
+        keys = {row.key: row.value for row in rows}
+        assert keys[KEY_DOMAIN_ACTIVE] == "atomic-test.example.com"
+        assert keys[KEY_DOMAIN_CONTACT_EMAIL] == "ops@example.com"
+        assert keys[KEY_DOMAIN_ISSUER] == "self-signed"
+        assert keys[KEY_DOMAIN_CERT_PATH].startswith("/")
+        assert keys[KEY_DOMAIN_KEY_PATH].startswith("/")
 
 
-def test_disable_domain_clears_all_settings():
-    async def _run():
-        async with AsyncSessionLocal() as db:
-            from app.domain_manager import _set_setting
-            await _set_setting(db, KEY_DOMAIN_ACTIVE, "will-be-disabled.example.com")
-            await _set_setting(db, KEY_DOMAIN_CERT_PATH, "/tmp/cert.pem")
-
-            result = await disable_domain(db)
-            assert result.success
-
-            status = await get_status(db)
-            assert status.enabled is False
-            assert status.active_domain == ""
-
-    asyncio.run(_run())
+@pytest.mark.asyncio
+async def test_get_status_when_no_domain_set():
+    async with AsyncSessionLocal() as db:
+        status = await get_status(db)
+        assert status.enabled is False
+        assert status.active_domain == ""
 
 
-def test_maybe_autorenew_noop_when_no_domain():
-    async def _run():
-        async with AsyncSessionLocal() as db:
-            result = await maybe_autorenew(db)
-            assert result is None
+@pytest.mark.asyncio
+async def test_disable_domain_clears_all_settings():
+    async with AsyncSessionLocal() as db:
+        from app.domain_manager import _set_setting
+        await _set_setting(db, KEY_DOMAIN_ACTIVE, "will-be-disabled.example.com")
+        await _set_setting(db, KEY_DOMAIN_CERT_PATH, "/tmp/cert.pem")
 
-    asyncio.run(_run())
+        result = await disable_domain(db)
+        assert result.success
+
+        status = await get_status(db)
+        assert status.enabled is False
+        assert status.active_domain == ""
+
+
+@pytest.mark.asyncio
+async def test_maybe_autorenew_noop_when_no_domain():
+    async with AsyncSessionLocal() as db:
+        result = await maybe_autorenew(db)
+        assert result is None
 
 
 # ═══════════════════════════════════════════════════════════════

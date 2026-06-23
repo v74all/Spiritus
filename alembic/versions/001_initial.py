@@ -20,8 +20,17 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    pass  # Tables created by init_db() on first run
+    # The historical application used metadata.create_all without Alembic.
+    # checkfirst keeps this baseline compatible with those installations while
+    # also making `alembic upgrade head` sufficient for a fresh database.
+    from app.database import Base
+    import app.models  # noqa: F401
+
+    Base.metadata.create_all(bind=op.get_bind(), checkfirst=True)
 
 
 def downgrade() -> None:
-    pass
+    from app.database import Base
+    import app.models  # noqa: F401
+
+    Base.metadata.drop_all(bind=op.get_bind(), checkfirst=True)

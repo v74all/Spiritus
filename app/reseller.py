@@ -34,6 +34,7 @@ from .models import (
 from .payments import payment_manager, PLANS
 from .protocol_engine import ClientConfigGenerator, xray_gen
 from .orchestrator import orchestrator
+from .auth import validate_password_strength
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +58,9 @@ class ResellerManager:
         max_traffic_gb: float = 1000,
     ) -> Dict[str, Any]:
         """Create a new reseller account."""
+        password_error = validate_password_strength(password)
+        if password_error:
+            return {"success": False, "error": password_error}
         # Check if username exists
         existing = await db.execute(
             select(Reseller).where(Reseller.username == username)

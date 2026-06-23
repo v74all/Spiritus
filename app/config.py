@@ -40,6 +40,14 @@ class Settings(BaseSettings):
     # Wildcard "*" is REJECTED at startup (see validator below).
     cors_origins: str = Field("", env="CORS_ORIGINS")
 
+    # Host-header allowlist (defence-in-depth vs Host/BadHost poisoning).
+    # Comma-separated hostnames; empty = allow any (back-compat). Set this in
+    # production to your panel domain(s), e.g. "panel.example.com".
+    allowed_hosts: str = Field("", env="ALLOWED_HOSTS")
+    # Reject request bodies larger than this (anti-DoS). JSON API needs little;
+    # 2 MiB is generous. 0 disables the check.
+    max_request_body_bytes: int = Field(2 * 1024 * 1024, env="MAX_REQUEST_BODY_BYTES")
+
     # Server — default to loopback. Expose externally only via reverse proxy.
     host: str = Field("127.0.0.1", env="HOST")
     port: int = 38471
@@ -67,12 +75,24 @@ class Settings(BaseSettings):
         env="ARGON2_SALT"
     )
     session_lifetime_hours: int = 1
+    mobile_token_lifetime_minutes: int = Field(30, env="MOBILE_TOKEN_LIFETIME_MINUTES")
     max_login_attempts: int = 5
     max_2fa_attempts: int = Field(10, env="MAX_2FA_ATTEMPTS")
     lockout_seconds: int = 1800
     # Bootstrap admin (one-shot, cleared after first use)
     admin_bootstrap_username: str = Field("admin", env="ADMIN_BOOTSTRAP_USERNAME")
     admin_bootstrap_password: str = Field("", env="ADMIN_BOOTSTRAP_PASSWORD")
+
+    # Security integrations. Metrics stay disabled until a dedicated token is
+    # configured; this prevents accidentally exposing host telemetry.
+    metrics_bearer_token: str = Field("", env="METRICS_BEARER_TOKEN")
+    webauthn_rp_id: str = Field("", env="WEBAUTHN_RP_ID")
+    webauthn_rp_name: str = Field("V7LTHRONYX VPN Panel", env="WEBAUTHN_RP_NAME")
+    webauthn_origins: str = Field("", env="WEBAUTHN_ORIGINS")
+    privileged_helper_socket: str = Field(
+        "/run/v7lthronyx/helper.sock", env="PRIVILEGED_HELPER_SOCKET"
+    )
+    usdt_min_confirmations: int = Field(20, ge=1, le=100, env="USDT_MIN_CONFIRMATIONS")
 
     @field_validator("secret_key", "jwt_secret_key")
     @classmethod
@@ -97,6 +117,13 @@ class Settings(BaseSettings):
                 "CORS_ORIGINS=* is forbidden. Use an explicit comma-separated allowlist, "
                 "or leave empty to disable CORS."
             )
+        return v
+
+    @field_validator("metrics_bearer_token")
+    @classmethod
+    def _validate_metrics_token(cls, v: str):
+        if v and len(v) < 32:
+            raise ValueError("METRICS_BEARER_TOKEN must be at least 32 chars")
         return v
     
     # Xray

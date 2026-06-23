@@ -2,39 +2,24 @@ global:
   scrape_interval: 15s
   evaluation_interval: 15s
   external_labels:
-    monitor: 'spiritus'
+    monitor: 'v7lthronyx'
 
 scrape_configs:
-  - job_name: 'spiritus'
+  - job_name: 'v7lthronyx-panel'
     static_configs:
-      - targets: ['localhost:38471']
-    metrics_path: '/metrics'
+      - targets: ['app:38471']
+    metrics_path: '/api/system/metrics'
+    authorization:
+      type: Bearer
+      credentials_file: /run/secrets/metrics_bearer_token
     scrape_interval: 10s
     scrape_timeout: 5s
     
-    # Authentication if needed
-    # bearer_token: 'YOUR_BEARER_TOKEN'
-
-  - job_name: 'postgres'
-    static_configs:
-      - targets: ['localhost:5432']
-    # Note: Requires postgres_exporter sidecar
-
-  - job_name: 'redis'
-    static_configs:
-      - targets: ['localhost:6379']
-    # Note: Requires redis_exporter sidecar
-
-  - job_name: 'node'
-    static_configs:
-      - targets: ['localhost:9100']
-    # Note: Requires node_exporter
-
 alerting:
   alertmanagers:
     - static_configs:
         - targets:
-            - 'localhost:9093'
+            - 'alertmanager:9093'
 
 rule_files:
   - 'alert_rules.yml'

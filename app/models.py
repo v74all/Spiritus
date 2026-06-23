@@ -15,7 +15,7 @@ Tables:
 
 from sqlalchemy import (
     Column, Integer, BigInteger, String, Float, Boolean,
-    DateTime, Text, JSON, ForeignKey, Enum, Index, UniqueConstraint
+    DateTime, Text, JSON, ForeignKey, Enum, Index, UniqueConstraint, text
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -253,6 +253,14 @@ class Payment(Base):
     __table_args__ = (
         Index("ix_payments_user_id", "user_id"),
         Index("ix_payments_status", "status"),
+        Index(
+            "uq_payments_pending_usdt_amount",
+            "usdt_expected_amount_micro",
+            unique=True,
+            postgresql_where=text("status = 'pending' AND usdt_expected_amount_micro IS NOT NULL"),
+            sqlite_where=text("status = 'pending' AND usdt_expected_amount_micro IS NOT NULL"),
+        ),
+        UniqueConstraint("usdt_tx_hash", name="uq_payments_usdt_tx_hash"),
     )
 
     id = Column(Integer, primary_key=True, index=True)
@@ -274,6 +282,7 @@ class Payment(Base):
     # USDT-specific
     usdt_wallet_address = Column(String(100), nullable=True)
     usdt_tx_hash = Column(String(255), nullable=True)
+    usdt_expected_amount_micro = Column(BigInteger, nullable=True)
 
     # Plan details (what the payment buys)
     plan_traffic_gb = Column(Float, default=0)

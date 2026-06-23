@@ -11,6 +11,7 @@ Background tasks:
 
 from celery import Celery
 from .config import settings
+from .privileged_helper import helper_request_sync, PrivilegedHelperError
 import logging
 
 logger = logging.getLogger(__name__)
@@ -262,14 +263,12 @@ def run_anomaly_detection():
 def reload_xray_config():
     """Reload Xray configuration."""
     logger.info("Reloading Xray config...")
-    import subprocess
     try:
-        subprocess.run(
-            ["systemctl", "reload", "xray"],
-            capture_output=True, text=True, timeout=30
-        )
+        result = helper_request_sync("service.reload", {"service": "xray"}, timeout=35)
+        if not result.ok:
+            return {"status": "error", "message": result.message}
         return {"status": "ok"}
-    except Exception as e:
+    except PrivilegedHelperError as e:
         logger.error(f"Failed to reload Xray: {e}")
         return {"status": "error", "message": str(e)}
 

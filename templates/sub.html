@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Azeret+Mono:wght@400;500;600;700&family=Fira+Sans:wght@300;400;500;600;700;800&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/panel.css') }}">
-<style>
+<style nonce="{{ csp_nonce }}">
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:var(--font-body);background:var(--bg0);color:var(--t1);
   min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:20px;
@@ -644,5 +644,6 @@ function toast(msg) {
   setTimeout(() => el.className = 'toast', 2500);
 }
 </script>
+<script src="{{ url_for('static', filename='js/csp-events.js') }}"></script>
 </body>
 </html>
