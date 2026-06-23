@@ -93,13 +93,22 @@ Spiritus is built to be exposed to hostile networks. Defenses are layered:
 
 **Requirements:** a fresh Linux server (Debian/Ubuntu recommended), root access, and a domain pointed at it.
 
+**One-line install** — downloads and runs the installer, which clones the repo into `/opt/v7lthronyx`:
+
 ```bash
-git clone https://github.com/v74all/Spiritus.git
-cd Spiritus
-sudo bash install.sh
+bash <(curl -sL https://raw.githubusercontent.com/v74all/Spiritus/main/install.sh)
 ```
 
-The installer provisions PostgreSQL + Redis, a Python virtualenv, Xray/sing-box binaries, TLS certificates (acme.sh), the systemd service, and an Nginx fallback — into `/opt/v7lthronyx`.
+Useful flags:
+
+```bash
+sudo ./install.sh --port 8080         # custom web port
+sudo ./install.sh --help              # all options
+sudo ./install.sh uninstall           # remove (keep data)
+sudo ./install.sh uninstall --purge   # remove everything
+```
+
+The installer provisions PostgreSQL + Redis, a Python virtualenv, Xray/sing-box binaries, TLS certificates (acme.sh), the systemd service, and an Nginx fallback.
 
 **Manual / development run:**
 
@@ -194,10 +203,9 @@ Released under the [MIT License](LICENSE).
 
 **امنیت** — CSP با nonce، HSTS preload، CSRF دو-کوکی، JWT با الگوریتم pin‌شده، 2FA، allowlist هاست، محدودیت حجم بدنه، rate-limit + fail2ban، و وابستگی‌های **بدون CVE شناخته‌شده**.
 
-**نصب سریع**
+**نصب سریع (یک‌خط)** — نصب‌کننده خودش ریپو را در `/opt/v7lthronyx` clone می‌کند:
 ```bash
-git clone https://github.com/v74all/Spiritus.git
-cd Spiritus && sudo bash install.sh
+bash <(curl -sL https://raw.githubusercontent.com/v74all/Spiritus/main/install.sh)
 ```
 
 > ⚠️ فایل `.env` واقعی هرگز نباید commit شود (پیش‌فرض در `.gitignore` است).
