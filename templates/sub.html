@@ -491,6 +491,21 @@ body{font-family:var(--font-body);background:var(--bg0);color:var(--t1);
       <span style="color:var(--purple);font-size:20px;flex-shrink:0">⬇</span>
     </a>
 
+    {% if mobile_profile %}
+    <!-- One-tap import into the dedicated app: QR (scan from another screen)
+         or direct v7l:// link (tap on the phone itself). -->
+    <div style="text-align:center;margin-bottom:14px;padding:14px;border:1px dashed var(--accent);border-radius:12px">
+      <div style="font-size:12px;color:var(--t2);margin-bottom:10px" lang="fa">
+        بعد از نصب اپ اختصاصی، سرور و اشتراک شما با یک ضربه اضافه می‌شود:
+      </div>
+      <div class="qr-box" id="mobile-import-qr" style="padding:10px;margin-bottom:8px"></div>
+      <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+        <a class="btn-copy" style="text-decoration:none" href="{{ mobile_profile }}" lang="fa">افزودن خودکار به اپ 🚀</a>
+        <button class="btn-copy" onclick="copyLink(event, 'mobile_profile')" lang="fa">کپی لینک</button>
+      </div>
+    </div>
+    {% endif %}
+
     <div style="font-size:11px;color:var(--t3);margin-bottom:14px;text-align:center;line-height:1.6" lang="fa">
       سایر اپلیکیشن‌ های پشتیبانی شده:
     </div>
@@ -557,8 +572,19 @@ async function toggleDirection() {
 }
 
 const LINKS = JSON.parse(document.getElementById('data-links').textContent);
+const MOBILE_PROFILE = {{ (mobile_profile or '') | tojson }};
 const EXPIRE = "{{ user.expire_at or '' }}";
 let activeQr = 'vmess';
+
+/* Mobile-app import QR (v7l://import…) */
+(function () {
+  const box = document.getElementById('mobile-import-qr');
+  if (!box || !MOBILE_PROFILE || typeof qrcode !== 'function') return;
+  try {
+    const qr = qrcode(0, 'M'); qr.addData(MOBILE_PROFILE); qr.make();
+    box.innerHTML = qr.createSvgTag(4, 0);
+  } catch (e) { box.innerHTML = '<small style="color:var(--t3)">QR Error</small>'; }
+})();
 
 /* Apply traffic bar styles */
 (function(){
@@ -620,6 +646,8 @@ function copyLink(ev, type) {
   let text = '';
   if (type === 'sub') {
     text = document.getElementById('sub-url').textContent.trim();
+  } else if (type === 'mobile_profile') {
+    text = MOBILE_PROFILE;
   } else if (type === 'sub_json') {
     text = document.getElementById('sub-json-url').textContent.trim();
   } else {
@@ -631,9 +659,10 @@ function copyLink(ev, type) {
     const btns = document.querySelectorAll('.btn-copy');
     btns.forEach(b => { if (b.classList.contains('copied')) b.classList.remove('copied'); });
     const btn = ev.currentTarget;
+    const orig = btn.textContent;
     btn.classList.add('copied');
     btn.textContent = '\u2713';
-    setTimeout(() => { btn.classList.remove('copied'); btn.textContent = 'Copy'; }, 2000);
+    setTimeout(() => { btn.classList.remove('copied'); btn.textContent = orig; }, 2000);
   });
 }
 

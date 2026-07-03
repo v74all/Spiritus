@@ -268,6 +268,7 @@ input,button,textarea,select{font-family:inherit;font-size:inherit}
     <div class="header-actions">
       <button class="btn btn-primary btn-sm header-primary" onclick="showModal('add-modal')">Add User</button>
       <button class="btn btn-outline btn-sm" onclick="showModal('bulk-modal')">Bulk</button>
+      <button class="btn btn-outline btn-sm" onclick="openAppModal()" title="Login link for the mobile app">📱 App</button>
       <button class="btn btn-outline btn-sm" onclick="forceSync()">Sync</button>
       <button class="btn btn-outline btn-sm header-sep" id="btn-groups" onclick="switchMainView('groups')">Groups</button>
       <button class="btn btn-outline btn-sm header-sep" id="btn-users" onclick="switchMainView('users')" style="display:none">Users</button>
@@ -554,6 +555,22 @@ input,button,textarea,select{font-family:inherit;font-size:inherit}
   </div>
 </div>
 
+<div id="app-modal" class="modal-overlay" onclick="if(event.target===this)closeModal(this.id)">
+  <div class="modal" style="text-align:center">
+    <h3>📱 Mobile App Login</h3>
+    <p style="font-size:13px;color:var(--t2);margin-bottom:16px">
+      Scan with the Spiritus app (or open the link on your phone) — the panel
+      address and your agent account are filled in automatically.
+    </p>
+    <div id="app-modal-qr" style="background:#fff;border-radius:12px;padding:12px;display:inline-block;margin-bottom:12px;min-width:120px;min-height:120px"></div>
+    <div id="app-modal-uri" style="font-size:11px;color:var(--t3);word-break:break-all;margin-bottom:16px"></div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="copyAppProfile()">Copy link</button>
+      <button class="btn btn-outline" onclick="closeModal('app-modal')">Close</button>
+    </div>
+  </div>
+</div>
+
 <script src="{{ url_for('static', filename='js/qrcode.js') }}"></script>
 <script nonce="{{ csp_nonce }}">
 // Per-request CSP nonce — needed when document.write builds a popup that
@@ -702,6 +719,38 @@ async function saveBrand() {
       toast('Brand updated');
     } else { toast(d.error||'Error','error'); }
   } catch(e) { toast('Connection error','error'); }
+}
+
+let appProfileUri = '';
+async function openAppModal() {
+  showModal('app-modal');
+  const qrBox = document.getElementById('app-modal-qr');
+  const uriBox = document.getElementById('app-modal-uri');
+  if (!appProfileUri) {
+    qrBox.innerHTML = '<small style="color:#555">Loading…</small>';
+    try {
+      const r = await fetch(API + '/mobile-profile');
+      const d = await r.json();
+      appProfileUri = d.profile_uri || '';
+    } catch (e) { /* keep empty → error below */ }
+  }
+  if (!appProfileUri) {
+    qrBox.innerHTML = '<small style="color:#555">Error</small>';
+    uriBox.textContent = '';
+    return;
+  }
+  try {
+    const qr = qrcode(0, 'M'); qr.addData(appProfileUri); qr.make();
+    qrBox.innerHTML = qr.createSvgTag(4, 0);
+  } catch (e) { qrBox.innerHTML = '<small style="color:#555">QR Error</small>'; }
+  uriBox.textContent = appProfileUri;
+}
+
+function copyAppProfile() {
+  if (!appProfileUri) { toast('Not available', 'error'); return; }
+  navigator.clipboard.writeText(appProfileUri)
+    .then(() => toast('Copied'))
+    .catch(() => toast('Copy failed', 'error'));
 }
 
 function updateQuotaBar() {

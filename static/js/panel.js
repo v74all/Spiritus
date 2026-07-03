@@ -123,6 +123,8 @@ function getKillSwitchValue() {
 /* ── Auth ── */
 async function doLogin() {
   const pw = document.getElementById('login-pass').value;
+  const totpEl = document.getElementById('login-totp');
+  const totp = totpEl ? totpEl.value.trim() : '';
   const errEl = document.getElementById('login-error');
   const btn = document.getElementById('login-submit');
   if (!btn) return;
@@ -130,10 +132,12 @@ async function doLogin() {
   btn.disabled = true;
   btn.textContent = 'Signing in...';
   try {
+    const body = { password: pw };
+    if (totp) body.totp_code = totp;
     const r = await fetch(API + '/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password: pw }),
+      body: JSON.stringify(body),
       credentials: 'same-origin'
     });
     let d = {};
@@ -149,6 +153,18 @@ async function doLogin() {
       document.getElementById('login-screen').style.display = 'none';
       document.getElementById('panel').style.display = 'block';
       startPolling();
+      btn.disabled = false;
+      btn.textContent = 'Sign In';
+      return;
+    }
+    // Password accepted, second factor required: reveal the TOTP field and
+    // let the operator submit again with the code.
+    if (d.totp_required) {
+      if (totpEl) {
+        totpEl.style.display = '';
+        totpEl.focus();
+      }
+      errEl.textContent = 'Enter your 2FA code';
       btn.disabled = false;
       btn.textContent = 'Sign In';
       return;
@@ -2601,11 +2617,51 @@ function renderAgents() {
       <div class="agent-actions" style="margin-top:10px">
         <button class="btn btn-outline btn-sm" onclick="showEditAgent(${a.id},'${esc(a.name)}',${a.traffic_quota_gb})">Edit Quota</button>
         <button class="btn btn-outline btn-sm" onclick="showResetAgentPw(${a.id},'${esc(a.name)}')">Reset Pass</button>
+        <button class="btn btn-outline btn-sm" onclick="toggleAgentAppLink(${a.id})">📱 App Link</button>
         <button class="btn ${a.active?'btn-orange':'btn-green'} btn-sm" onclick="toggleAgent(${a.id},${a.active?0:1})">${a.active?'Disable':'Enable'}</button>
         <button class="btn btn-danger btn-sm" onclick="deleteAgent(${a.id},'${esc(a.name)}')">Delete</button>
       </div>
+      <div id="agent-app-qr-${a.id}" style="display:none;margin-top:10px;text-align:center"></div>
     </div>`;
   }).join('');
+}
+
+// Mobile-app import link (v7l://import…) — QR the admin shows the agent, or
+// a link to send them. The app fills server / role / agent name from it.
+const _agentAppLinks = {};
+async function toggleAgentAppLink(id) {
+  const box = document.getElementById('agent-app-qr-' + id);
+  if (!box) return;
+  if (box.style.display !== 'none') { box.style.display = 'none'; return; }
+  if (!_agentAppLinks[id]) {
+    try {
+      const r = await fetch(API + '/agents/' + id + '/mobile-profile');
+      const d = await r.json();
+      _agentAppLinks[id] = d.profile_uri || '';
+    } catch (e) { /* handled below */ }
+  }
+  const uri = _agentAppLinks[id];
+  if (!uri) { toast('Failed to load app link', 'error'); return; }
+  let svg = '';
+  try {
+    const qr = qrcode(0, 'M');
+    qr.addData(uri);
+    qr.make();
+    svg = qr.createSvgTag(3, 0);
+  } catch (e) { /* show link only */ }
+  box.innerHTML =
+    (svg ? `<div style="background:#fff;border-radius:10px;padding:10px;display:inline-block;margin-bottom:8px">${svg}</div>` : '') +
+    `<div style="font-size:10px;color:var(--t3);word-break:break-all;margin-bottom:6px">${esc(uri)}</div>` +
+    `<button class="btn btn-outline btn-sm" onclick="copyAgentAppLink(${id})">Copy link</button>`;
+  box.style.display = 'block';
+}
+
+function copyAgentAppLink(id) {
+  const uri = _agentAppLinks[id];
+  if (!uri) { toast('Not available', 'error'); return; }
+  navigator.clipboard.writeText(uri)
+    .then(() => toast('Copied'))
+    .catch(() => toast('Copy failed', 'error'));
 }
 
 async function doAddAgent() {

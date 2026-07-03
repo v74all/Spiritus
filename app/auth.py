@@ -157,6 +157,49 @@ async def revoke_token(jti: str, ttl_seconds: int) -> None:
         logger.warning("token revocation failed: Redis unavailable")
 
 
+async def invalidate_sessions(username: str) -> None:
+    """Invalidate every previously-issued token for this admin at once.
+
+    The jti blacklist (revoke_token) only kills one specific session on
+    /logout. Without this, changing a compromised password does NOT log out
+    an attacker who already holds a stolen token — it keeps working until
+    natural expiry, defeating the whole point of the password change. Stores
+    the invalidation instant in Redis; _decode_token_to_user rejects any
+    token whose `iat` predates it. Call this on password change (and on any
+    other "kick everyone out" action, e.g. 2FA reset).
+    """
+    try:
+        from .redis_client import get_redis
+        redis = await get_redis()
+        # Whole seconds only: JWT `iat` is second-granularity (NumericDate),
+        # so comparing it against a sub-second float epoch could reject a
+        # token minted in the very same second as the invalidation (e.g. the
+        # replacement cookie this same request is about to issue).
+        now = int(datetime.now(timezone.utc).timestamp())
+        await redis.setex(
+            f"pwd_epoch:{username}",
+            settings.session_lifetime_hours * 3600,
+            str(now),
+        )
+    except Exception:
+        logger.warning("session invalidation failed: Redis unavailable")
+
+
+async def _tokens_invalidated_since(username: str, iat: Any) -> bool:
+    if not username or iat is None:
+        return False
+    try:
+        from .redis_client import get_redis
+        redis = await get_redis()
+        epoch = await redis.get(f"pwd_epoch:{username}")
+        if not epoch:
+            return False
+        return int(iat) < int(float(epoch))
+    except Exception:
+        # Fail-closed for auth, same posture as _is_token_revoked.
+        return not settings.debug
+
+
 async def _decode_token_to_user(token: str, db: AsyncSession) -> User:
     """Decode a JWT and resolve to a User. Rejects revoked or malformed tokens.
 
@@ -180,12 +223,16 @@ async def _decode_token_to_user(token: str, db: AsyncSession) -> User:
         username: Optional[str] = payload.get("sub")
         is_admin: bool = bool(payload.get("is_admin", False))
         jti: Optional[str] = payload.get("jti")
+        iat = payload.get("iat")
         if username is None:
             raise credentials_exception
     except JWTError:
         raise credentials_exception
 
     if jti and await _is_token_revoked(jti):
+        raise credentials_exception
+
+    if await _tokens_invalidated_since(username, iat):
         raise credentials_exception
 
     result = await db.execute(select(Admin).where(Admin.username == username))

@@ -18,6 +18,9 @@
     <div class="login-sub">Digital Bastion</div>
     <input type="password" id="login-pass" class="login-input" placeholder="Access Key"
            onkeydown="if(event.key==='Enter')doLogin()">
+    <input type="text" id="login-totp" class="login-input" placeholder="2FA code" inputmode="numeric"
+           autocomplete="one-time-code" maxlength="8" style="display:none"
+           onkeydown="if(event.key==='Enter')doLogin()">
     <button type="button" class="login-btn" id="login-submit" onclick="doLogin()">Authenticate</button>
     <div class="login-error" id="login-error"></div>
     <a href="/agent" style="display:inline-block;margin-top:18px;color:var(--t3);font-size:13px;text-decoration:none;transition:color .2s" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--t3)'">Agent Panel →</a>

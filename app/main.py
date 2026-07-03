@@ -712,8 +712,12 @@ async def subscription_page(
     if not user.active:
         raise HTTPException(status_code=404, detail="Not found")
     links = await _subscription_links(user, request, db)
+    from .api.users import build_import_uri
+
+    mobile_profile = await build_import_uri(request, db, role="subscriber", uuid=user.uuid)
     template = _jinja_env.get_template("sub.html")
     html = template.render(
+        mobile_profile=mobile_profile,
         dir=_detect_direction(request),
         request={"url_root": str(request.base_url)},
         user=_subscription_user_dict(user),
@@ -762,7 +766,9 @@ async def subscription_api(
     if not user.active:
         raise HTTPException(status_code=404, detail="Not found")
     links = await _subscription_links(user, request, db)
-    encoded = base64.b64encode("\n".join(links.values()).encode()).decode()
+    # dict.fromkeys: protocol variants (e.g. an _ipv6 twin) can resolve to the
+    # same URI — clients key their server list on it, duplicates break import.
+    encoded = base64.b64encode("\n".join(dict.fromkeys(links.values())).encode()).decode()
     return Response(
         content=encoded,
         media_type="text/plain; charset=utf-8",

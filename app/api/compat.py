@@ -990,6 +990,7 @@ async def _save_legacy_settings(db: AsyncSession, data: Dict[str, Any]) -> None:
 class LegacyLoginRequest(BaseModel):
     password: str
     username: Optional[str] = "admin"
+    totp_code: Optional[str] = None
 
 
 @router.post("/login")
@@ -1033,6 +1034,28 @@ async def legacy_login(
         # Constant message — no user enumeration.
         return {"ok": False, "error": "Invalid credentials"}
 
+    # ── Second factor ────────────────────────────────────────────────────
+    # If this admin has TOTP enabled, the password alone MUST NOT mint a
+    # session. Previously this legacy endpoint skipped 2FA entirely, so a
+    # stolen/guessed password bypassed the second factor completely.
+    if admin_user.totp_enabled and admin_user.totp_secret:
+        from .auth import _check_2fa_lockout, _record_failed_2fa, _clear_2fa_attempts
+        from ..auth import verify_totp
+
+        code = (request.totp_code or "").strip()
+        if not code:
+            # First phase: password OK, ask the client for the 6-digit code.
+            # No token issued, failed-attempt counter untouched (password was
+            # valid) — but keep the 2FA brute-force lockout separate.
+            return {"ok": False, "totp_required": True}
+
+        await _check_2fa_lockout(client_ip, username)
+        if not verify_totp(admin_user.totp_secret, code):
+            await _record_failed_2fa(client_ip, username)
+            logger.warning("legacy_login.2fa_failure ip=%s user=%s", client_ip, username)
+            return {"ok": False, "error": "Invalid 2FA code"}
+        await _clear_2fa_attempts(client_ip, username)
+
     await _clear_attempts(client_ip)
 
     token_payload: Dict[str, Any] = {"sub": username, "is_admin": True}
@@ -1072,10 +1095,12 @@ class ChangePasswordRequest(BaseModel):
 @router.post("/change-password")
 async def legacy_change_password(
     body: ChangePasswordRequest,
+    req: Request,
+    response: Response,
     admin: User = Depends(get_current_admin_cookie),
     db: AsyncSession = Depends(get_async_db),
 ):
-    from ..auth import validate_password_strength
+    from ..auth import validate_password_strength, invalidate_sessions
 
     err = validate_password_strength(body.new)
     if err:
@@ -1095,6 +1120,23 @@ async def legacy_change_password(
     db_admin.password_hash = get_password_hash(body.new)
     await db.commit()
     logger.info("password.change user=%s", admin.username)
+
+    # Kill every token issued before this instant — a stolen/leaked token
+    # must not keep working just because the operator "changed the
+    # password". Then mint a fresh one so the current session survives
+    # (its iat is now, so it isn't caught by its own invalidation).
+    await invalidate_sessions(admin.username)
+    access_token = create_access_token(data={"sub": admin.username, "is_admin": True})
+    from ..middleware.csrf import is_secure_request
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        secure=is_secure_request(req),
+        samesite="strict",
+        max_age=settings.session_lifetime_hours * 3600,
+        path="/",
+    )
     return {"ok": True}
 
 
@@ -3309,6 +3351,39 @@ async def legacy_agent_login(
 async def legacy_agent_logout(response: Response):
     response.delete_cookie("agent_access_token", path="/")
     return {"ok": True}
+
+
+@router.get("/agents/{agent_id}/mobile-profile")
+async def legacy_agent_mobile_profile_admin(
+    agent_id: int,
+    request: Request,
+    admin: User = Depends(get_current_admin_cookie),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """Import link the admin hands to an agent for the mobile app."""
+    from .users import build_import_uri
+
+    result = await db.execute(select(Agent).where(Agent.id == agent_id))
+    agent = result.scalar_one_or_none()
+    if agent is None:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    return {
+        "profile_uri": await build_import_uri(request, db, role="agent", agent=agent.name)
+    }
+
+
+@router.get("/agent/mobile-profile")
+async def legacy_agent_mobile_profile_self(
+    request: Request,
+    agent: Agent = Depends(_get_current_agent_cookie),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """The logged-in agent's own mobile-app import link."""
+    from .users import build_import_uri
+
+    return {
+        "profile_uri": await build_import_uri(request, db, role="agent", agent=agent.name)
+    }
 
 
 @router.get("/agent/me")

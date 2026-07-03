@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import secrets as secrets_module
 
 import pytest
 from fastapi import HTTPException
@@ -160,11 +161,148 @@ async def test_usdt_transaction_cannot_be_replayed():
 
 
 def test_mobile_contract_paths_are_registered():
-    paths = {route.path for route in app.routes}
+    # Read from the generated OpenAPI schema rather than walking app.routes:
+    # FastAPI wraps included routers in opaque _IncludedRouter objects, so a
+    # flat route scan misses prefixed paths. The schema is prefix-resolved.
+    paths = set(app.openapi().get("paths", {}).keys())
     assert "/api/mobile/auth/login" in paths
     assert "/api/mobile/auth/2fa" in paths
     assert "/api/mobile/session" in paths
     assert "/api/mobile/auth/logout" in paths
+
+
+@pytest.mark.asyncio
+async def test_legacy_login_cannot_skip_totp():
+    """Regression test for a 2FA bypass in the legacy /api/login endpoint.
+
+    Before the fix, POST /api/login only checked the password, so a stolen
+    or brute-forced password fully authenticated an admin who had TOTP
+    enabled — the second factor was never consulted. It must now: (1) refuse
+    to mint a session on password-only requests and signal totp_required,
+    (2) reject a wrong code, (3) only succeed with the correct code.
+    """
+    import pyotp
+
+    from app.auth import get_password_hash
+    from app.database import AsyncSessionLocal, init_db
+    from app.models import Admin, UserRole
+
+    # Ensure schema exists: this test may run standalone (without another
+    # test having gone through the app's lifespan/TestClient startup first).
+    # The async sqlite ":memory:" engine defaults to StaticPool (one shared
+    # connection), so create_all here is visible to every session after it.
+    await init_db()
+
+    password = "Sup3rStrong!Pass-1"
+    secret = pyotp.random_base32()
+    username = f"totp-admin-{secrets_module.token_hex(4)}"
+
+    async with AsyncSessionLocal() as db:
+        db.add(
+            Admin(
+                username=username,
+                password_hash=get_password_hash(password),
+                role=UserRole.admin,
+                totp_enabled=True,
+                totp_secret=secret,
+            )
+        )
+        await db.commit()
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="https://testserver") as client:
+        # Password alone must NOT issue a session cookie.
+        r1 = await client.post("/api/login", json={"username": username, "password": password})
+        assert r1.json().get("ok") is False
+        assert r1.json().get("totp_required") is True
+        assert "access_token" not in client.cookies
+
+        # Wrong code must not authenticate either.
+        r2 = await client.post(
+            "/api/login",
+            json={"username": username, "password": password, "totp_code": "000000"},
+        )
+        assert r2.json().get("ok") is False
+        assert "access_token" not in client.cookies
+
+        # Correct code succeeds.
+        code = pyotp.TOTP(secret).now()
+        r3 = await client.post(
+            "/api/login",
+            json={"username": username, "password": password, "totp_code": code},
+        )
+        assert r3.json().get("ok") is True
+        assert "access_token" in client.cookies
+
+
+@pytest.mark.asyncio
+async def test_password_change_invalidates_other_sessions():
+    """A password change must kill tokens issued before it.
+
+    Without this, a stolen/leaked token keeps authenticating until its
+    natural expiry even after the operator "changed the password" to lock
+    the attacker out — the change had no effect on sessions already handed
+    out. The admin's own current session must keep working (a fresh cookie
+    is reissued by the endpoint).
+    """
+    from app.auth import get_password_hash
+    from app.database import AsyncSessionLocal, init_db
+    from app.models import Admin, UserRole
+
+    await init_db()
+
+    old_password = "Sup3rStrong!Pass-1"
+    new_password = "EvenStr0nger!Pass-2"
+    username = f"pwchange-admin-{secrets_module.token_hex(4)}"
+
+    async with AsyncSessionLocal() as db:
+        db.add(
+            Admin(
+                username=username,
+                password_hash=get_password_hash(old_password),
+                role=UserRole.admin,
+            )
+        )
+        await db.commit()
+
+    # Two independent clients: `browser` carries the admin's real cookie
+    # session; `attacker` carries ONLY the raw stolen JWT as a Bearer header
+    # and no cookie jar — otherwise httpx would (correctly, per the app's
+    # cookie-takes-precedence-over-header logic) authenticate the attacker's
+    # requests using the browser's cookie instead of the token we're testing.
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="https://testserver") as browser, \
+            AsyncClient(transport=ASGITransport(app=app), base_url="https://testserver") as attacker:
+        login = await browser.post("/api/login", json={"username": username, "password": old_password})
+        assert login.json().get("ok") is True
+        stolen_token = login.json()["access_token"]
+        attacker_headers = {"Authorization": f"Bearer {stolen_token}"}
+
+        # The "attacker" holds `stolen_token` and can still use it right now
+        # — proves the token was valid pre-change.
+        pre_change = await attacker.get("/api/users", headers=attacker_headers)
+        assert pre_change.status_code == 200
+
+        # JWT `iat` and the invalidation marker are both second-granularity;
+        # cross a whole second boundary so "issued before the change" is
+        # unambiguous rather than a same-second coin flip.
+        await asyncio.sleep(1.1)
+
+        # A GET first, to mint the double-submit CSRF cookie for the POST.
+        await browser.get("/api/users")
+        csrf_token = browser.cookies.get("csrf_token")
+        change = await browser.post(
+            "/api/change-password",
+            json={"current": old_password, "new": new_password},
+            headers={"X-CSRF-Token": csrf_token},
+        )
+        assert change.json().get("ok") is True
+
+        # The stolen token must now be dead, even though it hasn't expired.
+        post_change = await attacker.get("/api/users", headers=attacker_headers)
+        assert post_change.status_code == 401
+
+        # The admin's own browser session (reissued cookie) must still work.
+        still_logged_in = await browser.get("/api/users")
+        assert still_logged_in.status_code == 200
 
 
 @pytest.mark.asyncio

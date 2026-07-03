@@ -38,7 +38,18 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/users", tags=["users"])
 
 
-async def _mobile_profile_uri(user: VpnUser, request: Request, db: AsyncSession) -> str:
+async def build_import_uri(
+    request: Request,
+    db: AsyncSession,
+    role: str,
+    uuid: str | None = None,
+    agent: str | None = None,
+) -> str:
+    """v7l://import deep link understood by the mobile app (all roles).
+
+    The app pins the panel certificate when `pin` is present, so the link
+    keeps working on bare-IP / self-signed installs too.
+    """
     result = await db.execute(
         select(Setting).where(Setting.key.in_(["domain_cert_path", "domain_issuer"]))
     )
@@ -49,10 +60,18 @@ async def _mobile_profile_uri(user: VpnUser, request: Request, db: AsyncSession)
         cert = x509.load_pem_x509_certificate(cert_path.read_bytes())
         pin = "sha256/" + base64.b64encode(cert.fingerprint(hashes.SHA256())).decode("ascii")
     server = f"{request.url.scheme}://{request.url.netloc}"
-    query = {"server": server, "role": "subscriber", "uuid": user.uuid}
+    query = {"server": server, "role": role}
+    if uuid:
+        query["uuid"] = uuid
+    if agent:
+        query["agent"] = agent
     if pin:
         query["pin"] = pin
     return "v7l://import?" + urlencode(query)
+
+
+async def _mobile_profile_uri(user: VpnUser, request: Request, db: AsyncSession) -> str:
+    return await build_import_uri(request, db, role="subscriber", uuid=user.uuid)
 
 # Models
 class UserCreate(BaseModel):
