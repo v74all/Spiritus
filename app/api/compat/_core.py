@@ -60,7 +60,6 @@ logger = logging.getLogger(__name__)
 # Note: _login_attempts used to live here but has been migrated to Redis (see
 # the wrapper helpers below that delegate to app/api/auth.py).
 _settings_state: dict[str, Any] = {}
-_resilience_state: dict[str, Any] = {"active_attacks": 0, "stats": {}}
 _LEGACY_SETTINGS_KEY = "legacy_panel_settings"
 _LEGACY_SETTINGS_FILE = "vpn-settings.json"
 _DPI_SETTING_KEYS = {

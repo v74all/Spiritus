@@ -121,15 +121,6 @@
         </button>
       </div>
 
-      <div class="nav-section">
-        <div class="nav-section-label">Security</div>
-        <button class="nav-btn nav-btn-orange" onclick="showModal('aggressive-modal');closeDrawer()" title="Advanced: tools that test and strengthen connectivity on filtered networks">
-          <span class="nav-btn-icon">&#x26A1;</span>Resilience <span class="nav-fa">/ پایداری شبکه</span>
-        </button>
-        <button class="nav-btn nav-btn-danger" onclick="showModal('fightback-modal');closeDrawer()" title="Advanced: counter-measure tools. Use only if you know what they do">
-          <span class="nav-btn-icon">&#x2694;</span>Counter <span class="nav-fa">/ مقابله</span>
-        </button>
-      </div>
 
       <div class="nav-section">
         <div class="nav-section-label">System</div>
@@ -275,13 +266,11 @@
       <h4><span class="help-en">Good habits</span><span class="help-fa" lang="fa">نکات مهم</span></h4>
       <ul class="help-steps help-en">
         <li>Never post a user's subscription link publicly — anyone with it can use the account.</li>
-        <li>Keep <b>Resilience</b> and <b>Counter</b> off unless you know exactly why you need them.</li>
         <li>Create a backup before changing Settings or upgrading.</li>
         <li>If a customer cannot connect: ask them to refresh the subscription in the app first, then try another protocol.</li>
       </ul>
       <ul class="help-steps help-fa" lang="fa">
         <li>لینک اشتراک کاربر را هرگز عمومی نگذارید؛ هر کس آن را داشته باشد می‌تواند از حساب استفاده کند.</li>
-        <li><b>Resilience</b> و <b>Counter</b> را فقط در صورتی روشن کنید که دقیقاً بدانید برای چه لازم است.</li>
         <li>قبل از تغییر تنظیمات یا آپدیت، Backup بگیرید.</li>
         <li>اگر مشتری وصل نمی‌شود: اول در برنامه اشتراک را به‌روزرسانی کند، بعد پروتکل دیگری را امتحان کند.</li>
       </ul>
@@ -1804,91 +1793,6 @@
           <div class="settings-desc">Automatically sync usage stats / همگام‌سازی خودکار آمار مصرف</div></div>
         <label class="toggle"><input type="checkbox" id="set-system-auto-sync" checked><span class="toggle-slider"></span></label>
       </div>
-    <!-- ═══ Resilience Tools ═══ -->
-    <div class="settings-section">
-      <div class="sec-header">
-        <div class="settings-title">⚔️ Network Resilience Tools / ابزارهای تاب‌آوری شبکه</div>
-        <span class="s-indicator info" id="si-network-resilience"><span class="dot"></span> <span class="si-text">Ready</span></span>
-      </div>
-      <div class="help-box">
-        <div class="help-en">⚔️ <b>Network Resilience Tools</b> provide advanced techniques for maintaining connectivity under restrictive network conditions. <b>Warning:</b> Requires root privileges. Use responsibly.</div>
-        <div class="help-fa">⚔️ <b>ابزارهای تاب‌آوری شبکه</b> تکنیک‌های پیشرفته برای حفظ اتصال در شرایط شبکه محدودکننده. <b>هشدار:</b> نیاز به دسترسی روت دارد.</div>
-      </div>
-
-      <div class="settings-row">
-        <div><div class="settings-label">Enhanced SYN Flood</div>
-          <div class="settings-desc">State table exhaustion with IP randomization</div></div>
-        <button class="btn btn-outline btn-sm" onclick="runFirewallAttack('syn_flood_enhanced')">Test</button>
-      </div>
-
-      <div class="settings-row">
-        <div><div class="settings-label">SSL/TLS Handshake Flood</div>
-          <div class="settings-desc">Cryptographic resource exhaustion</div></div>
-        <button class="btn btn-outline btn-sm" onclick="runFirewallAttack('ssl_tls_handshake_flood')">Test</button>
-      </div>
-
-      <div class="settings-row">
-        <div><div class="settings-label">QUIC Protocol Flood</div>
-          <div class="settings-desc">Modern protocol bypass attacks</div></div>
-        <button class="btn btn-outline btn-sm" onclick="runFirewallAttack('quic_protocol_flood')">Test</button>
-      </div>
-
-      <div class="settings-row">
-        <div><div class="settings-label">HTTP/2 Flood</div>
-          <div class="settings-desc">HTTP/2 stream exhaustion</div></div>
-        <button class="btn btn-outline btn-sm" onclick="runFirewallAttack('http2_flood_attack')">Test</button>
-      </div>
-
-      <div class="settings-row">
-        <div><div class="settings-label">Packet Fragmentation Attack</div>
-          <div class="settings-desc">IP reassembly overwhelm</div></div>
-        <button class="btn btn-outline btn-sm" onclick="runFirewallAttack('packet_fragmentation_attack')">Test</button>
-      </div>
-
-      <div class="settings-row">
-        <div><div class="settings-label">DNS Amplification</div>
-          <div class="settings-desc">DNS response amplification attacks</div></div>
-        <button class="btn btn-outline btn-sm" onclick="runFirewallAttack('dns_amplification')">Test</button>
-      </div>
-
-      <div class="settings-row">
-        <div><div class="settings-label">Adaptive Coordinated Attack</div>
-          <div class="settings-desc">AI-driven technique rotation</div></div>
-        <button class="btn btn-outline btn-sm" onclick="runFirewallAttack('adaptive_coordinated_attack')">Test</button>
-      </div>
-
-      <div class="settings-row">
-        <div><div class="settings-label">Maximal Attack Pattern</div>
-          <div class="settings-desc">All techniques combined for maximum impact</div></div>
-        <button class="btn btn-outline btn-sm" onclick="runFirewallAttack('maximal_attack')">Test</button>
-      </div>
-
-      <div class="form-group" style="margin-top:12px"><label>Target IP / آدرس هدف</label>
-        <input type="text" id="firewall-target-ip" placeholder="Target IP">
-        <div class="settings-desc">Network infrastructure IP / آدرس IP زیرساخت شبکه</div></div>
-
-      <div class="form-group"><label>Attack Duration (seconds) / مدت حمله (ثانیه)</label>
-        <input type="number" id="firewall-duration" value="30" min="1" max="3600">
-        <div class="settings-desc">Simulation duration for testing / مدت شبیه‌سازی برای تست</div></div>
-
-      <div class="settings-row" style="margin-top:12px">
-        <div><div class="settings-label">Attack Statistics</div>
-          <div class="settings-desc">View current attack stats / مشاهده آمار حملات فعلی</div></div>
-        <button class="btn btn-green btn-sm" onclick="fetchFirewallStats()">View Stats</button>
-      </div>
-
-      <div class="settings-row">
-        <div><div class="settings-label">Stop All Operations</div>
-          <div class="settings-desc">Immediately stop all running attacks / توقف فوری تمام حملات در حال اجرا</div></div>
-        <button class="btn btn-danger btn-sm" onclick="stopFirewallAttacks()">Stop All</button>
-      </div>
-
-      <div id="firewall-stats-display" style="margin-top:12px;padding:12px;background:var(--bg3);border-radius:var(--radius-sm);display:none">
-        <div class="settings-title">Attack Statistics</div>
-        <div id="firewall-stats-content" style="font-size:12px;color:var(--t2)"></div>
-      </div>
-    </div>
-
     <!-- ═══ Network Intelligence ═══ -->
     <div class="settings-section">
       <div class="sec-header">
@@ -2221,174 +2125,6 @@ document.addEventListener('keydown', function(e) {
   </div>
 </div>
 
-<!-- Resilience Operations Modal -->
-<div class="modal-overlay" id="aggressive-modal">
-  <div class="modal modal-xxl">
-    <h3>⚔️ Network Resilience Tools / ابزارهای تاب‌آوری شبکه</h3>
-    <div class="help-box" style="margin-bottom:16px">
-      <div class="help-en">⚔️ <b>Network Resilience Tools</b> test your network's ability to withstand attacks. Select attack type, configure target, and run simulations. <b>Warning:</b> For authorized testing only.</div>
-      <div class="help-fa">⚔️ <b>ابزارهای تاب‌آوری شبکه</b> توانایی شبکه شما در مقابله با حملات را تست می‌کند. نوع حمله را انتخاب، هدف را تنظیم و شبیه‌سازی اجرا کنید. <b>هشدار:</b> فقط برای تست مجاز.</div>
-    </div>
-
-    <div class="config-tabs" style="margin-bottom:16px">
-      <button class="config-tab tab-vmess active" onclick="switchAggressiveTab('config')">⚙️ Config</button>
-      <button class="config-tab tab-grpc" onclick="switchAggressiveTab('advanced')">🔧 Advanced</button>
-      <button class="config-tab tab-trojan" onclick="switchAggressiveTab('status')">📊 Status</button>
-    </div>
-
-    <!-- Config Tab -->
-    <div id="aggressive-tab-config" class="aggressive-tab-content">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-        <div class="form-group">
-          <label>Target IP / آدرس هدف</label>
-          <input type="text" id="aggressive-target-ip" placeholder="192.168.1.1" value="127.0.0.1">
-        </div>
-        <div class="form-group">
-          <label>Target Port / پورت هدف</label>
-          <input type="number" id="aggressive-target-port" placeholder="443" value="443">
-        </div>
-        <div class="form-group">
-          <label>Duration (sec) / مدت (ثانیه)</label>
-          <input type="number" id="aggressive-duration" placeholder="60" value="10">
-        </div>
-        <div class="form-group">
-          <label>Attack Type / نوع حمله</label>
-          <select id="resilience-op-type">
-            <option value="syn_flood">Massive SYN Flood</option>
-            <option value="udp_flood">UDP Flood Multi-Port</option>
-            <option value="icmp_flood">ICMP Flood Variety</option>
-            <option value="http_flood">HTTP Flood Layer 7</option>
-            <option value="dns_amp">DNS Amplification</option>
-            <option value="ntp_amp">NTP Amplification</option>
-            <option value="combined">Combined Attack</option>
-          </select>
-        </div>
-      </div>
-      <div class="modal-actions">
-        <button class="btn btn-orange" onclick="startResilienceOp()">▶ Start Operation</button>
-        <button class="btn btn-danger" onclick="stopResilienceOps()">⏹ Stop All</button>
-        <button class="btn btn-outline" onclick="hideModal('aggressive-modal')">✕ Close</button>
-      </div>
-    </div>
-
-    <!-- Advanced Tab -->
-    <div id="aggressive-tab-advanced" class="aggressive-tab-content" style="display:none">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-        <div class="form-group" id="aggressive-ports-group">
-          <label>UDP Ports / پورت‌های UDP</label>
-          <input type="text" id="aggressive-ports" placeholder="53,80,443,8080" value="53,80,443">
-        </div>
-        <div class="form-group" id="aggressive-dns-group">
-          <label>DNS Servers / سرورهای DNS</label>
-          <input type="text" id="aggressive-dns-servers" placeholder="8.8.8.8,1.1.1.1" value="8.8.8.8,1.1.1.1">
-        </div>
-        <div class="form-group" id="aggressive-ntp-group">
-          <label>NTP Servers / سرورهای NTP</label>
-          <input type="text" id="aggressive-ntp-servers" placeholder="pool.ntp.org,time.nist.gov" value="pool.ntp.org">
-        </div>
-        <div class="form-group" id="aggressive-url-group">
-          <label>Target URL / آدرس هدف</label>
-          <input type="text" id="aggressive-target-url" placeholder="https://example.com" value="http://127.0.0.1">
-        </div>
-      </div>
-    </div>
-
-    <!-- Status Tab -->
-    <div id="aggressive-tab-status" class="aggressive-tab-content" style="display:none">
-      <div id="aggressive-status" style="padding:16px;background:rgba(255,255,255,.02);border-radius:var(--radius-sm)">
-        <div style="font-size:12px;color:var(--t2);margin-bottom:8px">Attack Status / وضعیت حمله:</div>
-        <div id="aggressive-status-text" style="font-size:13px;color:var(--t0)">No active attacks / حمله فعالی وجود ندارد</div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- Counter Techniques Modal -->
-<div class="modal-overlay" id="fightback-modal">
-  <div class="modal modal-xxl">
-    <h3>🛡️ Counter Techniques / تکنیک‌های متقابل</h3>
-    <div class="help-box" style="margin-bottom:16px">
-      <div class="help-en">🛡️ <b>Counter Techniques</b> provide active defense measures against network attacks. Select technique, configure target, and deploy countermeasures. <b>Warning:</b> Can disrupt infrastructure — authorized testing only.</div>
-      <div class="help-fa">🛡️ <b>تکنیک‌های متقابل</b> اقدامات دفاعی فعال در برابر حملات شبکه را ارائه می‌دهد. نوع تکنیک را انتخاب، هدف را تنظیم و اقدام متقابل را اجرا کنید. <b>هشدار:</b> فقط برای تست مجاز.</div>
-    </div>
-
-    <div class="config-tabs" style="margin-bottom:16px">
-      <button class="config-tab tab-firewall active" onclick="switchFightbackTab('config')">⚙️ Config</button>
-      <button class="config-tab tab-grpc" onclick="switchFightbackTab('advanced')">🔧 Advanced</button>
-      <button class="config-tab tab-trojan" onclick="switchFightbackTab('status')">📊 Status</button>
-    </div>
-
-    <!-- Config Tab -->
-    <div id="fightback-tab-config" class="fightback-tab-content">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-        <div class="form-group">
-          <label>Target IP / آدرس هدف</label>
-          <input type="text" id="fightback-target-ip" placeholder="192.168.1.1" value="127.0.0.1">
-        </div>
-        <div class="form-group">
-          <label>Target Port / پورت هدف</label>
-          <input type="number" id="fightback-target-port" placeholder="443" value="443">
-        </div>
-        <div class="form-group">
-          <label>Duration (sec) / مدت (ثانیه)</label>
-          <input type="number" id="fightback-duration" placeholder="60" value="10">
-        </div>
-        <div class="form-group">
-          <label>Counter Technique / تکنیک متقابل</label>
-          <select id="fightback-technique">
-            <option value="rst_flood">TCP RST Flood</option>
-            <option value="fin_flood">TCP FIN Flood</option>
-            <option value="icmp_redirect">ICMP Redirect</option>
-            <option value="arp_spoofing">ARP Spoofing</option>
-            <option value="dns_poisoning">DNS Poisoning</option>
-            <option value="tcp_hijacking">TCP Hijacking</option>
-            <option value="session_hijacking">Session Hijacking</option>
-            <option value="combined">Combined Counter</option>
-          </select>
-        </div>
-      </div>
-      <div class="modal-actions">
-        <button class="btn btn-danger" onclick="startFightBack()">▶ Start Counter</button>
-        <button class="btn btn-orange" onclick="stopFightBack()">⏹ Stop All</button>
-        <button class="btn btn-outline" onclick="hideModal('fightback-modal')">✕ Close</button>
-      </div>
-    </div>
-
-    <!-- Advanced Tab -->
-    <div id="fightback-tab-advanced" class="fightback-tab-content" style="display:none">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-        <div class="form-group" id="fightback-gateway-group">
-          <label>Gateway IP / IP گیت‌وی</label>
-          <input type="text" id="fightback-gateway-ip" placeholder="192.168.1.254" value="192.168.1.254">
-        </div>
-        <div class="form-group" id="fightback-dns-group">
-          <label>DNS Server / سرور DNS</label>
-          <input type="text" id="fightback-dns-server" placeholder="8.8.8.8" value="8.8.8.8">
-        </div>
-        <div class="form-group" id="fightback-domain-group">
-          <label>Domain / دامنه</label>
-          <input type="text" id="fightback-domain" placeholder="google.com" value="google.com">
-        </div>
-        <div class="form-group" id="fightback-fake-ip-group">
-          <label>Fake IP / IP جعلی</label>
-          <input type="text" id="fightback-fake-ip" placeholder="1.2.3.4" value="1.2.3.4">
-        </div>
-        <div class="form-group" id="fightback-session-group" style="grid-column:span 2">
-          <label>Session ID / شناسه نشست</label>
-          <input type="text" id="fightback-session-id" placeholder="abc123def456" value="test-session-id">
-        </div>
-      </div>
-    </div>
-
-    <!-- Status Tab -->
-    <div id="fightback-tab-status" class="fightback-tab-content" style="display:none">
-      <div id="fightback-status" style="padding:16px;background:rgba(255,255,255,.02);border-radius:var(--radius-sm)">
-        <div style="font-size:12px;color:var(--t2);margin-bottom:8px">Counter Status / وضعیت اقدام متقابل:</div>
-        <div id="fightback-status-text" style="font-size:13px;color:var(--t0)">No active techniques / تکنیک فعالی وجود ندارد</div>
-      </div>
-    </div>
-  </div>
-</div>
 
 <script src="{{ url_for('static', filename='js/csp-events.js') }}?v={{ asset_v }}"></script>
 </body>

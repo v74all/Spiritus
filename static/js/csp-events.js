@@ -67,7 +67,6 @@
     'regenerateReality',
     'resetSettingsToDefault',
     'restoreBackup',
-    'runFirewallAttack',
     'saveBrand',
     'saveSettings',
     'selectBulkRun',

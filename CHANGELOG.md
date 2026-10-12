@@ -45,7 +45,6 @@ All notable changes to Spiritus VPN Panel will be documented in this file.
 - Data export (CSV/JSON)
 - System health monitoring
 - DPI evasion techniques
-- Network resilience tools
 - Dark theme UI with glassmorphism
 - Responsive design for mobile
 - Rate limiting and security headers
