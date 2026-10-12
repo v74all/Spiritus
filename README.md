@@ -50,7 +50,7 @@
 <table>
   <tr>
     <td width="50%"><img src="docs/screenshots/settings-protocols.png" alt="Protocol & REALITY settings"><br><sub>Protocol / REALITY / CDN configuration</sub></td>
-    <td width="50%"><img src="docs/screenshots/anti-censorship.png" alt="Anti-censorship resilience tools"><br><sub>DPI-evasion & resilience tools</sub></td>
+    <td width="50%"><img src="docs/screenshots/subscription-mobile.png" alt="Subscriber view on mobile"><br><sub>Subscriber view (mobile, RTL)</sub></td>
   </tr>
   <tr>
     <td width="50%"><img src="docs/screenshots/analytics.png" alt="Traffic analytics"><br><sub>Traffic analytics & top users</sub></td>
