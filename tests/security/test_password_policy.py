@@ -5,7 +5,6 @@ Ensures the panel rejects short, common, and structurally weak passwords
 across every entrypoint that calls validate_password_strength().
 """
 
-import pytest
 
 from app.auth import validate_password_strength
 

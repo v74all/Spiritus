@@ -9,10 +9,13 @@ Background tasks:
 - Anomaly detection
 """
 
-from celery import Celery
-from .config import settings
-from .privileged_helper import helper_request_sync, PrivilegedHelperError
 import logging
+from datetime import UTC
+
+from celery import Celery
+
+from .config import settings
+from .privileged_helper import PrivilegedHelperError, helper_request_sync
 
 logger = logging.getLogger(__name__)
 
@@ -79,10 +82,11 @@ def monitor_traffic():
     import asyncio
 
     async def _sync():
-        from .database import AsyncSessionLocal
-        from .models import VpnUser, Agent, AgentStatus
-        from .orchestrator import orchestrator
         from sqlalchemy import select
+
+        from .database import AsyncSessionLocal
+        from .models import Agent, AgentStatus, VpnUser
+        from .orchestrator import orchestrator
 
         async with AsyncSessionLocal() as db:
             agents = (await db.execute(
@@ -126,10 +130,11 @@ def check_expirations():
     import asyncio
 
     async def _expire():
+        from sqlalchemy import and_, select
+
         from .database import AsyncSessionLocal
-        from .models import VpnUser, Agent
+        from .models import Agent, VpnUser
         from .orchestrator import orchestrator
-        from sqlalchemy import select, and_
         from .timeutil import utcnow as _utcnow
 
         async with AsyncSessionLocal() as db:
@@ -138,7 +143,7 @@ def check_expirations():
                 select(VpnUser).where(
                     and_(
                         VpnUser.active == 1,
-                        VpnUser.expire_at != None,
+                        VpnUser.expire_at.is_not(None),
                         VpnUser.expire_at < _utcnow(),
                     )
                 )
@@ -173,15 +178,15 @@ def auto_backup():
     Uses pg_dump for PostgreSQL backup with rotation
     (keeps last N days based on settings).
     """
-    import subprocess
-    import os
     import glob as globmod
-    from datetime import datetime, timezone
+    import os
+    import subprocess
+    from datetime import datetime
 
     backup_dir = os.path.join(os.getcwd(), "backups")
     os.makedirs(backup_dir, exist_ok=True)
 
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
     db_backup = os.path.join(backup_dir, f"vpnpanel_{timestamp}.sql.gz")
 
     try:
@@ -221,7 +226,7 @@ def auto_backup():
 
     # Rotation: keep last 7 days
     retention_days = 7
-    cutoff = datetime.now(timezone.utc).timestamp() - (retention_days * 86400)
+    cutoff = datetime.now(UTC).timestamp() - (retention_days * 86400)
     removed = 0
     for f in globmod.glob(os.path.join(backup_dir, "vpnpanel_*.sql.gz")):
         if os.path.getmtime(f) < cutoff:
@@ -358,9 +363,9 @@ def dpi_reality_key_rotation_check():
     active = reality_key_manager.get_active_keys()
     expiring = []
     for key in active:
-        from datetime import datetime, timezone
+        from datetime import datetime
         expires = datetime.fromisoformat(key["expires_at"])
-        days_left = (expires - datetime.now(timezone.utc)).days
+        days_left = (expires - datetime.now(UTC)).days
         if days_left <= 7:
             expiring.append({
                 "key_id": key["key_id"],

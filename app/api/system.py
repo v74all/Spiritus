@@ -10,23 +10,23 @@ Endpoints:
 - GET  /system/metrics - Prometheus metrics
 """
 
+import hmac
+import logging
+import os
+import subprocess
+
+import psutil
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
-from typing import Optional, Dict, Any, List
-import psutil
-import subprocess
-import os
-import logging
-import hmac
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..auth import get_current_admin, User
+from ..auth import User, get_current_admin
 from ..config import settings
 from ..database import get_async_db
 from ..models import VpnUser
-from ..privileged_helper import helper_request, PrivilegedHelperError
-from sqlalchemy import select, func
-from sqlalchemy.ext.asyncio import AsyncSession
+from ..privileged_helper import PrivilegedHelperError, helper_request
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/system", tags=["system"])
@@ -37,15 +37,15 @@ class SystemStatus(BaseModel):
     disk_percent: float
     uptime_seconds: float
     xray_running: bool
-    xray_version: Optional[str]
+    xray_version: str | None
     active_users: int
     total_users: int
 
 class XrayStatus(BaseModel):
     running: bool
-    version: Optional[str]
+    version: str | None
     config_valid: bool
-    uptime: Optional[float]
+    uptime: float | None
 
 class MessageResponse(BaseModel):
     message: str
@@ -107,7 +107,7 @@ async def get_xray_status(admin: User = Depends(get_current_admin)):
     version = None
     config_valid = False
     uptime = None
-    
+
     try:
         # Check if xray process is running
         for proc in psutil.process_iter(['name', 'cmdline', 'create_time']):
@@ -116,7 +116,7 @@ async def get_xray_status(admin: User = Depends(get_current_admin)):
                 import time
                 uptime = time.time() - proc.info.get('create_time', time.time())
                 break
-        
+
         # Get version
         result = subprocess.run(
             [settings.xray_bin_path, "version"],
@@ -124,7 +124,7 @@ async def get_xray_status(admin: User = Depends(get_current_admin)):
         )
         if result.returncode == 0:
             version = result.stdout.strip().split('\n')[0]
-        
+
         # Validate config
         result = subprocess.run(
             [settings.xray_bin_path, "-test", "-config", settings.xray_config_path],
@@ -133,7 +133,7 @@ async def get_xray_status(admin: User = Depends(get_current_admin)):
         config_valid = result.returncode == 0
     except Exception as e:
         logger.error(f"Error checking Xray status: {e}")
-    
+
     return XrayStatus(
         running=running,
         version=version,
@@ -175,7 +175,7 @@ async def get_logs(
         return {"logs": []}
 
     try:
-        with open(log_file, "r", errors="replace") as f:
+        with open(log_file, errors="replace") as f:
             all_lines = f.readlines()
             return {"logs": all_lines[-lines:]}
     except Exception as e:

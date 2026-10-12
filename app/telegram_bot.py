@@ -9,16 +9,12 @@ Features:
 - Interactive inline keyboards
 """
 
+import asyncio
 import json
 import logging
-import asyncio
-from typing import Dict, Any, Optional, List, Callable
-from datetime import datetime
-from dataclasses import dataclass
+from collections.abc import Callable
 
 import httpx
-
-from .config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -32,12 +28,12 @@ class TelegramBot:
 
     API_BASE = "https://api.telegram.org/bot{token}/{method}"
 
-    def __init__(self, token: str = "", chat_id: str = "", admin_chat_ids: List[str] = None):
+    def __init__(self, token: str = "", chat_id: str = "", admin_chat_ids: list[str] = None):
         self.token = token
         self.chat_id = chat_id
         self.admin_chat_ids = admin_chat_ids or []
-        self._client: Optional[httpx.AsyncClient] = None
-        self._command_handlers: Dict[str, Callable] = {}
+        self._client: httpx.AsyncClient | None = None
+        self._command_handlers: dict[str, Callable] = {}
         self._running = False
         self._last_update_id = 0
 
@@ -54,7 +50,7 @@ class TelegramBot:
         if self._client and not self._client.is_closed:
             await self._client.aclose()
 
-    async def _call_api(self, method: str, data: Dict = None) -> Dict:
+    async def _call_api(self, method: str, data: dict = None) -> dict:
         """Call Telegram Bot API."""
         if not self.token:
             return {"ok": False, "error": "No bot token configured"}
@@ -79,8 +75,8 @@ class TelegramBot:
         chat_id: str,
         text: str,
         parse_mode: str = "HTML",
-        reply_markup: Dict = None,
-    ) -> Dict:
+        reply_markup: dict = None,
+    ) -> dict:
         """Send a text message."""
         data = {
             "chat_id": chat_id,
@@ -98,7 +94,7 @@ class TelegramBot:
             if chat_id:
                 await self.send_message(chat_id, text, parse_mode)
 
-    async def send_photo(self, chat_id: str, photo_url: str, caption: str = "") -> Dict:
+    async def send_photo(self, chat_id: str, photo_url: str, caption: str = "") -> dict:
         """Send a photo."""
         return await self._call_api("sendPhoto", {
             "chat_id": chat_id,
@@ -186,7 +182,7 @@ class TelegramBot:
             return func
         return decorator
 
-    async def handle_update(self, update: Dict) -> None:
+    async def handle_update(self, update: dict) -> None:
         """Handle an incoming update from Telegram."""
         message = update.get("message", {})
         if not message:
@@ -196,9 +192,20 @@ class TelegramBot:
         chat_id = str(message.get("chat", {}).get("id", ""))
         from_user = message.get("from", {})
 
-        # Verify admin
-        if chat_id not in [self.chat_id] + self.admin_chat_ids:
-            await self.send_message(chat_id, "⛔ دسترسی غیرمجاز")
+        if not chat_id:
+            return
+        admin_ids = {c.strip() for c in [self.chat_id, *self.admin_chat_ids] if c and c.strip()}
+        if chat_id not in admin_ids:
+            # Non-admins get the self-service flow, which only touches the
+            # subscription bound to that chat.
+            if text.startswith("/"):
+                from .database import AsyncSessionLocal
+                from .telegram_selfservice import handle_user_command
+
+                cmd, _, args = text.partition(" ")
+                async with AsyncSessionLocal() as db:
+                    reply = await handle_user_command(db, chat_id, cmd, args)
+                await self.send_message(chat_id, reply)
             return
 
         # Handle commands
@@ -282,12 +289,15 @@ class TelegramBot:
         self._running = False
         logger.info("Telegram bot polling stopped")
 
-    async def setup_webhook(self, webhook_url: str) -> Dict:
+    async def setup_webhook(self, webhook_url: str, secret_token: str = "") -> dict:
         """Setup webhook for receiving updates (alternative to polling)."""
-        return await self._call_api("setWebhook", {
+        payload = {
             "url": webhook_url,
             "allowed_updates": ["message", "callback_query"],
-        })
+        }
+        if secret_token:
+            payload["secret_token"] = secret_token
+        return await self._call_api("setWebhook", payload)
 
 
 # Global bot instance

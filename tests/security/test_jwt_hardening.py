@@ -10,24 +10,24 @@ Covers:
 """
 
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
+import jwt as pyjwt
 import pytest
-from jose import jwt as jose_jwt
 
 from app import auth as _auth
-from app.auth import create_access_token, _decode_token_to_user, revoke_token
+from app.auth import _decode_token_to_user, create_access_token
 from app.config import settings
-
 
 # ── token forgery ───────────────────────────────────────────────────────────
 
 
 def test_alg_none_token_is_rejected(monkeypatch):
     """An attacker crafted token with alg=none must NOT validate."""
-    # python-jose refuses to encode with alg=none unless explicitly enabled,
+    # PyJWT refuses to encode with alg=none unless explicitly enabled,
     # so we hand-craft the structure.
-    import base64, json
+    import base64
+    import json
 
     header = base64.urlsafe_b64encode(json.dumps({"alg": "none", "typ": "JWT"}).encode()).rstrip(b"=")
     payload = base64.urlsafe_b64encode(
@@ -44,10 +44,10 @@ def test_alg_none_token_is_rejected(monkeypatch):
 
 def test_token_with_wrong_secret_is_rejected():
     """A token signed with a different secret must not be accepted."""
-    bad = jose_jwt.encode(
+    bad = pyjwt.encode(
         {"sub": "admin", "is_admin": True,
-         "exp": datetime.now(timezone.utc) + timedelta(minutes=5),
-         "iat": datetime.now(timezone.utc)},
+         "exp": datetime.now(UTC) + timedelta(minutes=5),
+         "iat": datetime.now(UTC)},
         "wrong-secret-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         algorithm="HS256",
     )
@@ -60,8 +60,8 @@ def test_token_with_wrong_secret_is_rejected():
 
 
 def test_token_missing_exp_is_rejected():
-    """jose.decode is told to require exp/sub — a missing exp must fail."""
-    bad = jose_jwt.encode(
+    """jwt.decode is told to require exp/sub — a missing exp must fail."""
+    bad = pyjwt.encode(
         {"sub": "admin"},  # no exp, no iat
         settings.jwt_secret_key,
         algorithm="HS256",
@@ -91,7 +91,7 @@ def test_revoked_token_is_rejected(monkeypatch):
     monkeypatch.setattr(_auth, "revoke_token", fake_revoke)
 
     token = create_access_token({"sub": "admin", "is_admin": True})
-    payload = jose_jwt.decode(token, settings.jwt_secret_key, algorithms=["HS256"],
+    payload = pyjwt.decode(token, settings.jwt_secret_key, algorithms=["HS256"],
                               options={"verify_exp": False})
     jti = payload["jti"]
     assert jti, "jti claim must be present on issued tokens"
@@ -109,6 +109,6 @@ def test_revoked_token_is_rejected(monkeypatch):
 def test_issued_token_carries_required_claims():
     """Every issued token must have iat, exp, nbf, jti."""
     token = create_access_token({"sub": "admin", "is_admin": True})
-    payload = jose_jwt.decode(token, settings.jwt_secret_key, algorithms=["HS256"])
+    payload = pyjwt.decode(token, settings.jwt_secret_key, algorithms=["HS256"])
     for claim in ("iat", "exp", "nbf", "jti", "sub"):
         assert claim in payload, f"missing claim: {claim}"

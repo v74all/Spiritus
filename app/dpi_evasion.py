@@ -23,19 +23,15 @@ import hashlib
 import json
 import logging
 import os
-import random
 import secrets
-
 import subprocess
 import time
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import httpx
-
-from .config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -87,7 +83,7 @@ class IranDPIThreat:
 
     # Tier 3: Same-ASN (Hetzner AS24940) — must be scanned
     # Populated dynamically by RealiTLScanner
-    TIER3_SNIS: List[str] = []
+    TIER3_SNIS: list[str] = []
 
     # UDP-based protocols to AVOID (Iran throttles UDP)
     UDP_PROTOCOLS = {"hysteria2", "tuic", "amneziawg"}
@@ -99,7 +95,7 @@ class IranDPIThreat:
     FLOW_CHECK_INTERVAL = 30
 
     @classmethod
-    def get_safe_snis(cls, prefer_iran_domestic: bool = False) -> List[str]:
+    def get_safe_snis(cls, prefer_iran_domestic: bool = False) -> list[str]:
         """Get list of safe SNIs, prioritized by evasion effectiveness."""
         snis = []
         if prefer_iran_domestic:
@@ -147,7 +143,7 @@ class SNIEntry:
     tls13_supported: bool = False
     h2_supported: bool = False
     asn_match: bool = False  # True if SNI's ASN matches server's ASN
-    last_verified: Optional[datetime] = None
+    last_verified: datetime | None = None
     verification_count: int = 0
     blocked: bool = False
     latency_ms: float = 0.0
@@ -164,12 +160,12 @@ class SNIManager:
     """
 
     def __init__(self):
-        self._sni_pool: Dict[str, SNIEntry] = {}
-        self._current_sni: Optional[str] = None
+        self._sni_pool: dict[str, SNIEntry] = {}
+        self._current_sni: str | None = None
         self._rotation_interval = 3600  # 1 hour default
         self._last_rotation: float = 0
-        self._server_asn: Optional[str] = None
-        self._server_ip: Optional[str] = None
+        self._server_asn: str | None = None
+        self._server_ip: str | None = None
         self._scan_lock = asyncio.Lock()
         self._initialized = False
 
@@ -261,7 +257,7 @@ class SNIManager:
         """Mark an SNI as blocked by DPI."""
         if domain in self._sni_pool:
             self._sni_pool[domain].blocked = True
-            self._sni_pool[domain].last_verified = datetime.now(timezone.utc)
+            self._sni_pool[domain].last_verified = datetime.now(UTC)
             logger.warning(f"SNI marked as blocked: {domain}")
 
         # If current SNI is blocked, force rotation
@@ -269,7 +265,7 @@ class SNIManager:
             self._current_sni = None
             self._last_rotation = 0
 
-    async def validate_sni(self, domain: str) -> Dict[str, Any]:
+    async def validate_sni(self, domain: str) -> dict[str, Any]:
         """Validate an SNI for TLS 1.3 and HTTP/2 support."""
         result = {
             "domain": domain,
@@ -317,12 +313,12 @@ class SNIManager:
             self._sni_pool[domain].tls13_supported = result["tls13"]
             self._sni_pool[domain].h2_supported = result["h2"]
             self._sni_pool[domain].latency_ms = result["latency_ms"]
-            self._sni_pool[domain].last_verified = datetime.now(timezone.utc)
+            self._sni_pool[domain].last_verified = datetime.now(UTC)
             self._sni_pool[domain].verification_count += 1
 
         return result
 
-    async def scan_asn_for_snis(self, asn: str = "AS24940") -> List[str]:
+    async def scan_asn_for_snis(self, asn: str = "AS24940") -> list[str]:
         """Scan a specific ASN for valid TLS 1.3 + H2 domains.
 
         Uses RealiTLScanner approach: connect to IPs in the ASN range
@@ -377,7 +373,7 @@ class SNIManager:
                                 except (json.JSONDecodeError, KeyError):
                                     continue
                             logger.info(f"RealiTLScanner found {len(validated)} valid SNIs")
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         proc.kill()
                         logger.warning("RealiTLScanner timed out, using fallback")
                 except Exception as e:
@@ -409,7 +405,7 @@ class SNIManager:
             logger.info(f"ASN scan complete: {len(validated)} valid SNIs found")
             return validated
 
-    async def get_sni_pool_status(self) -> List[Dict[str, Any]]:
+    async def get_sni_pool_status(self) -> list[dict[str, Any]]:
         """Get status of all SNIs in the pool."""
         return [
             {
@@ -468,9 +464,9 @@ class RealityKeyManager:
     def __init__(self):
         self._xray_bin = "/usr/local/bin/xray"
         self._rotation_days = 30  # Rotate keys every 30 days
-        self._keys: Dict[str, Dict[str, Any]] = {}  # key_id -> key data
+        self._keys: dict[str, dict[str, Any]] = {}  # key_id -> key data
 
-    async def generate_key_pair(self) -> Dict[str, str]:
+    async def generate_key_pair(self) -> dict[str, str]:
         """Generate a new REALITY X25519 key pair using xray binary.
 
         The pair is then persisted to /etc/v7lthronyx/secrets.json via
@@ -520,7 +516,7 @@ class RealityKeyManager:
         import uuid
         return str(uuid.uuid4())
 
-    async def rotate_keys(self, agent_id: int) -> Dict[str, Any]:
+    async def rotate_keys(self, agent_id: int) -> dict[str, Any]:
         """Rotate REALITY keys for an agent.
 
         Returns:
@@ -536,19 +532,19 @@ class RealityKeyManager:
             "agent_id": agent_id,
             "private_key": new_keys["private_key"],
             "public_key": new_keys["public_key"],
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "expires_at": (datetime.now(timezone.utc) + timedelta(days=self._rotation_days)).isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
+            "expires_at": (datetime.now(UTC) + timedelta(days=self._rotation_days)).isoformat(),
         }
 
         self._keys[key_id] = key_data
         logger.info(f"REALITY keys rotated for agent {agent_id}: key_id={key_id}")
         return key_data
 
-    def get_active_keys(self) -> List[Dict[str, Any]]:
+    def get_active_keys(self) -> list[dict[str, Any]]:
         """Get all active (non-expired) key pairs."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         active = []
-        for key_id, data in self._keys.items():
+        for _key_id, data in self._keys.items():
             expires = datetime.fromisoformat(data["expires_at"])
             if expires > now:
                 active.append(data)
@@ -560,7 +556,7 @@ class RealityKeyManager:
         if not data:
             return True
         expires = datetime.fromisoformat(data["expires_at"])
-        return datetime.now(timezone.utc) > expires
+        return datetime.now(UTC) > expires
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -598,12 +594,12 @@ class ActiveProbingDefense:
     }
 
     def __init__(self):
-        self._probes_detected: Dict[str, List[float]] = defaultdict(list)
+        self._probes_detected: dict[str, list[float]] = defaultdict(list)
         self._fallback_type = "corporate"
         self._probe_threshold = 5  # Max probes before blocking
         self._probe_window = 300  # 5 minutes
 
-    def generate_fallback_response(self, path: str = "/") -> Dict[str, Any]:
+    def generate_fallback_response(self, path: str = "/") -> dict[str, Any]:
         """Generate a realistic HTTP fallback response for active probing.
 
         This is what the Xray fallback server will serve to non-proxy
@@ -699,7 +695,7 @@ class ActiveProbingDefense:
         port: int = 443,
         dest: str = "",
         sni: str = "",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Generate Xray fallback configuration for active probing defense.
 
         This config makes Xray serve a realistic website to non-proxy
@@ -710,22 +706,22 @@ class ActiveProbingDefense:
         return {
             "fallbacks": [
                 {
-                    "dest": dest or f"127.0.0.1:8443",
+                    "dest": dest or "127.0.0.1:8443",
                     "xver": 1,
                 },
                 {
                     "path": "/robots.txt",
-                    "dest": dest or f"127.0.0.1:8443",
+                    "dest": dest or "127.0.0.1:8443",
                     "xver": 1,
                 },
                 {
                     "path": "/favicon.ico",
-                    "dest": dest or f"127.0.0.1:8443",
+                    "dest": dest or "127.0.0.1:8443",
                     "xver": 1,
                 },
                 {
                     "alpn": "h2",
-                    "dest": dest or f"127.0.0.1:8443",
+                    "dest": dest or "127.0.0.1:8443",
                     "xver": 1,
                 },
             ],
@@ -773,7 +769,7 @@ class ActiveProbingDefense:
 
         return False
 
-    def get_probe_stats(self) -> Dict[str, Any]:
+    def get_probe_stats(self) -> dict[str, Any]:
         """Get statistics about detected probes."""
         now = time.time()
         active_probes = {}
@@ -811,9 +807,9 @@ class FlowRateLimiter:
 
     def __init__(self):
         # user_id -> list of (timestamp, bytes) tuples
-        self._flow_history: Dict[int, List[Tuple[float, int]]] = defaultdict(list)
+        self._flow_history: dict[int, list[tuple[float, int]]] = defaultdict(list)
         # user_id -> current rate limit state
-        self._user_state: Dict[int, Dict[str, Any]] = {}
+        self._user_state: dict[int, dict[str, Any]] = {}
         self._alert_callback = None
 
     def set_alert_callback(self, callback):
@@ -856,7 +852,7 @@ class FlowRateLimiter:
 
         return round(mbps, 2)
 
-    def check_rate_limit(self, user_id: int) -> Dict[str, Any]:
+    def check_rate_limit(self, user_id: int) -> dict[str, Any]:
         """Check if a user is within rate limits.
 
         Returns:
@@ -913,7 +909,7 @@ class FlowRateLimiter:
         self._user_state[user_id] = state
         return result
 
-    def get_xray_rate_limit_config(self, user_id: int) -> Dict[str, Any]:
+    def get_xray_rate_limit_config(self, user_id: int) -> dict[str, Any]:
         """Generate Xray rate limit configuration for a user.
 
         Returns Xray-level bandwidth shaping config.
@@ -932,7 +928,7 @@ class FlowRateLimiter:
                 "rate_limit_up": "0 Mbps",
             }
 
-    def get_all_rates(self) -> List[Dict[str, Any]]:
+    def get_all_rates(self) -> list[dict[str, Any]]:
         """Get current rates for all users."""
         results = []
         for user_id in list(self._flow_history.keys()):
@@ -974,7 +970,7 @@ class DPISafeConfigGenerator:
         xhttp_mode: str = "auto",
         port: int = 443,
         fallback_dest: str = "127.0.0.1:8443",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Generate a DPI-safe VLESS + XHTTP + REALITY inbound.
 
         This is the PRIMARY protocol stack for Iran:
@@ -1031,7 +1027,7 @@ class DPISafeConfigGenerator:
         sni: str = "objects.githubusercontent.com",
         port: int = 443,
         fallback_dest: str = "127.0.0.1:8443",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Generate a DPI-safe VLESS + Vision + REALITY inbound.
 
         Alternative to XHTTP: uses TCP with xtls-rprx-vision flow.
@@ -1079,7 +1075,7 @@ class DPISafeConfigGenerator:
         server_address: str = "",
         api_port: int = 10085,
         fallback_dest: str = "127.0.0.1:8443",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Generate a complete DPI-safe Xray configuration.
 
         Includes:
@@ -1225,7 +1221,7 @@ class DPISafeConfigGenerator:
         xhttp_path: str = "/api/v2/stream",
         xhttp_mode: str = "auto",
         port: int = 443,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Generate DPI-safe client configuration.
 
         Returns both XHTTP and Vision client configs.
@@ -1283,9 +1279,9 @@ class IPReputationMonitor:
     def __init__(self):
         self._last_check: float = 0
         self._check_interval = 3600  # 1 hour
-        self._reputation_data: Dict[str, Any] = {}
+        self._reputation_data: dict[str, Any] = {}
 
-    async def check_ip_reputation(self, ip: str = "") -> Dict[str, Any]:
+    async def check_ip_reputation(self, ip: str = "") -> dict[str, Any]:
         """Check IP reputation against known blacklists.
 
         Uses ip-api.com (free, no API key required) for basic reputation
@@ -1304,7 +1300,7 @@ class IPReputationMonitor:
             "is_clean": True,
             "blacklists": {},
             "risk_score": 0,
-            "checked_at": datetime.now(timezone.utc).isoformat(),
+            "checked_at": datetime.now(UTC).isoformat(),
         }
 
         # Check via ip-api.com (free, no auth required)
@@ -1336,7 +1332,7 @@ class IPReputationMonitor:
         """Check if the server IP has clean reputation."""
         return self._reputation_data.get("is_clean", True)
 
-    def get_reputation(self) -> Dict[str, Any]:
+    def get_reputation(self) -> dict[str, Any]:
         """Get cached reputation data."""
         return self._reputation_data
 

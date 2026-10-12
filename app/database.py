@@ -4,10 +4,11 @@ Database module for V7LTHRONYX VPN Panel.
 Uses SQLAlchemy 2.0 with async support and PostgreSQL.
 """
 
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy.orm import declarative_base
-from typing import AsyncGenerator
 import logging
+from collections.abc import AsyncGenerator
+
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.orm import declarative_base
 
 from .config import settings
 
@@ -61,7 +62,7 @@ async def safe_refresh(db: AsyncSession, instance) -> None:
         logger.warning("safe_refresh: could not refresh %r: %s", instance, exc)
 
 
-async def get_async_db() -> AsyncGenerator[AsyncSession, None]:
+async def get_async_db() -> AsyncGenerator[AsyncSession]:
     """Dependency to get async database session."""
     async with AsyncSessionLocal() as session:
         try:

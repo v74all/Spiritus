@@ -13,6 +13,7 @@
 
   var ALLOWED_CALLS = new Set([
     'applyFilter',
+    'applyUserPreset',
     'autoSelectBestSNI',
     'cleanupBackups',
     'closeActivity',

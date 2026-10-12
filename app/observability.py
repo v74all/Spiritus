@@ -14,10 +14,6 @@ Prometheus/Grafana:
 
 import logging
 import os
-from typing import Dict, Any, Optional
-from dataclasses import dataclass
-
-from .config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -46,15 +42,15 @@ def setup_opentelemetry(app=None):
         return False
     try:
         from opentelemetry import trace
+        from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+        from opentelemetry.sdk.resources import SERVICE_NAME, Resource
         from opentelemetry.sdk.trace import TracerProvider
         from opentelemetry.sdk.trace.export import BatchSpanProcessor
-        from opentelemetry.sdk.resources import Resource, SERVICE_NAME
-        from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 
         # Create resource
         resource = Resource.create({
             SERVICE_NAME: "v7lthronyx-vpn-panel",
-            "service.version": "2.0.0",
+            "service.version": "2.1.0",
             "deployment.environment": "production",
         })
 
@@ -382,7 +378,7 @@ groups:
 
 def generate_grafana_provisioning(
     output_dir: str = "/opt/v7lthronyx/grafana",
-) -> Dict[str, str]:
+) -> dict[str, str]:
     """Generate Grafana provisioning configuration files."""
     import json
     os.makedirs(output_dir, exist_ok=True)

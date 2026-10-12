@@ -18,18 +18,14 @@ Generates Xray/sing-box/WireGuard configurations for all supported protocols:
 - ECH (Encrypted Client Hello) support
 """
 
-import json
-import uuid
 import base64
-import hashlib
-import secrets
+import json
 import logging
-from typing import Dict, Any, Optional, List
+import secrets
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Any
 from urllib.parse import urlencode
-
-from .config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +61,7 @@ class ProtocolSpec:
     backend: ProtocolBackend
     description: str
     description_fa: str
-    config_fields: List[Dict[str, Any]] = field(default_factory=list)
+    config_fields: list[dict[str, Any]] = field(default_factory=list)
     requires_tls: bool = False
     supports_cdn: bool = False
     supports_reality: bool = False
@@ -76,7 +72,7 @@ class ProtocolSpec:
 #  Protocol Registry
 # ═══════════════════════════════════════════════════════════════
 
-PROTOCOLS: Dict[str, ProtocolSpec] = {
+PROTOCOLS: dict[str, ProtocolSpec] = {
     # ── Xray-core protocols ──
     "vless_xhttp_reality": ProtocolSpec(
         key="vless_xhttp_reality",
@@ -348,6 +344,21 @@ PROTOCOLS: Dict[str, ProtocolSpec] = {
             {"key": "front_domain", "type": "string", "default": "chat.deepseek.com", "label": "SNI Domain"},
         ],
     ),
+    "wireguard": ProtocolSpec(
+        key="wireguard",
+        name="WireGuard",
+        name_fa="WireGuard",
+        category=ProtocolCategory.wireguard,
+        backend=ProtocolBackend.wireguard,
+        description="Plain WireGuard tunnel (no obfuscation). Fast, but easily fingerprinted by DPI.",
+        description_fa="تونل WireGuard ساده (بدون مبهم‌سازی). سریع ولی توسط DPI به‌راحتی شناسایی می‌شود.",
+        config_fields=[
+            {"key": "port", "type": "int", "default": 51821, "label": "Port"},
+            {"key": "address", "type": "string", "default": "10.9.0.1/24", "label": "Address"},
+            {"key": "dns", "type": "string", "default": "1.1.1.1", "label": "DNS"},
+            {"key": "mtu", "type": "int", "default": 1420, "label": "MTU"},
+        ],
+    ),
     "amneziawg": ProtocolSpec(
         key="amneziawg",
         name="AmneziaWG 2.0",
@@ -392,8 +403,8 @@ class XrayConfigGenerator:
         reality_sni: str = "digikala.com",
         xhttp_path: str = "/xhttp-stream",
         xhttp_mode: str = "auto",
-        ech_config: Optional[Dict] = None,
-    ) -> Dict[str, Any]:
+        ech_config: dict | None = None,
+    ) -> dict[str, Any]:
         """Generate VLESS + XHTTP + REALITY inbound config."""
         config = {
             "tag": "vless-xhttp-reality",
@@ -444,8 +455,8 @@ class XrayConfigGenerator:
         reality_dest: str = "objects.githubusercontent.com:443",
         reality_sni: str = "objects.githubusercontent.com",
         flow: str = "xtls-rprx-vision",
-        ech_config: Optional[Dict] = None,
-    ) -> Dict[str, Any]:
+        ech_config: dict | None = None,
+    ) -> dict[str, Any]:
         """Generate VLESS + REALITY + Vision inbound config."""
         config = {
             "tag": "vless-vision-reality",
@@ -492,7 +503,7 @@ class XrayConfigGenerator:
         reality_sni: str = "digikala.com",
         tunnel_port: int = 0,
         backhaul_mode: str = "rathole",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Generate VLESS-Reverse-Reality (backhaul tunnel) config.
 
         This creates:
@@ -571,7 +582,7 @@ class XrayConfigGenerator:
         port: int = 443,
         sni: str = "www.aparat.com",
         ws_path: str = "/api/v1/stream",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Generate VMess + WS + TLS inbound config."""
         return {
             "tag": "vmess-ws-tls",
@@ -604,7 +615,7 @@ class XrayConfigGenerator:
         port: int = 2057,
         ws_path: str = "/vless-ws",
         host: str = "",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Generate VLESS + WS + TLS inbound config."""
         ws_settings = {"path": ws_path}
         if host:
@@ -632,7 +643,7 @@ class XrayConfigGenerator:
         port: int = 2052,
         ws_path: str = "/",
         host: str = "",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Generate VLESS + WS Plain (no TLS) inbound for domain fronting.
 
         Used with Iranian trusted domains (snapp.ir, digikala.com) as the
@@ -669,7 +680,7 @@ class XrayConfigGenerator:
         grpc_port: int = 2060,
         sni: str = "",
         domain: str = "",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Generate Trojan + WS/gRPC + TLS (CDN) inbound config."""
         inbounds = [
             {
@@ -722,7 +733,7 @@ class XrayConfigGenerator:
         user_key: str,
         port: int = 2056,
         method: str = "2022-blake3-aes-128-gcm",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Generate Shadowsocks-2022 inbound config.
 
         SS-2022 multi-user form: the inbound carries the server PSK in
@@ -732,7 +743,7 @@ class XrayConfigGenerator:
         behaviour) makes Xray try to base64-decode the whole string and
         fail with "illegal base64 data" at the ':' separator.
         """
-        settings: Dict[str, Any] = {
+        settings: dict[str, Any] = {
             "method": method,
             "password": server_key,
             "network": "tcp,udp",
@@ -753,9 +764,9 @@ class XrayConfigGenerator:
         port: int = 2054,
         service_name: str = "GunService",
         sni: str = "",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Generate VLESS + gRPC inbound config (CDN compatible)."""
-        stream: Dict[str, Any] = {
+        stream: dict[str, Any] = {
             "network": "grpc",
             "grpcSettings": {"serviceName": service_name},
         }
@@ -783,12 +794,12 @@ class XrayConfigGenerator:
         path: str = "/httpupgrade",
         host: str = "",
         sni: str = "",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Generate VLESS + HTTPUpgrade inbound config."""
-        hu_settings: Dict[str, Any] = {"path": path}
+        hu_settings: dict[str, Any] = {"path": path}
         if host:
             hu_settings["host"] = host
-        stream: Dict[str, Any] = {
+        stream: dict[str, Any] = {
             "network": "httpupgrade",
             "httpupgradeSettings": hu_settings,
         }
@@ -811,10 +822,10 @@ class XrayConfigGenerator:
 
     @staticmethod
     def generate_full_config(
-        inbounds: List[Dict],
+        inbounds: list[dict],
         outbound_tag: str = "direct",
         api_port: int = 10085,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Generate a complete Xray config.json with all inbounds."""
         return {
             "log": {
@@ -899,8 +910,8 @@ class SingboxConfigGenerator:
     """
 
     @staticmethod
-    def _tls_block(sni: str, cert_path: str, key_path: str, alpn: Optional[List[str]] = None) -> Dict[str, Any]:
-        tls: Dict[str, Any] = {"enabled": True}
+    def _tls_block(sni: str, cert_path: str, key_path: str, alpn: list[str] | None = None) -> dict[str, Any]:
+        tls: dict[str, Any] = {"enabled": True}
         if sni:
             tls["server_name"] = sni
         if cert_path and key_path:
@@ -922,9 +933,9 @@ class SingboxConfigGenerator:
         bandwidth_up: str = "100 mbps",
         bandwidth_down: str = "200 mbps",
         masquerade: str = "https://www.bing.com",
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Hysteria2 QUIC inbound with optional Salamander obfuscation."""
-        inbound: Dict[str, Any] = {
+        inbound: dict[str, Any] = {
             "type": "hysteria2",
             "tag": "hysteria2-in",
             "listen": "::",
@@ -941,6 +952,30 @@ class SingboxConfigGenerator:
         return [inbound]
 
     @staticmethod
+    def hysteria2_port_hop_rules(
+        port_range: str, target_port: int = 8443, interface: str = ""
+    ) -> list[list[str]]:
+        """iptables/ip6tables NAT rules redirecting a UDP port range to the Hysteria2 listener.
+
+        Clients hop across the range (``mport``); the server needs one REDIRECT per
+        IP family. Returned as argv lists, never executed here.
+        """
+        lo_s, _, hi_s = port_range.partition("-")
+        if not (lo_s.isdigit() and hi_s.isdigit()):
+            raise ValueError("port range must look like 20000-30000")
+        lo, hi = int(lo_s), int(hi_s)
+        if not (1024 <= lo < hi <= 65535) or lo <= target_port <= hi:
+            raise ValueError("invalid port-hop range (must be 1024-65535 and exclude the target port)")
+        rules = []
+        for binary in ("iptables", "ip6tables"):
+            rule = [binary, "-t", "nat", "-A", "PREROUTING"]
+            if interface:
+                rule += ["-i", interface]
+            rule += ["-p", "udp", "--dport", f"{lo}:{hi}", "-j", "REDIRECT", "--to-ports", str(target_port)]
+            rules.append(rule)
+        return rules
+
+    @staticmethod
     def generate_tuic(
         uuid: str,
         password: str,
@@ -951,9 +986,9 @@ class SingboxConfigGenerator:
         congestion_control: str = "cubic",
         udp_relay: str = "native",
         zero_rtt: bool = False,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """TUIC v5 QUIC inbound."""
-        inbound: Dict[str, Any] = {
+        inbound: dict[str, Any] = {
             "type": "tuic",
             "tag": "tuic-in",
             "listen": "::",
@@ -974,7 +1009,7 @@ class SingboxConfigGenerator:
         handshake_port: int = 443,
         version: int = 3,
         ss_method: str = "2022-blake3-aes-128-gcm",
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """ShadowTLS v3 inbound + the Shadowsocks detour it wraps.
 
         ShadowTLS only does the TLS-camouflage handshake; the actual
@@ -982,7 +1017,7 @@ class SingboxConfigGenerator:
         via `detour`.
         """
         detour_tag = "shadowtls-ss-in"
-        shadowtls_in: Dict[str, Any] = {
+        shadowtls_in: dict[str, Any] = {
             "type": "shadowtls",
             "tag": "shadowtls-in",
             "listen": "::",
@@ -992,7 +1027,7 @@ class SingboxConfigGenerator:
             "handshake": {"server": handshake_server, "server_port": handshake_port},
             "detour": detour_tag,
         }
-        ss_detour: Dict[str, Any] = {
+        ss_detour: dict[str, Any] = {
             "type": "shadowsocks",
             "tag": detour_tag,
             "listen": "127.0.0.1",
@@ -1010,9 +1045,9 @@ class SingboxConfigGenerator:
         sni: str = "",
         cert_path: str = "",
         key_path: str = "",
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """NaiveProxy (naive) inbound — HTTP/2 CONNECT over TLS."""
-        inbound: Dict[str, Any] = {
+        inbound: dict[str, Any] = {
             "type": "naive",
             "tag": "naive-in",
             "listen": "::",
@@ -1023,7 +1058,7 @@ class SingboxConfigGenerator:
         return [inbound]
 
     @staticmethod
-    def generate_full_config(inbounds: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def generate_full_config(inbounds: list[dict[str, Any]]) -> dict[str, Any]:
         """Wrap rendered inbounds into a complete sing-box config."""
         return {
             "log": {"level": "warn", "timestamp": True},
@@ -1052,7 +1087,7 @@ class MieruConfigGenerator:
         protocol: str = "TCP",
         mtu: int = 1400,
         logging_level: str = "INFO",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         proto = (protocol or "TCP").upper()
         if proto not in ("TCP", "UDP"):
             proto = "TCP"
@@ -1072,7 +1107,7 @@ class MieruConfigGenerator:
         protocol: str = "TCP",
         mtu: int = 1400,
         profile_name: str = "v7lthronyx",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Mieru has no universal URI scheme; clients import a JSON profile."""
         proto = (protocol or "TCP").upper()
         if proto not in ("TCP", "UDP"):
@@ -1138,7 +1173,7 @@ class ClientConfigGenerator:
         host: str = "",
         xhttp_mode: str = "",
         allow_insecure: bool = False,
-        ech: Optional[Dict] = None,
+        ech: dict | None = None,
         label: str = "",
         # DPI evasion parameters
         fragment: bool = False,
@@ -1322,12 +1357,15 @@ class ClientConfigGenerator:
         obfs: str = "",
         insecure: int = 0,
         label: str = "",
+        port_hop: str = "",
     ) -> str:
-        """Generate Hysteria2 share URL."""
+        """Generate Hysteria2 share URL. ``port_hop`` is a range like ``20000-30000``."""
         params = {
             "sni": sni,
             "insecure": str(insecure),
         }
+        if port_hop:
+            params["mport"] = port_hop
         if obfs:
             params["obfs"] = "salamander"
             params["obfs-password"] = obfs
@@ -1401,7 +1439,7 @@ class ECHManager:
     """
 
     @staticmethod
-    def generate_ech_keys() -> Dict[str, str]:
+    def generate_ech_keys() -> dict[str, str]:
         """Generate ECH key pair (HPKE public/private keys)."""
         # In production, use hpke library. For now, generate placeholder keys.
         private_key = secrets.token_hex(32)
@@ -1418,7 +1456,7 @@ class ECHManager:
         config_id: int = 0,
         kem_id: int = 32,  # DHKEM(X25519, HKDF-SHA256)
         sym_id: int = 1,   # HKDF-SHA256 + AES-128-GCM
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Generate ECHConfig for DNS HTTPS record."""
         return {
             "version": 0xfe0d,
@@ -1433,7 +1471,7 @@ class ECHManager:
 
     @staticmethod
     def generate_dns_https_record(
-        ech_config: Dict[str, Any],
+        ech_config: dict[str, Any],
         target: str = ".",
         port: int = 443,
     ) -> str:

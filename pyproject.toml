@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "spiritus"
-version = "2.0.0"
+version = "2.1.0"
 description = "Enterprise VPN Management Panel with FastAPI, PostgreSQL, and advanced security"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -41,12 +41,12 @@ classifiers = [
 dependencies = [
     "fastapi>=0.104.0",
     "uvicorn[standard]>=0.24.0",
-    "sqlalchemy>=2.0.0",
+    "sqlalchemy[asyncio]>=2.0.0",
     "asyncpg>=0.29.0",
     "redis>=5.0.0",
     "pydantic>=2.0.0",
     "pydantic-settings>=2.0.0",
-    "python-jose[cryptography]>=3.3.0",
+    "PyJWT>=2.10.1",
     "pyotp>=2.9.0",
     "argon2-cffi>=23.2.0",
     "python-dotenv>=1.0.0",
@@ -120,6 +120,8 @@ exclude = '''
 [tool.ruff]
 line-length = 100
 target-version = "py310"
+
+[tool.ruff.lint]
 select = [
     "E",     # pycodestyle errors
     "W",     # pycodestyle warnings
@@ -134,7 +136,16 @@ select = [
 ignore = [
     "E501",  # line too long (handled by black)
     "C901",  # complex function
+    "B008",  # FastAPI Depends()/Query() in defaults is idiomatic
+    "ARG001",  # FastAPI dependency parameters are intentionally unused
+    "ARG002",
+    "ARG004",
+    "ARG005",
+    "E402",  # sys.path bootstrap imports
+    "SIM105",
+    "B904",
 ]
+
 exclude = [
     ".git",
     "__pycache__",
@@ -143,6 +154,16 @@ exclude = [
     ".pytest_cache",
     ".mypy_cache",
 ]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["B017"]
+"app/api/compat/*.py" = ["F403", "F405", "F401"]  # sections share helpers via _core
+
+[tool.bandit]
+exclude_dirs = ["tests", ".venv", "venv"]
+# B101: assert in tests. B104: "0.0.0.0" literals are generated Xray/sing-box
+# listen addresses for client-facing inbounds, not panel bind addresses.
+skips = ["B101", "B104"]
 
 [tool.mypy]
 python_version = "3.10"
@@ -206,10 +227,6 @@ profile = "black"
 line_length = 100
 skip_glob = ["*/venv/*"]
 known_first_party = ["app"]
-
-[tool.bandit]
-skips = ["B101"]
-exclude_dirs = ["/test/", "/tests/", "/.venv/", "/venv/"]
 
 [tool.pylint.messages_control]
 max-line-length = 100

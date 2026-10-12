@@ -102,7 +102,7 @@ type-check:
 
 security:
 	@echo "🔐 Running security scans..."
-	bandit -r app/ main.py security.py models.py -f screen
+	bandit -c pyproject.toml -r app/ main.py security.py models.py -f screen
 	@echo ""
 	@echo "Running pip-audit..."
 	pip-audit --desc

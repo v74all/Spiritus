@@ -422,3 +422,15 @@ psql -U spiritus -d spiritus -c "SELECT COUNT(*) FROM audit_logs;"
 - **Issues**: https://github.com/v74all/Spiritus/issues
 - **Discussions**: https://github.com/v74all/Spiritus/discussions
 - **Documentation**: [README.md](README.md)
+
+---
+
+## Upgrading to the security/feature release (Unreleased)
+
+1. **Install new dependencies**: `pip install -c constraints.txt -r requirements.txt` (adds `PyJWT`, `greenlet`; removes `python-jose`, `passlib`, `pycryptodome`).
+2. **Run migrations**: `alembic upgrade head` (004: audit hash-chain columns; 005: `resellers.parent_id`, `reseller_ledger`, `vpn_users.telegram_chat_id`). Audit rows written before 004 have no hash and are skipped by verification.
+3. **JWT**: tokens are still HS256 with the same `JWT_SECRET_KEY`; existing sessions keep working. Passwords hashed with passlib-argon2 verify unchanged.
+4. **Backups**: new backups are encrypted (`.json.enc`). Set `BACKUP_ENCRYPTION_KEY` (otherwise a key derived from `SECRET_KEY` is used — rotating `SECRET_KEY` would then make old backups unreadable).
+5. **Mobile clients**: login/2FA responses now include `refresh_token` and `refresh_expires_in`. Old clients keep working; new clients should call `/api/mobile/auth/refresh` (single-use: always store the newly returned refresh token).
+6. **Optional**: `ADMIN_IP_ALLOWLIST` (comma-separated CIDRs; loopback is always allowed), `TELEGRAM_WEBHOOK_SECRET` (then register the webhook with `secret_token`), `MOBILE_REFRESH_LIFETIME_DAYS`.
+

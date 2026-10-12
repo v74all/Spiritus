@@ -53,74 +53,81 @@
     <div class="nav-drawer-body">
 
       <div class="nav-section">
+        <div class="nav-section-label">Help / راهنما</div>
+        <button class="nav-btn" onclick="showModal('help-modal');closeDrawer()" title="Step-by-step guide, explanations and tips">
+          <span class="nav-btn-icon">?</span>Getting Started <span class="nav-fa">/ راهنمای شروع</span>
+        </button>
+      </div>
+
+      <div class="nav-section">
         <div class="nav-section-label">Quick Actions</div>
-        <button class="nav-btn nav-btn-primary" onclick="showModal('add-modal');closeDrawer()">
-          <span class="nav-btn-icon">+</span>Add User
+        <button class="nav-btn nav-btn-primary" onclick="showModal('add-modal');closeDrawer()" title="Create a VPN account with a traffic limit and an expiry date">
+          <span class="nav-btn-icon">+</span>Add User <span class="nav-fa">/ افزودن کاربر</span>
         </button>
-        <button class="nav-btn" onclick="showModal('bulk-modal');closeDrawer()">
-          <span class="nav-btn-icon">&#x229E;</span>Bulk Create
+        <button class="nav-btn" onclick="showModal('bulk-modal');closeDrawer()" title="Create many accounts at once, e.g. 50 users for a reseller">
+          <span class="nav-btn-icon">&#x229E;</span>Bulk Create <span class="nav-fa">/ ساخت گروهی</span>
         </button>
-        <button class="nav-btn" onclick="forceSync();closeDrawer()">
-          <span class="nav-btn-icon">&#x21BA;</span>Sync
+        <button class="nav-btn" onclick="forceSync();closeDrawer()" title="Apply the current users and settings to the VPN server">
+          <span class="nav-btn-icon">&#x21BA;</span>Sync <span class="nav-fa">/ همگام‌سازی</span>
         </button>
       </div>
 
       <div class="nav-section">
         <div class="nav-section-label">Views</div>
-        <button class="nav-btn" id="btn-groups" onclick="switchMainView('groups');closeDrawer()">
-          <span class="nav-btn-icon">&#x25AB;</span>Groups
+        <button class="nav-btn" id="btn-groups" onclick="switchMainView('groups');closeDrawer()" title="Users grouped by their name prefix">
+          <span class="nav-btn-icon">&#x25AB;</span>Groups <span class="nav-fa">/ گروه‌ها</span>
         </button>
-        <button class="nav-btn" id="btn-users" onclick="switchMainView('users');closeDrawer()" style="display:none">
-          <span class="nav-btn-icon">&#x25AA;</span>Users
+        <button class="nav-btn" id="btn-users" onclick="switchMainView('users');closeDrawer()" style="display:none" title="Show the full user list">
+          <span class="nav-btn-icon">&#x25AA;</span>Users <span class="nav-fa">/ کاربران</span>
         </button>
-        <button class="nav-btn" onclick="showModal('agents-modal');closeDrawer()">
-          <span class="nav-btn-icon">&#x25C8;</span>Agents
+        <button class="nav-btn" onclick="showModal('agents-modal');closeDrawer()" title="Sub-admins (agents) who get their own user quota">
+          <span class="nav-btn-icon">&#x25C8;</span>Agents <span class="nav-fa">/ نمایندگان</span>
         </button>
       </div>
 
       <div class="nav-section">
         <div class="nav-section-label">Monitor</div>
-        <button class="nav-btn" onclick="showModal('sysmon-modal');closeDrawer()">
-          <span class="nav-btn-icon">&#x25C9;</span>System Monitor
+        <button class="nav-btn" onclick="showModal('sysmon-modal');closeDrawer()" title="CPU, memory, disk and network usage of this server">
+          <span class="nav-btn-icon">&#x25C9;</span>System Monitor <span class="nav-fa">/ وضعیت سرور</span>
         </button>
-        <button class="nav-btn" onclick="showModal('online-modal');closeDrawer()">
-          <span class="nav-btn-icon">&#x25CE;</span>Online Users
+        <button class="nav-btn" onclick="showModal('online-modal');closeDrawer()" title="Who is connected right now">
+          <span class="nav-btn-icon">&#x25CE;</span>Online Users <span class="nav-fa">/ کاربران آنلاین</span>
         </button>
       </div>
 
       <div class="nav-section">
         <div class="nav-section-label">Analytics</div>
-        <button class="nav-btn" onclick="showModal('search-modal');closeDrawer()">
-          <span class="nav-btn-icon">&#x2315;</span>Search
+        <button class="nav-btn" onclick="showModal('search-modal');closeDrawer()" title="Find users by name, note or UUID">
+          <span class="nav-btn-icon">&#x2315;</span>Search <span class="nav-fa">/ جستجو</span>
         </button>
-        <button class="nav-btn" onclick="showModal('report-modal');closeDrawer()">
-          <span class="nav-btn-icon">&#x2261;</span>Report
+        <button class="nav-btn" onclick="showModal('report-modal');closeDrawer()" title="Summary of users, traffic and expiring accounts">
+          <span class="nav-btn-icon">&#x2261;</span>Report <span class="nav-fa">/ گزارش</span>
         </button>
-        <button class="nav-btn" onclick="showModal('analytics-modal');closeDrawer()">
-          <span class="nav-btn-icon">&#x25B2;</span>Analytics
+        <button class="nav-btn" onclick="showModal('analytics-modal');closeDrawer()" title="Traffic charts and top users">
+          <span class="nav-btn-icon">&#x25B2;</span>Analytics <span class="nav-fa">/ آمار</span>
         </button>
       </div>
 
       <div class="nav-section">
         <div class="nav-section-label">Data</div>
-        <button class="nav-btn" onclick="showModal('backup-modal');closeDrawer()">
-          <span class="nav-btn-icon">&#x229D;</span>Backup
+        <button class="nav-btn" onclick="showModal('backup-modal');closeDrawer()" title="Create or restore a backup of users and settings">
+          <span class="nav-btn-icon">&#x229D;</span>Backup <span class="nav-fa">/ پشتیبان‌گیری</span>
         </button>
-        <button class="nav-btn" onclick="doExportCSV();closeDrawer()">
-          <span class="nav-btn-icon">&#x229F;</span>Export CSV
+        <button class="nav-btn" onclick="doExportCSV();closeDrawer()" title="Download all users as a spreadsheet">
+          <span class="nav-btn-icon">&#x229F;</span>Export CSV <span class="nav-fa">/ خروجی CSV</span>
         </button>
-        <button class="nav-btn" onclick="doExportJSON();closeDrawer()">
-          <span class="nav-btn-icon">{ }</span>Export JSON
+        <button class="nav-btn" onclick="doExportJSON();closeDrawer()" title="Download all users as JSON">
+          <span class="nav-btn-icon">{ }</span>Export JSON <span class="nav-fa">/ خروجی JSON</span>
         </button>
       </div>
 
       <div class="nav-section">
         <div class="nav-section-label">Security</div>
-        <button class="nav-btn nav-btn-orange" onclick="showModal('aggressive-modal');closeDrawer()">
-          <span class="nav-btn-icon">&#x26A1;</span>Resilience
+        <button class="nav-btn nav-btn-orange" onclick="showModal('aggressive-modal');closeDrawer()" title="Advanced: tools that test and strengthen connectivity on filtered networks">
+          <span class="nav-btn-icon">&#x26A1;</span>Resilience <span class="nav-fa">/ پایداری شبکه</span>
         </button>
-        <button class="nav-btn nav-btn-danger" onclick="showModal('fightback-modal');closeDrawer()">
-          <span class="nav-btn-icon">&#x2694;</span>Counter
+        <button class="nav-btn nav-btn-danger" onclick="showModal('fightback-modal');closeDrawer()" title="Advanced: counter-measure tools. Use only if you know what they do">
+          <span class="nav-btn-icon">&#x2694;</span>Counter <span class="nav-fa">/ مقابله</span>
         </button>
       </div>
 
@@ -129,11 +136,11 @@
         <button class="nav-btn dir-toggle" onclick="toggleDirection();closeDrawer()">
           <span class="nav-btn-icon">&#x21C4;</span>Toggle {{ 'RTL' if dir == 'ltr' else 'LTR' }}
         </button>
-        <button class="nav-btn" onclick="showModal('settings-modal');closeDrawer()">
-          <span class="nav-btn-icon">&#x2699;</span>Settings
+        <button class="nav-btn" onclick="showModal('settings-modal');closeDrawer()" title="Protocols, domains, DPI evasion, Telegram and security settings">
+          <span class="nav-btn-icon">&#x2699;</span>Settings <span class="nav-fa">/ تنظیمات</span>
         </button>
-        <button class="nav-btn nav-btn-logout" onclick="doLogout()">
-          <span class="nav-btn-icon">&#x23FB;</span>Logout
+        <button class="nav-btn nav-btn-logout" onclick="doLogout()" title="Sign out of the panel">
+          <span class="nav-btn-icon">&#x23FB;</span>Logout <span class="nav-fa">/ خروج</span>
         </button>
       </div>
 
@@ -204,20 +211,113 @@
   </div>
 </div>
 
+<!-- ── Help Modal ── -->
+<div id="help-modal" class="modal-overlay" onclick="if(event.target===this)closeModal(this.id)">
+  <div class="modal modal-xl help-modal" style="max-height:calc(100vh - 40px);overflow-y:auto;-webkit-overflow-scrolling:touch">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <h3 style="margin:0">Getting Started / راهنمای شروع</h3>
+      <button class="btn btn-outline btn-sm" onclick="closeModal('help-modal')">✕</button>
+    </div>
+
+    <section class="help-section">
+      <h4><span class="help-en">First setup — 5 steps</span><span class="help-fa" lang="fa">راه‌اندازی اولیه — ۵ قدم</span></h4>
+      <ol class="help-steps help-en">
+        <li><b>Choose protocols.</b> Open <i>Settings → Protocols</i> and keep only what you need. If unsure, enable <b>VLESS Reality (Vision)</b> plus one backup such as <b>Hysteria2</b>. Press <b>Save</b>.</li>
+        <li><b>Add a user.</b> Click <i>Add User</i>, pick a plan, press <i>Create User</i>.</li>
+        <li><b>Send the link.</b> On the user's card press the QR / Config button and send the <b>Subscription Link</b> to your customer. They only need to paste it into an app.</li>
+        <li><b>Sync.</b> If you created users in bulk without applying them, press <i>Sync</i> so the server accepts them.</li>
+        <li><b>Protect the panel.</b> Change the admin password, enable 2FA, and create a <i>Backup</i>.</li>
+      </ol>
+      <ol class="help-steps help-fa" lang="fa">
+        <li><b>پروتکل‌ها را انتخاب کنید.</b> از <i>Settings ← Protocols</i> فقط موارد لازم را روشن بگذارید. اگر مطمئن نیستید، <b>VLESS Reality (Vision)</b> به‌همراه یک پشتیبان مثل <b>Hysteria2</b> را فعال کنید و <b>Save</b> بزنید.</li>
+        <li><b>کاربر بسازید.</b> روی <i>Add User</i> بزنید، یک پلن انتخاب کنید و <i>Create User</i> را بزنید.</li>
+        <li><b>لینک را بفرستید.</b> روی کارت کاربر، دکمهٔ QR / Config را بزنید و <b>لینک اشتراک</b> را برای مشتری بفرستید. او فقط باید آن را در برنامه وارد کند.</li>
+        <li><b>همگام‌سازی.</b> اگر کاربران را گروهی و بدون اعمال روی سرور ساخته‌اید، <i>Sync</i> را بزنید.</li>
+        <li><b>پنل را امن کنید.</b> رمز ادمین را عوض کنید، 2FA را فعال کنید و یک <i>Backup</i> بسازید.</li>
+      </ol>
+    </section>
+
+    <section class="help-section">
+      <h4><span class="help-en">What do the labels mean?</span><span class="help-fa" lang="fa">این برچسب‌ها یعنی چه؟</span></h4>
+      <dl class="help-dl help-en">
+        <dt>Online</dt><dd>Connected right now.</dd>
+        <dt>Active</dt><dd>Enabled and not expired — allowed to connect.</dd>
+        <dt>Disabled</dt><dd>Turned off by you, or traffic ran out.</dd>
+        <dt>Expiring</dt><dd>Will expire within a few days — good time to remind the customer.</dd>
+        <dt>Agent</dt><dd>A sub-admin with their own user quota. Agents can only see their own users.</dd>
+        <dt>Group</dt><dd>Users sharing a name prefix (e.g. <code>1gig-001</code>, <code>1gig-002</code>).</dd>
+      </dl>
+      <dl class="help-dl help-fa" lang="fa">
+        <dt>Online</dt><dd>همین الان وصل است.</dd>
+        <dt>Active</dt><dd>فعال و منقضی‌نشده — اجازهٔ اتصال دارد.</dd>
+        <dt>Disabled</dt><dd>توسط شما خاموش شده یا حجمش تمام شده است.</dd>
+        <dt>Expiring</dt><dd>تا چند روز دیگر منقضی می‌شود — زمان خوبی برای یادآوری به مشتری.</dd>
+        <dt>Agent</dt><dd>زیرمجموعه (نماینده) با سهمیهٔ کاربر مخصوص خودش؛ فقط کاربران خودش را می‌بیند.</dd>
+        <dt>Group</dt><dd>کاربرانی با پیشوند نام یکسان (مثل <code>1gig-001</code>).</dd>
+      </dl>
+    </section>
+
+    <section class="help-section">
+      <h4><span class="help-en">Which protocol should I use?</span><span class="help-fa" lang="fa">کدام پروتکل را انتخاب کنم؟</span></h4>
+      <table class="help-table">
+        <thead><tr><th>Protocol</th><th class="help-en">Best for</th><th class="help-fa" lang="fa">مناسب برای</th></tr></thead>
+        <tbody>
+          <tr><td>VLESS Reality / Vision / XHTTP</td><td class="help-en">Heavily filtered networks. Best default.</td><td class="help-fa" lang="fa">شبکه‌های با فیلترینگ شدید؛ بهترین انتخاب پیش‌فرض.</td></tr>
+          <tr><td>Hysteria2 / TUIC</td><td class="help-en">Speed (video, games). Needs UDP.</td><td class="help-fa" lang="fa">سرعت (ویدیو، بازی)؛ نیاز به UDP دارد.</td></tr>
+          <tr><td>CDN / WS / gRPC / Trojan-CDN</td><td class="help-en">When the server IP is blocked; traffic goes through a CDN.</td><td class="help-fa" lang="fa">وقتی آی‌پی سرور بسته شده؛ ترافیک از CDN رد می‌شود.</td></tr>
+          <tr><td>VMess / Shadowsocks 2022</td><td class="help-en">Compatibility with old apps.</td><td class="help-fa" lang="fa">سازگاری با برنامه‌های قدیمی.</td></tr>
+          <tr><td>WireGuard / AmneziaWG / OpenVPN</td><td class="help-en">Whole-device VPN with a native app.</td><td class="help-fa" lang="fa">وی‌پی‌ان کل دستگاه با برنامهٔ اختصاصی.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="help-section">
+      <h4><span class="help-en">Good habits</span><span class="help-fa" lang="fa">نکات مهم</span></h4>
+      <ul class="help-steps help-en">
+        <li>Never post a user's subscription link publicly — anyone with it can use the account.</li>
+        <li>Keep <b>Resilience</b> and <b>Counter</b> off unless you know exactly why you need them.</li>
+        <li>Create a backup before changing Settings or upgrading.</li>
+        <li>If a customer cannot connect: ask them to refresh the subscription in the app first, then try another protocol.</li>
+      </ul>
+      <ul class="help-steps help-fa" lang="fa">
+        <li>لینک اشتراک کاربر را هرگز عمومی نگذارید؛ هر کس آن را داشته باشد می‌تواند از حساب استفاده کند.</li>
+        <li><b>Resilience</b> و <b>Counter</b> را فقط در صورتی روشن کنید که دقیقاً بدانید برای چه لازم است.</li>
+        <li>قبل از تغییر تنظیمات یا آپدیت، Backup بگیرید.</li>
+        <li>اگر مشتری وصل نمی‌شود: اول در برنامه اشتراک را به‌روزرسانی کند، بعد پروتکل دیگری را امتحان کند.</li>
+      </ul>
+    </section>
+
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="closeModal('help-modal');showModal('add-modal')">+ Add User / افزودن کاربر</button>
+      <button class="btn btn-outline" onclick="closeModal('help-modal')">Close / بستن</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── Add Modal ── -->
 <div id="add-modal" class="modal-overlay" onclick="if(event.target===this)closeModal(this.id)">
   <div class="modal">
-    <h3>New User</h3>
-    <div class="form-group"><label>Username</label>
+    <h3>New User / کاربر جدید</h3>
+    <div class="hint-box">
+      <span class="help-en">Pick a plan below or type your own values. After you create the user, open their card and send them the <b>subscription link</b>.</span>
+      <span class="help-fa" lang="fa">یک پلن را انتخاب کنید یا مقدار دلخواه بنویسید. بعد از ساخت کاربر، «لینک اشتراک» را از کارت او برایش بفرستید.</span>
+    </div>
+    <div class="preset-row">
+      <button type="button" class="btn btn-outline btn-sm" onclick="applyUserPreset(10,30)">10 GB / 30d</button>
+      <button type="button" class="btn btn-outline btn-sm" onclick="applyUserPreset(30,30)">30 GB / 30d</button>
+      <button type="button" class="btn btn-outline btn-sm" onclick="applyUserPreset(100,60)">100 GB / 60d</button>
+      <button type="button" class="btn btn-outline btn-sm" onclick="applyUserPreset(0,30)">Unlimited / نامحدود</button>
+    </div>
+    <div class="form-group"><label>Username / نام کاربری</label>
       <input type="text" id="add-name" placeholder="e.g. ali"></div>
-    <div class="form-group"><label>Traffic (GB)</label>
-      <input type="number" id="add-traffic" value="10" min="0.1" step="0.1"></div>
-    <div class="form-group"><label>Duration (days)</label>
-      <input type="number" id="add-days" value="30" min="1"></div>
+    <div class="form-group"><label>Traffic (GB) / حجم <small class="field-hint">0 = unlimited / نامحدود</small></label>
+      <input type="number" id="add-traffic" value="10" min="0" step="0.1"></div>
+    <div class="form-group"><label>Duration (days) / مدت <small class="field-hint">days from today, 0 = never expires / روز از امروز، ۰ = بدون انقضا</small></label>
+      <input type="number" id="add-days" value="30" min="0"></div>
     <div class="form-group" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-      <div><label>Speed Down (KB/s)</label>
+      <div><label>Speed Down (KB/s) <small class="field-hint">0 = no limit</small></label>
         <input type="number" id="add-speed-down" value="200" min="0"></div>
-      <div><label>Speed Up (KB/s)</label>
+      <div><label>Speed Up (KB/s) <small class="field-hint">0 = no limit</small></label>
         <input type="number" id="add-speed-up" value="200" min="0"></div>
     </div>
     <div class="form-group"><label>Note</label>

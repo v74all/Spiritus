@@ -22,7 +22,7 @@ the operator's form data never strands the running panel.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -50,8 +50,8 @@ router = APIRouter(prefix="/protocols", tags=["protocols"])
 
 class ProtocolConfigUpdate(BaseModel):
     """Body for PUT /protocols/{key}/config."""
-    config: Dict[str, Any] = Field(default_factory=dict)
-    enabled: Optional[bool] = None
+    config: dict[str, Any] = Field(default_factory=dict)
+    enabled: bool | None = None
 
 
 class ProtocolStatusResponse(BaseModel):
@@ -59,26 +59,26 @@ class ProtocolStatusResponse(BaseModel):
     enabled_in_db: bool
     running: bool
     connections: int
-    last_started_at: Optional[str] = None
-    last_error: Optional[str] = None
+    last_started_at: str | None = None
+    last_error: str | None = None
 
 
 class SyncResponse(BaseModel):
     success: bool
     config_path: str
     validator_output: str = ""
-    reload_method: Optional[str] = None
+    reload_method: str | None = None
     rolled_back: bool = False
-    error: Optional[str] = None
+    error: str | None = None
     started_at: str
-    finished_at: Optional[str] = None
+    finished_at: str | None = None
 
 
 # ═══════════════════════════════════════════════════════════════
 #  Helpers
 # ═══════════════════════════════════════════════════════════════
 
-def _spec_to_dict(spec: ProtocolSpec, enabled: bool = False) -> Dict[str, Any]:
+def _spec_to_dict(spec: ProtocolSpec, enabled: bool = False) -> dict[str, Any]:
     return {
         "key": spec.key,
         "name": spec.name,
@@ -123,8 +123,8 @@ async def _resolve_target_agent_id(db: AsyncSession) -> int:
 async def _upsert_protocol_config(
     db: AsyncSession,
     protocol_key: str,
-    config_payload: Dict[str, Any],
-    enabled: Optional[bool],
+    config_payload: dict[str, Any],
+    enabled: bool | None,
 ) -> ProtocolConfig:
     """Find or create the ProtocolConfig row for (agent, protocol_key).
 
@@ -176,7 +176,7 @@ async def _upsert_protocol_config(
 #  Endpoints
 # ═══════════════════════════════════════════════════════════════
 
-@router.get("", response_model=List[Dict[str, Any]])
+@router.get("", response_model=list[dict[str, Any]])
 async def list_protocols(
     admin: User = Depends(get_current_admin),
     db: AsyncSession = Depends(get_async_db),
@@ -192,7 +192,7 @@ async def list_protocols(
     )
     enabled_keys = {row[0] for row in result.all()}
 
-    out: List[Dict[str, Any]] = []
+    out: list[dict[str, Any]] = []
     for key, spec in PROTOCOLS.items():
         out.append(_spec_to_dict(spec, enabled=key in enabled_keys))
     return out
@@ -283,7 +283,7 @@ async def update_protocol_config(
         # Always-allowed meta keys; these are not rendered into the
         # Xray inbound but are useful for the orchestrator.
         known_keys.update({"reality_private_key", "reality_public_key", "reality_short_id"})
-        for k in payload.config.keys():
+        for k in payload.config:
             if k not in known_keys:
                 raise HTTPException(
                     status_code=422,
@@ -343,7 +343,7 @@ async def force_sync(
 #  Misc
 # ═══════════════════════════════════════════════════════════════
 
-def _sync_to_dict(sync: SyncResult) -> Dict[str, Any]:
+def _sync_to_dict(sync: SyncResult) -> dict[str, Any]:
     """Convert SyncResult dataclass → JSON-friendly dict for the
     Pydantic response model."""
     return {

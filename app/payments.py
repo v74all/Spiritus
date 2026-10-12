@@ -13,25 +13,22 @@ Features:
 - Reseller commission tracking
 """
 
-import json
-import time
-import hashlib
-import secrets
 import logging
-from typing import Dict, Any, Optional, List
-from datetime import datetime, timedelta, timezone
-from .timeutil import utcnow as _utcnow
+import secrets
 from dataclasses import dataclass
-from enum import Enum
+from datetime import timedelta
+from typing import Any
 
 import httpx
-from sqlalchemy import select, and_
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from .database import safe_refresh
 
-from .models import Payment, PaymentGateway, PaymentStatus, VpnUser, Reseller
+from .commissions import credit_commissions
 from .config import settings
+from .database import safe_refresh
+from .models import Payment, PaymentGateway, PaymentStatus, VpnUser
+from .timeutil import utcnow as _utcnow
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +47,7 @@ class PaymentPlan:
     price_irr: int  # Iranian Rial
     price_usdt: float = 0  # USDT cents
 
-PLANS: Dict[str, PaymentPlan] = {
+PLANS: dict[str, PaymentPlan] = {
     "basic": PaymentPlan(
         id="basic",
         name="Basic",
@@ -112,7 +109,7 @@ class ZarinpalGateway:
         description: str = "V7LTHRONYX VPN Subscription",
         email: str = "",
         mobile: str = "",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Create a Zarinpal payment request."""
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.post(
@@ -152,7 +149,7 @@ class ZarinpalGateway:
         self,
         authority: str,
         amount: int,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Verify a Zarinpal payment."""
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.post(
@@ -202,7 +199,7 @@ class IDPayGateway:
         name: str = "",
         email: str = "",
         phone: str = "",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Create an IDPay payment request."""
         headers = {
             "X-API-KEY": self.api_key,
@@ -247,7 +244,7 @@ class IDPayGateway:
         self,
         payment_id: str,
         order_id: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Verify an IDPay payment."""
         headers = {
             "X-API-KEY": self.api_key,
@@ -298,7 +295,7 @@ class USDTGateway:
         expected_amount_micro: int,
         since_timestamp: int = 0,
         tx_hash: str = "",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Check for incoming USDT TRC-20 payments."""
         headers = {}
         if self.api_key:
@@ -376,7 +373,7 @@ class PaymentManager:
     """Unified payment manager for all gateways."""
 
     def __init__(self):
-        self._gateways: Dict[str, Any] = {}
+        self._gateways: dict[str, Any] = {}
 
     def setup_zarinpal(self, merchant_id: str, sandbox: bool = False, callback_url: str = ""):
         self._gateways["zarinpal"] = ZarinpalGateway(merchant_id, sandbox, callback_url)
@@ -393,8 +390,8 @@ class PaymentManager:
         user_id: int,
         plan_id: str,
         gateway: str = "zarinpal",
-        reseller_id: Optional[int] = None,
-    ) -> Dict[str, Any]:
+        reseller_id: int | None = None,
+    ) -> dict[str, Any]:
         """Create a new payment."""
         plan = PLANS.get(plan_id)
         if not plan:
@@ -492,7 +489,7 @@ class PaymentManager:
         payment_id: int,
         gateway: str = "zarinpal",
         **kwargs,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Verify and complete a payment."""
         result = await db.execute(
             select(Payment).where(Payment.id == payment_id).with_for_update()
@@ -575,17 +572,10 @@ class PaymentManager:
                             user.expire_at = _utcnow() + timedelta(days=payment.plan_days)
                     user.active = 1
 
-            # Process reseller commission
-            if payment.reseller_id:
-                reseller_result = await db.execute(
-                    select(Reseller).where(Reseller.id == payment.reseller_id)
-                )
-                reseller = reseller_result.scalar_one_or_none()
-                if reseller:
-                    commission = int(payment.amount * reseller.commission_rate / 100)
-                    reseller.balance += commission
-
             try:
+                # Seller commission plus overrides for ancestors in the reseller tree.
+                if payment.reseller_id:
+                    await credit_commissions(db, payment)
                 await db.commit()
             except IntegrityError:
                 await db.rollback()
@@ -606,7 +596,7 @@ class PaymentManager:
 
     async def get_user_payments(
         self, db: AsyncSession, user_id: int
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Get payment history for a user."""
         result = await db.execute(
             select(Payment)

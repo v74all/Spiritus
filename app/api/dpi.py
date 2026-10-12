@@ -17,21 +17,22 @@ Endpoints:
 - GET  /dpi/threat-model     — Iran DPI threat model info
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
-from typing import Optional, List, Dict, Any
 import logging
 
-from ..auth import get_current_admin, User
+from fastapi import APIRouter, Depends
+from pydantic import BaseModel, Field
+
+from ..auth import User, get_current_admin
 from ..dpi_evasion import (
-    sni_manager,
-    reality_key_manager,
+    IranDPIThreat,
     active_probing_defense,
+    dpi_safe_generator,
     flow_rate_limiter,
     ip_reputation_monitor,
-    dpi_safe_generator,
-    IranDPIThreat,
+    reality_key_manager,
+    sni_manager,
 )
+from ..evasion_rotation import UTLS_FINGERPRINTS, fingerprint_rotator, protocol_rotator
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/dpi", tags=["dpi-evasion"])
@@ -60,6 +61,13 @@ class DPIConfigGenerateRequest(BaseModel):
     xhttp_mode: str = Field("auto")
     port: int = Field(443)
     server_address: str = Field("")
+
+class FingerprintFlagRequest(BaseModel):
+    fingerprint: str = Field(..., pattern="^(" + "|".join(UTLS_FINGERPRINTS) + ")$")
+
+class ProtocolReportRequest(BaseModel):
+    protocol: str = Field(..., min_length=1, max_length=64)
+    ok: bool
 
 class MessageResponse(BaseModel):
     message: str
@@ -215,6 +223,39 @@ async def mark_sni_blocked(
     """Mark an SNI as blocked by DPI."""
     await sni_manager.mark_sni_blocked(req.domain)
     return MessageResponse(message=f"SNI '{req.domain}' marked as blocked")
+
+
+@router.get("/fingerprint")
+async def get_fingerprint(admin: User = Depends(get_current_admin)):
+    """Current uTLS fingerprint (rotates automatically on its interval)."""
+    fingerprint_rotator.current()
+    return fingerprint_rotator.status()
+
+
+@router.post("/fingerprint/rotate")
+async def rotate_fingerprint(admin: User = Depends(get_current_admin)):
+    fingerprint_rotator.rotate()
+    return fingerprint_rotator.status()
+
+
+@router.post("/fingerprint/flag")
+async def flag_fingerprint(req: FingerprintFlagRequest, admin: User = Depends(get_current_admin)):
+    """Quarantine a fingerprint that is being blocked; a new one is chosen."""
+    fingerprint_rotator.mark_flagged(req.fingerprint)
+    fingerprint_rotator.current()
+    return fingerprint_rotator.status()
+
+
+@router.get("/protocol-rotation")
+async def get_protocol_rotation(admin: User = Depends(get_current_admin)):
+    return protocol_rotator.status()
+
+
+@router.post("/protocol-rotation/report")
+async def report_protocol_health(req: ProtocolReportRequest, admin: User = Depends(get_current_admin)):
+    """Feed probe/user results; after repeated failures the next protocol becomes active."""
+    protocol_rotator.report(req.protocol, req.ok)
+    return protocol_rotator.status()
 
 
 @router.get("/keys")

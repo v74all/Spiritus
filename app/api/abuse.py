@@ -9,17 +9,19 @@ Endpoints:
 - GET  /abuse/port-scans - Get port scan alerts
 """
 
-from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel
-from typing import List, Optional
 import logging
 
-from ..auth import get_current_admin, User
+from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel
+
 from ..abuse_prevention import (
-    generate_egress_iptables_rules, BLOCKED_PORTS,
-    anomaly_detector, port_scan_detector, AnomalyAlert
+    BLOCKED_PORTS,
+    anomaly_detector,
+    generate_egress_iptables_rules,
+    port_scan_detector,
 )
-from ..privileged_helper import helper_request, PrivilegedHelperError
+from ..auth import User, get_current_admin
+from ..privileged_helper import PrivilegedHelperError, helper_request
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/abuse", tags=["abuse-prevention"])

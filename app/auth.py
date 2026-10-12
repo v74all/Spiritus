@@ -8,22 +8,24 @@ Supports:
 - Session management
 """
 
-from fastapi import Depends, HTTPException, status, Request
-from fastapi.security import OAuth2PasswordBearer, HTTPBearer, HTTPAuthorizationCredentials
-from jose import JWTError, jwt
-from passlib.context import CryptContext
-from datetime import datetime, timedelta, timezone
-from typing import Optional, Dict, Any
-import pyotp
 import logging
 import re
-import secrets as _secrets
 import uuid
+from datetime import UTC, datetime, timedelta
+from typing import Any
+
+import jwt
+import pyotp
+from argon2 import PasswordHasher
+from argon2.exceptions import InvalidHashError, VerificationError
+from fastapi import Depends, HTTPException, Request, status
+from fastapi.security import HTTPBearer, OAuth2PasswordBearer
+from jwt import PyJWTError as JWTError
 from pydantic import BaseModel
+from sqlalchemy import select
 
 from .config import settings
 from .database import AsyncSession, get_async_db
-from sqlalchemy import select
 
 # JWT algorithm is pinned. We explicitly pass it to jwt.decode() and refuse to
 # fall back to any other algorithm — this defends against alg-confusion and
@@ -33,8 +35,8 @@ _JWT_ALG = "HS256"
 # Configure logging
 logger = logging.getLogger(__name__)
 
-# Password hashing
-pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
+# Password hashing (Argon2id; hashes created by the former passlib backend stay valid)
+_hasher = PasswordHasher()
 
 # OAuth2 scheme
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/token")
@@ -46,35 +48,38 @@ class Token(BaseModel):
     token_type: str
     expires_in: int
     totp_required: bool = False
-    totp_uri: Optional[str] = None
+    totp_uri: str | None = None
 
 class TokenData(BaseModel):
-    username: Optional[str] = None
-    user_id: Optional[int] = None
+    username: str | None = None
+    user_id: int | None = None
     is_admin: bool = False
 
 class User(BaseModel):
     id: int
     username: str
     is_admin: bool
-    totp_secret: Optional[str] = None
+    totp_secret: str | None = None
 
 # Utility functions
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a password against the hashed version."""
-    return pwd_context.verify(plain_password, hashed_password)
+    try:
+        return _hasher.verify(hashed_password, plain_password)
+    except (VerificationError, InvalidHashError):
+        return False
 
 def get_password_hash(password: str) -> str:
     """Generate a password hash."""
-    return pwd_context.hash(password)
+    return _hasher.hash(password)
 
 def create_access_token(
-    data: Dict[str, Any],
-    expires_delta: Optional[timedelta] = None,
+    data: dict[str, Any],
+    expires_delta: timedelta | None = None,
 ) -> str:
     """Create a JWT access token with `jti` (revocable) and `iat`/`nbf` claims."""
     to_encode = data.copy()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if expires_delta:
         expire = now + expires_delta
     else:
@@ -98,7 +103,7 @@ _COMMON_PASSWORDS = {
 }
 
 
-def validate_password_strength(pw: str) -> Optional[str]:
+def validate_password_strength(pw: str) -> str | None:
     """Return None if password is acceptable, else a human-readable reason."""
     if pw is None or len(pw) < 12:
         return "Password must be at least 12 characters long."
@@ -157,6 +162,52 @@ async def revoke_token(jti: str, ttl_seconds: int) -> None:
         logger.warning("token revocation failed: Redis unavailable")
 
 
+async def is_session_family_revoked(family: str | None) -> bool:
+    """True when a refresh-token family was revoked (logout or refresh-token reuse)."""
+    if not family:
+        return False
+    try:
+        from .redis_client import get_redis
+        redis = await get_redis()
+        return bool(await redis.get(f"session_family_revoked:{family}"))
+    except Exception:
+        return not settings.debug
+
+
+async def revoke_session_family(family: str, ttl_seconds: int) -> None:
+    if not family:
+        return
+    try:
+        from .redis_client import get_redis
+        redis = await get_redis()
+        await redis.setex(f"session_family_revoked:{family}", max(ttl_seconds, 1), "1")
+    except Exception:
+        logger.warning("session family revocation failed: Redis unavailable")
+
+
+async def revoke_request_token(request: Request) -> str | None:
+    """Revoke the access token carried by this request (cookie or Bearer).
+
+    Returns the revoked jti, or None when no valid token was present. Expired or
+    malformed tokens are ignored — there is nothing left to revoke.
+    """
+    token = request.cookies.get("access_token")
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.lower().startswith("bearer "):
+        token = auth_header.split(" ", 1)[1].strip()
+    if not token:
+        return None
+    try:
+        payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[_JWT_ALG])
+    except JWTError:
+        return None
+    jti, exp = payload.get("jti"), payload.get("exp")
+    if not jti or not exp:
+        return None
+    await revoke_token(str(jti), int(exp - datetime.now(UTC).timestamp()))
+    return str(jti)
+
+
 async def invalidate_sessions(username: str) -> None:
     """Invalidate every previously-issued token for this admin at once.
 
@@ -175,7 +226,7 @@ async def invalidate_sessions(username: str) -> None:
         # so comparing it against a sub-second float epoch could reject a
         # token minted in the very same second as the invalidation (e.g. the
         # replacement cookie this same request is about to issue).
-        now = int(datetime.now(timezone.utc).timestamp())
+        now = int(datetime.now(UTC).timestamp())
         await redis.setex(
             f"pwd_epoch:{username}",
             settings.session_lifetime_hours * 3600,
@@ -220,9 +271,9 @@ async def _decode_token_to_user(token: str, db: AsyncSession) -> User:
             algorithms=[_JWT_ALG],
             options={"require": ["exp", "iat", "sub", "nbf"]},
         )
-        username: Optional[str] = payload.get("sub")
+        username: str | None = payload.get("sub")
         is_admin: bool = bool(payload.get("is_admin", False))
-        jti: Optional[str] = payload.get("jti")
+        jti: str | None = payload.get("jti")
         iat = payload.get("iat")
         if username is None:
             raise credentials_exception
@@ -230,6 +281,9 @@ async def _decode_token_to_user(token: str, db: AsyncSession) -> User:
         raise credentials_exception
 
     if jti and await _is_token_revoked(jti):
+        raise credentials_exception
+
+    if await is_session_family_revoked(payload.get("fam")):
         raise credentials_exception
 
     if await _tokens_invalidated_since(username, iat):
@@ -243,10 +297,10 @@ async def _decode_token_to_user(token: str, db: AsyncSession) -> User:
     # Brief lockout / disabled-account check (the model carries `locked_until`).
     locked_until = getattr(admin, "locked_until", None)
     if locked_until is not None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         # Tolerate naive timestamps (sqlite legacy rows).
         if locked_until.tzinfo is None:
-            locked_until = locked_until.replace(tzinfo=timezone.utc)
+            locked_until = locked_until.replace(tzinfo=UTC)
         if locked_until > now:
             raise credentials_exception
     # Resolve role → is_admin. Deny if role is missing/unknown; only explicit
@@ -307,7 +361,7 @@ async def get_current_admin_cookie(
 async def get_optional_user_cookie(
     request: Request,
     db: AsyncSession = Depends(get_async_db),
-) -> Optional[User]:
+) -> User | None:
     """Get the current user from cookie/header, or None if not authenticated."""
     try:
         token = request.cookies.get("access_token")

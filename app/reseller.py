@@ -15,30 +15,29 @@ Self-Service Portal:
 - QR code generation
 """
 
-import json
-import secrets
 import logging
-from typing import Dict, Any, Optional, List
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
+from typing import Any
+
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from .auth import get_password_hash, validate_password_strength, verify_password
+from .commissions import MAX_TREE_DEPTH, ancestors
+from .database import safe_refresh
+from .models import (
+    Agent,
+    Payment,
+    PaymentStatus,
+    Reseller,
+    VpnUser,
+)
+from .payments import PLANS, payment_manager
+from .protocol_engine import ClientConfigGenerator
+from .services.user_names import taken_vpn_user_names
 from .timeutil import utcnow as _utcnow
 
-from sqlalchemy import select, and_, func
-from sqlalchemy.ext.asyncio import AsyncSession
-from .database import safe_refresh
-from passlib.context import CryptContext
-
-from .models import (
-    VpnUser, Reseller, Payment, Agent,
-    PaymentGateway, PaymentStatus,
-)
-from .payments import payment_manager, PLANS
-from .protocol_engine import ClientConfigGenerator, xray_gen
-from .orchestrator import orchestrator
-from .auth import validate_password_strength
-
 logger = logging.getLogger(__name__)
-
-pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -56,11 +55,24 @@ class ResellerManager:
         commission_rate: float = 10.0,
         max_users: int = 100,
         max_traffic_gb: float = 1000,
-    ) -> Dict[str, Any]:
-        """Create a new reseller account."""
+        parent_id: int | None = None,
+    ) -> dict[str, Any]:
+        """Create a reseller; with ``parent_id`` it becomes a sub-reseller."""
         password_error = validate_password_strength(password)
         if password_error:
             return {"success": False, "error": password_error}
+        if parent_id is not None:
+            parent = (
+                await db.execute(select(Reseller).where(Reseller.id == parent_id))
+            ).scalar_one_or_none()
+            if parent is None or not parent.active:
+                return {"success": False, "error": "Parent reseller not found or disabled"}
+            if len(await ancestors(db, parent)) >= MAX_TREE_DEPTH:
+                return {"success": False, "error": f"Reseller tree depth limit ({MAX_TREE_DEPTH}) reached"}
+            if commission_rate > parent.commission_rate:
+                return {"success": False, "error": "Commission rate cannot exceed the parent's rate"}
+            if max_users > parent.max_users or max_traffic_gb > parent.max_traffic_gb:
+                return {"success": False, "error": "Limits cannot exceed the parent's limits"}
         # Check if username exists
         existing = await db.execute(
             select(Reseller).where(Reseller.username == username)
@@ -70,10 +82,11 @@ class ResellerManager:
 
         reseller = Reseller(
             username=username,
-            password_hash=pwd_context.hash(password),
+            password_hash=get_password_hash(password),
             commission_rate=commission_rate,
             max_users=max_users,
             max_traffic_gb=max_traffic_gb,
+            parent_id=parent_id,
         )
         db.add(reseller)
         await db.commit()
@@ -84,27 +97,42 @@ class ResellerManager:
             "id": reseller.id,
             "username": reseller.username,
             "commission_rate": reseller.commission_rate,
+            "parent_id": reseller.parent_id,
         }
+
+    async def downline(self, db: AsyncSession, reseller_id: int) -> list[Reseller]:
+        """All descendants (breadth-first), bounded by the tree depth limit."""
+        found: list[Reseller] = []
+        frontier = [reseller_id]
+        for _ in range(MAX_TREE_DEPTH):
+            if not frontier:
+                break
+            rows = (
+                await db.execute(select(Reseller).where(Reseller.parent_id.in_(frontier)))
+            ).scalars().all()
+            found.extend(rows)
+            frontier = [r.id for r in rows]
+        return found
 
     async def authenticate_reseller(
         self, db: AsyncSession, username: str, password: str
-    ) -> Optional[Reseller]:
+    ) -> Reseller | None:
         """Authenticate a reseller."""
         result = await db.execute(
             select(Reseller).where(
                 Reseller.username == username,
-                Reseller.active == True,
+                Reseller.active.is_(True),
             )
         )
         reseller = result.scalar_one_or_none()
 
-        if reseller and pwd_context.verify(password, reseller.password_hash):
+        if reseller and verify_password(password, reseller.password_hash):
             return reseller
         return None
 
     async def get_reseller_stats(
         self, db: AsyncSession, reseller_id: int
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Get reseller statistics."""
         # User count
         user_count = await db.execute(
@@ -168,8 +196,8 @@ class ResellerManager:
         name: str,
         traffic_limit_gb: float,
         days: int,
-        agent_id: Optional[int] = None,
-    ) -> Dict[str, Any]:
+        agent_id: int | None = None,
+    ) -> dict[str, Any]:
         """Create a VPN user under a reseller."""
         # Check limits
         reseller_result = await db.execute(
@@ -195,6 +223,9 @@ class ResellerManager:
             agent_check = await db.execute(select(Agent).where(Agent.id == agent_id))
             if agent_check.scalar_one_or_none() is None:
                 return {"success": False, "error": f"Agent {agent_id} not found"}
+
+        if await taken_vpn_user_names(db, [name]):
+            return {"success": False, "error": f"User '{name}' already exists"}
 
         # Create user
         import uuid
@@ -242,7 +273,7 @@ class SelfServicePortal:
 
     async def get_user_status(
         self, db: AsyncSession, user_uuid: str
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Get user subscription status."""
         result = await db.execute(
             select(VpnUser).where(VpnUser.uuid == user_uuid)
@@ -281,7 +312,7 @@ class SelfServicePortal:
         user_uuid: str,
         protocol: str = "vless_vision_reality",
         server_address: str = "",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Get user configuration for a specific protocol."""
         result = await db.execute(
             select(VpnUser).where(VpnUser.uuid == user_uuid)
@@ -291,15 +322,13 @@ class SelfServicePortal:
         if not user:
             return {"success": False, "error": "User not found"}
 
-        if not server_address:
-            # Try to get from agent
-            if user.agent_id:
-                agent_result = await db.execute(
-                    select(Agent).where(Agent.id == user.agent_id)
-                )
-                agent = agent_result.scalar_one_or_none()
-                if agent:
-                    server_address = agent.address
+        if not server_address and user.agent_id:
+            agent_result = await db.execute(
+                select(Agent).where(Agent.id == user.agent_id)
+            )
+            agent = agent_result.scalar_one_or_none()
+            if agent:
+                server_address = agent.address
 
         # Generate share URL based on protocol
         share_url = ""
@@ -358,7 +387,7 @@ class SelfServicePortal:
             "qr_data": share_url,  # Frontend generates QR from this
         }
 
-    async def get_available_plans(self) -> List[Dict[str, Any]]:
+    async def get_available_plans(self) -> list[dict[str, Any]]:
         """Get available subscription plans."""
         return [
             {
@@ -379,7 +408,7 @@ class SelfServicePortal:
         user_uuid: str,
         plan_id: str,
         gateway: str = "zarinpal",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Create a payment for user subscription renewal."""
         result = await db.execute(
             select(VpnUser).where(VpnUser.uuid == user_uuid)
@@ -399,7 +428,7 @@ class SelfServicePortal:
 
     async def get_user_payments(
         self, db: AsyncSession, user_uuid: str
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Get payment history for a user."""
         result = await db.execute(
             select(VpnUser).where(VpnUser.uuid == user_uuid)

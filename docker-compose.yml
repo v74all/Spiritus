@@ -63,6 +63,14 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS:-}
       METRICS_BEARER_TOKEN: ${METRICS_BEARER_TOKEN:?METRICS_BEARER_TOKEN must be set in .env}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      ADMIN_IP_ALLOWLIST: ${ADMIN_IP_ALLOWLIST:-}
+      BACKUP_ENCRYPTION_KEY: ${BACKUP_ENCRYPTION_KEY:-}
+      MOBILE_REFRESH_LIFETIME_DAYS: ${MOBILE_REFRESH_LIFETIME_DAYS:-30}
+    init: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     ports:
       - "127.0.0.1:38471:38471"
       - "127.0.0.1:10085:10085"

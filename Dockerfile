@@ -1,5 +1,5 @@
 # ═══ Stage 1: Builder ═══
-FROM python:3.11-slim AS builder
+FROM python:3.13-slim AS builder
 
 WORKDIR /build
 
@@ -9,13 +9,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+COPY requirements.txt constraints.txt ./
+RUN pip install --no-cache-dir --prefix=/install -c constraints.txt -r requirements.txt
 
 # ═══ Stage 2: Runtime ═══
-FROM python:3.11-slim
+FROM python:3.13-slim
 
 WORKDIR /app
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
 # Install runtime dependencies only
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -44,4 +47,5 @@ USER appuser
 EXPOSE 38471 10085
 
 # Run migrations and start app
-CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 38471"]
+# Bound to all interfaces inside the container only; compose publishes it on 127.0.0.1.
+CMD ["sh", "-c", "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 38471 --proxy-headers --forwarded-allow-ips=${FORWARDED_ALLOW_IPS:-127.0.0.1}"]

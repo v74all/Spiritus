@@ -106,7 +106,41 @@ body{font-family:var(--font-body);background:var(--bg0);color:var(--t1);
   box-shadow:0 8px 24px rgba(0,0,0,.4)}
 .toast.show{transform:translateX(-50%) translateY(0)}
 
+/* Plain-language helpers */
+.banner{display:flex;gap:12px;align-items:flex-start;padding:14px 16px;border-radius:var(--radius);margin-bottom:16px;
+  border:1px solid var(--border);background:var(--bg2);font-size:14px;line-height:1.6}
+.banner b{display:block;font-size:15px;margin-bottom:2px}
+.banner-ico{font-size:22px;line-height:1.2}
+.banner-ok{border-color:rgba(0,232,70,.35);background:var(--green-bg)}
+.banner-warn{border-color:rgba(240,192,64,.4);background:var(--yellow-bg)}
+.banner-bad{border-color:rgba(255,138,128,.4);background:var(--red-bg)}
+.steps{list-style:none;counter-reset:s;display:grid;gap:12px;margin:0 0 16px;padding:0}
+.steps li{counter-increment:s;display:flex;gap:12px;align-items:flex-start;font-size:14px;line-height:1.6;color:var(--t1)}
+.steps li::before{content:counter(s);flex:0 0 28px;height:28px;border-radius:50%;background:var(--accent2);color:var(--bg0);
+  font-weight:800;display:flex;align-items:center;justify-content:center;font-size:14px}
+.steps small{display:block;color:var(--t3);font-size:12px}
+.cta-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+.cta{display:flex;align-items:center;justify-content:center;gap:8px;padding:12px;border-radius:var(--radius-sm);
+  background:var(--accent2);color:var(--bg0);font-weight:700;font-size:13px;text-decoration:none;border:none;cursor:pointer}
+.cta.alt{background:var(--bg3);color:var(--t0);border:1px solid var(--border2)}
+.cta:hover{filter:brightness(1.1)}
+.hint{font-size:12px;color:var(--t3);line-height:1.7}
+details.adv{margin-bottom:16px}
+details.adv>summary{cursor:pointer;list-style:none;padding:14px 18px;background:var(--bg2);border:1px solid var(--border);
+  border-radius:var(--radius);font-weight:700;font-size:14px;color:var(--t1)}
+details.adv>summary::-webkit-details-marker{display:none}
+details.adv>summary::after{content:"\25BE";float:right;color:var(--t3)}
+[dir=rtl] details.adv>summary::after{float:left}
+details.adv[open]>summary{border-bottom-left-radius:0;border-bottom-right-radius:0;margin-bottom:0}
+details.adv .adv-body{padding-top:16px}
+.faq details{border-bottom:1px solid var(--border);padding:10px 0}
+.faq summary{cursor:pointer;font-weight:600;font-size:13px;color:var(--t0)}
+.faq p{margin-top:8px;font-size:13px;line-height:1.7;color:var(--t2)}
+.proto-help{margin:0 0 14px;padding:0;list-style:none;font-size:12px;line-height:1.8;color:var(--t2)}
+.proto-help b{color:var(--t0)}
+
 @media(max-width:500px){
+  .cta-grid{grid-template-columns:1fr}
   body{padding:12px}
   .stats{grid-template-columns:1fr 1fr;gap:8px}
   .stat{padding:10px}
@@ -114,46 +148,150 @@ body{font-family:var(--font-body);background:var(--bg0);color:var(--t1);
   .apps-grid{grid-template-columns:1fr}
   .qr-box svg{max-width:200px;max-height:200px;width:100%;height:auto}
 }
+
+.muted-note{color:var(--t3)}
+.stat-val,.bar-head span,.info-val{direction:ltr;unicode-bidi:isolate}
+[dir=rtl] .bar-head{flex-direction:row-reverse}
+/* inline styles moved to classes (CSP forbids style attributes) */
+.st-d2c171b{margin-top:10px}
+.st-60d8405{margin-top:0;margin-bottom:0}
+.st-7f24e27{color:var(--green)}
+.st-a805525{color:var(--accent)}
+.st-26d30ab{flex-wrap:wrap;gap:4px}
+.st-80a7594{background:#e74c3c22;color:#e74c3c}
+.st-2b4fe42{background:#2ecc7122;color:#2ecc71}
+.st-e58cef4{background:#3498db22;color:#3498db}
+.st-4570a48{background:#e67e2222;color:#e67e22}
+.st-fbfca95{background:#1abc9c22;color:#1abc9c}
+.st-0c57bce{background:#9b59b622;color:#9b59b6}
+.st-9ad3e3d{background:#8e44ad22;color:#8e44ad}
+.st-ffbd8c0{background:#34495e22;color:#34495e}
+.st-2901aa9{background:#c0392b22;color:#c0392b}
+.st-103b8b9{background:#f1c40f22;color:#f39c12}
+.st-d0695c3{background:#16a08522;color:#16a085}
+.st-0a2c5fd{background:#27ae6022;color:#27ae60}
+.st-8a8fc03{background:#2c3e5022;color:#2c3e50}
+.st-2b30d7a{background:#d3540022;color:#d35400}
+.st-b7a2fa5{background:#7f8c8d22;color:#7f8c8d}
+.st-92c0ced{background:#2980b922;color:#2980b9}
+.st-f161b5a{background:#e8439322;color:#e84393}
+.st-0c3e3c7{border-color:rgba(0,240,255,.15)}
+.st-b2f3ffa{background:rgba(0,240,255,.15);color:var(--accent)}
+.st-1ddf086{font-size:12px;color:var(--t3);margin-bottom:12px}
+.st-56f4356{margin-top:12px}
+.st-47771e1{font-size:12px;color:var(--t3);margin-bottom:8px}
+.st-8471262{margin-bottom:8px;border:1px solid var(--accent);background:linear-gradient(135deg,rgba(88,166,255,.08),rgba(188,140,255,.08));position:relative;overflow:hidden}
+.st-b96a383{font-size:34px}
+.st-97445a8{flex:1}
+.st-d2787e5{font-size:15px;display:flex;align-items:center;gap:8px}
+.st-ed0cb43{padding:2px 8px;border-radius:10px;font-size:9px;font-weight:700;background:var(--green-bg);color:var(--green)}
+.st-f1c714e{color:var(--t2);font-size:12px;margin-top:4px}
+.st-1518ef3{margin-top:6px;display:flex;gap:6px;flex-wrap:wrap}
+.st-4b350c1{padding:2px 8px;border-radius:8px;font-size:9px;font-weight:600;background:rgba(88,166,255,.12);color:var(--accent)}
+.st-10f125b{padding:2px 8px;border-radius:8px;font-size:9px;font-weight:600;background:rgba(63,185,80,.12);color:var(--green)}
+.st-6ed2879{color:var(--accent);font-size:20px;flex-shrink:0}
+.st-763bcd2{margin-bottom:14px;border:1px solid var(--purple);background:linear-gradient(135deg,rgba(188,140,255,.08),rgba(88,166,255,.08));position:relative;overflow:hidden}
+.st-5cde6fa{padding:2px 8px;border-radius:10px;font-size:9px;font-weight:700;background:rgba(188,140,255,.12);color:var(--purple)}
+.st-8f0da40{padding:2px 8px;border-radius:8px;font-size:9px;font-weight:600;background:rgba(188,140,255,.12);color:var(--purple)}
+.st-ef52db5{color:var(--purple);font-size:20px;flex-shrink:0}
+.st-e20f4a4{text-align:center;margin-bottom:14px;padding:14px;border:1px dashed var(--accent);border-radius:12px}
+.st-e6a6978{font-size:12px;color:var(--t2);margin-bottom:10px}
+.st-44e5ff9{padding:10px;margin-bottom:8px}
+.st-5642863{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+.st-80d654f{text-decoration:none}
+.st-4059fee{font-size:11px;color:var(--t3);margin-bottom:14px;text-align:center;line-height:1.6}
 </style>
 </head>
 <body>
 
+{% set fa = (dir == 'rtl') %}
+{% set sub_url = request.url_root ~ 'sub-api/' ~ user.uuid %}
+{% set limit_gb = user.traffic_limit_gb or 0 %}
+{% set used_gb = user.traffic_used_gb or 0 %}
 <div class="container">
   <!-- Header -->
   <div class="header">
     <div class="logo">V7LTHRONYX</div>
     <div class="user-tag">{{ 'کاربر:' if dir == 'rtl' else 'Account:' }} <b>{{ user.name }}</b></div>
-    <button class="btn btn-ghost btn-sm dir-toggle" onclick="toggleDirection()" style="margin-top:10px" title="Toggle RTL/LTR">{{ 'RTL' if dir == 'ltr' else 'LTR' }}</button>
+    <button class="btn btn-ghost btn-sm dir-toggle st-d2c171b" onclick="toggleDirection()" title="Toggle RTL/LTR">{{ 'RTL' if dir == 'ltr' else 'LTR' }}</button>
+  </div>
+
+  <!-- Plain-language account state -->
+  {% if state == 'expired' %}
+  <div class="banner banner-bad" role="status"><span class="banner-ico">⛔</span><div>
+    <b>{{ 'اشتراک شما تمام شده است' if fa else 'Your subscription has expired' }}</b>
+    {{ 'برای تمدید با فروشنده یا پشتیبانی خود تماس بگیرید. بعد از تمدید نیازی به تغییر تنظیمات نیست.' if fa else 'Contact your provider to renew. After renewal you do not need to change any settings.' }}
+  </div></div>
+  {% elif state == 'limit' %}
+  <div class="banner banner-bad" role="status"><span class="banner-ico">📊</span><div>
+    <b>{{ 'حجم اشتراک شما تمام شده است' if fa else 'You have used all of your traffic' }}</b>
+    {{ 'برای افزودن حجم با فروشنده یا پشتیبانی خود تماس بگیرید.' if fa else 'Contact your provider to add more traffic.' }}
+  </div></div>
+  {% elif state == 'expiring' %}
+  <div class="banner banner-warn" role="status"><span class="banner-ico">⏳</span><div>
+    <b>{{ ('فقط %d روز تا پایان اشتراک باقی مانده'|format(days_left)) if fa else ('Only %d day(s) left'|format(days_left)) }}</b>
+    {{ 'برای جلوگیری از قطعی، از همین حالا تمدید کنید.' if fa else 'Renew now to avoid an interruption.' }}
+  </div></div>
+  {% elif state == 'low_traffic' %}
+  <div class="banner banner-warn" role="status"><span class="banner-ico">📉</span><div>
+    <b>{{ 'حجم باقی‌مانده شما کم است' if fa else 'You are running low on traffic' }}</b>
+    {{ 'بیش از ۹۰٪ حجم مصرف شده است.' if fa else 'More than 90% of your traffic has been used.' }}
+  </div></div>
+  {% else %}
+  <div class="banner banner-ok" role="status"><span class="banner-ico">✅</span><div>
+    <b>{{ 'اشتراک شما فعال است' if fa else 'Your subscription is active' }}</b>
+    {{ 'برای وصل شدن، مراحل زیر را دنبال کنید.' if fa else 'Follow the steps below to connect.' }}
+  </div></div>
+  {% endif %}
+
+  <!-- Quick start -->
+  <div class="card" id="quick-start">
+    <div class="card-title">{{ 'اتصال در ۳ قدم' if fa else 'Connect in 3 steps' }}</div>
+    <ol class="steps">
+      <li><div>{{ 'یک برنامه نصب کنید' if fa else 'Install an app' }}
+        <small>{{ 'اندروید: Hiddify یا V2RayNG — آیفون: Streisand یا Hiddify — ویندوز: اپ اختصاصی یا V2RayN' if fa else 'Android: Hiddify or V2RayNG — iPhone: Streisand or Hiddify — Windows: our app or V2RayN' }}</small></div></li>
+      <li><div>{{ 'روی دکمهٔ برنامهٔ خود بزنید تا اشتراک اضافه شود' if fa else 'Tap your app below to add the subscription' }}
+        <small>{{ 'اگر باز نشد، «کپی لینک اشتراک» را بزنید و در برنامه گزینهٔ «افزودن از کلیپ‌بورد» را انتخاب کنید.' if fa else 'If it does not open, tap “Copy subscription link” and choose “Add from clipboard” in the app.' }}</small></div></li>
+      <li><div>{{ 'دکمهٔ اتصال را بزنید' if fa else 'Press the connect button' }}
+        <small>{{ 'اگر یک سرور کار نکرد، سرور دیگری از لیست را امتحان کنید یا لیست را به‌روزرسانی کنید.' if fa else 'If one server does not work, try another from the list or refresh the list.' }}</small></div></li>
+    </ol>
+    <div class="cta-grid">
+      <a class="cta" href="hiddify://import/{{ sub_url }}#{{ user.name|urlencode }}" rel="noopener">🔒 Hiddify</a>
+      <a class="cta" href="v2rayng://install-config?url={{ sub_url|urlencode }}&amp;name={{ user.name|urlencode }}" rel="noopener">📱 V2RayNG</a>
+      <a class="cta" href="streisand://import/{{ sub_url }}" rel="noopener">🍎 Streisand</a>
+      <button class="cta alt" onclick="copyLink(event, 'sub')">📋 {{ 'کپی لینک اشتراک' if fa else 'Copy subscription link' }}</button>
+    </div>
+    <p class="hint">{{ 'برنامه هنوز نصب نیست؟ از بخش «دانلود برنامه» پایین همین صفحه نصب کنید.' if fa else 'App not installed yet? Get one from “Download Apps” further down this page.' }}</p>
   </div>
 
   <!-- Status & Traffic -->
   <div class="card">
-    <div class="card-title">Account Status</div>
+    <div class="card-title">{{ 'وضعیت حساب' if fa else 'Account Status' }}</div>
     <div class="status-row">
       <span class="status-dot {{ 'active' if user.active else 'inactive' }}"></span>
       <span class="status-text {{ 'active' if user.active else 'inactive' }}">
-        {{ 'Active' if user.active else 'Disabled' }}
+        {{ ('فعال' if fa else 'Active') if user.active else ('غیرفعال' if fa else 'Disabled') }}
       </span>
     </div>
 
     <div class="stats">
       <div class="stat">
         <span class="stat-val" id="s-used">{{ "%.2f"|format(user.traffic_used_gb or 0) }} GB</span>
-        <span class="stat-lbl">Used Traffic</span>
+        <span class="stat-lbl">{{ 'مصرف شده' if fa else 'Used Traffic' }}</span>
       </div>
       <div class="stat">
-        <span class="stat-val">{{ "%.1f"|format(user.traffic_limit_gb or 0) }} GB</span>
-        <span class="stat-lbl">Total Limit</span>
+        <span class="stat-val">{% if limit_gb > 0 %}{{ "%.1f"|format(limit_gb) }} GB{% else %}{{ 'نامحدود' if fa else 'Unlimited' }}{% endif %}</span>
+        <span class="stat-lbl">{{ 'حجم کل' if fa else 'Total Limit' }}</span>
       </div>
       <div class="stat">
-        <span class="stat-val" id="s-days">—</span>
-        <span class="stat-lbl">Days Left</span>
+        <span class="stat-val" id="s-days" data-days="{{ days_left if days_left is not none else '' }}">{{ days_left if days_left is not none else ('نامحدود' if fa else 'Unlimited') }}</span>
+        <span class="stat-lbl">{{ 'روز باقی‌مانده' if fa else 'Days Left' }}</span>
       </div>
     </div>
 
-    {% set used = user.traffic_used_gb or 0 %}
-    {% set limit = user.traffic_limit_gb or 1 %}
-    {% set pct = (used / limit * 100)|int %}
+    {% set used = used_gb %}
+    {% set limit = limit_gb if limit_gb > 0 else 1 %}
+    {% set pct = ((used / limit * 100)|int) if limit_gb > 0 else 0 %}
     {% set pct = [pct, 100]|min %}
     {% set bar_color = 'var(--green)' %}
     {% if pct >= 60 and pct < 85 %}
@@ -163,8 +301,8 @@ body{font-family:var(--font-body);background:var(--bg0);color:var(--t1);
     {% endif %}
     <div class="traffic-bar">
       <div class="bar-head">
-        <span class="used">{{ "%.2f"|format(used) }} GB used</span>
-        <span class="limit">{{ pct }}% of {{ "%.1f"|format(limit) }} GB</span>
+        <span class="used">{{ "%.2f"|format(used) }} GB {{ 'مصرف شده' if fa else 'used' }}</span>
+        <span class="limit">{% if limit_gb > 0 %}{{ pct }}% {{ 'از' if fa else 'of' }} {{ "%.1f"|format(limit) }} GB{% else %}{{ 'بدون محدودیت حجم' if fa else 'No traffic limit' }}{% endif %}</span>
       </div>
       <div class="bar-track">
         <div class="bar-fill" id="traffic-bar-fill" data-width="{{ pct }}%" data-bg="{{ bar_color }}"></div>
@@ -174,24 +312,35 @@ body{font-family:var(--font-body);background:var(--bg0);color:var(--t1);
 
   <!-- Live Speed -->
   <div class="card">
-    <div class="card-title">Live Connection</div>
-    <div class="stats" style="margin-top:0;margin-bottom:0">
+    <div class="card-title">{{ 'اتصال زنده' if fa else 'Live Connection' }}</div>
+    <div class="stats st-60d8405">
       <div class="stat">
-        <span class="stat-val" style="color:var(--green)" id="speed-up">{{ "%.1f"|format(live_up / 1024 / 1024) if live_up > 0 else '0' }} MB</span>
+        <span class="stat-val st-7f24e27" id="speed-up">{{ "%.1f"|format(live_up / 1024 / 1024) if live_up > 0 else '0' }} MB</span>
         <span class="stat-lbl">↑ Upload (session)</span>
       </div>
       <div class="stat">
-        <span class="stat-val" style="color:var(--accent)" id="speed-down">{{ "%.1f"|format(live_down / 1024 / 1024) if live_down > 0 else '0' }} MB</span>
+        <span class="stat-val st-a805525" id="speed-down">{{ "%.1f"|format(live_down / 1024 / 1024) if live_down > 0 else '0' }} MB</span>
         <span class="stat-lbl">↓ Download (session)</span>
       </div>
     </div>
   </div>
 
+  <!-- Advanced: individual configs (collapsed by default) -->
+  <details class="adv">
+    <summary>🛠 {{ 'پیشرفته: کانفیگ‌های تکی و QR' if fa else 'Advanced: individual configs & QR codes' }}</summary>
+    <div class="adv-body">
+    <ul class="proto-help">
+      <li>{{ ('<b>پیشنهاد ما:</b> همان «لینک اشتراک» بالا را استفاده کنید؛ همهٔ سرورها را خودکار اضافه می‌کند.' if fa else '<b>Our advice:</b> just use the subscription link above — it adds every server automatically.')|safe }}</li>
+      <li>{{ ('<b>Reality / Vision / XHTTP:</b> برای شبکه‌های سخت‌گیر (فیلترینگ شدید) بهتر هستند.' if fa else '<b>Reality / Vision / XHTTP:</b> best on heavily filtered networks.')|safe }}</li>
+      <li>{{ ('<b>CDN / WS / gRPC:</b> وقتی آی‌پی سرور بسته شده کار می‌کنند.' if fa else '<b>CDN / WS / gRPC:</b> work when the server IP itself is blocked.')|safe }}</li>
+      <li>{{ ('<b>Hysteria2 / TUIC:</b> سریع‌تر، مناسب ویدیو و بازی؛ روی بعضی اینترنت‌ها (UDP) ممکن است بسته باشند.' if fa else '<b>Hysteria2 / TUIC:</b> faster, good for video and games; may be blocked on some networks (UDP).')|safe }}</li>
+    </ul>
+
   <!-- QR Codes -->
   <div class="card">
     <div class="card-title">QR Code</div>
     <div class="qr-section">
-      <div class="qr-tabs" style="flex-wrap:wrap;gap:4px">
+      <div class="qr-tabs st-26d30ab">
         {% if links.vmess %}<button class="qr-tab active" onclick="showQr('vmess')">VMess</button>{% endif %}
         {% if links.vless %}<button class="qr-tab" onclick="showQr('vless')">VLESS</button>{% endif %}
         {% if links.cdn_vmess %}<button class="qr-tab" onclick="showQr('cdn')">CDN</button>{% endif %}
@@ -251,7 +400,7 @@ body{font-family:var(--font-body);background:var(--bg0);color:var(--t1);
       {% endif %}
       {% if links.trojan %}
       <div class="config-item">
-        <div class="config-label"><span class="config-badge" style="background:#e74c3c22;color:#e74c3c">Trojan</span> TLS</div>
+        <div class="config-label"><span class="config-badge st-80a7594">Trojan</span> TLS</div>
         <div class="config-box">
           <div class="config-link" id="link-trojan">{{ links.trojan }}</div>
           <button class="btn-copy" onclick="copyLink(event, 'trojan')">Copy</button>
@@ -260,7 +409,7 @@ body{font-family:var(--font-body);background:var(--bg0);color:var(--t1);
       {% endif %}
       {% if links.grpc_vmess %}
       <div class="config-item">
-        <div class="config-label"><span class="config-badge" style="background:#2ecc7122;color:#2ecc71">gRPC</span> VMess + TLS</div>
+        <div class="config-label"><span class="config-badge st-2b4fe42">gRPC</span> VMess + TLS</div>
         <div class="config-box">
           <div class="config-link" id="link-grpc_vmess">{{ links.grpc_vmess }}</div>
           <button class="btn-copy" onclick="copyLink(event, 'grpc_vmess')">Copy</button>
@@ -269,7 +418,7 @@ body{font-family:var(--font-body);background:var(--bg0);color:var(--t1);
       {% endif %}
       {% if links.httpupgrade_vmess %}
       <div class="config-item">
-        <div class="config-label"><span class="config-badge" style="background:#3498db22;color:#3498db">HU</span> VMess + TLS</div>
+        <div class="config-label"><span class="config-badge st-e58cef4">HU</span> VMess + TLS</div>
         <div class="config-box">
           <div class="config-link" id="link-httpupgrade_vmess">{{ links.httpupgrade_vmess }}</div>
           <button class="btn-copy" onclick="copyLink(event, 'httpupgrade_vmess')">Copy</button>
@@ -278,7 +427,7 @@ body{font-family:var(--font-body);background:var(--bg0);color:var(--t1);
       {% endif %}
       {% if links.ss2022 %}
       <div class="config-item">
-        <div class="config-label"><span class="config-badge" style="background:#e67e2222;color:#e67e22">SS2022</span> ShadowSocks 2022</div>
+        <div class="config-label"><span class="config-badge st-4570a48">SS2022</span> ShadowSocks 2022</div>
         <div class="config-box">
           <div class="config-link" id="link-ss2022">{{ links.ss2022 }}</div>
           <button class="btn-copy" onclick="copyLink(event, 'ss2022')">Copy</button>
@@ -287,7 +436,7 @@ body{font-family:var(--font-body);background:var(--bg0);color:var(--t1);
       {% endif %}
       {% if links.vless_ws %}
       <div class="config-item">
-        <div class="config-label"><span class="config-badge" style="background:#1abc9c22;color:#1abc9c">VLESS-WS</span> WS + TLS</div>
+        <div class="config-label"><span class="config-badge st-fbfca95">VLESS-WS</span> WS + TLS</div>
         <div class="config-box">
           <div class="config-link" id="link-vless_ws">{{ links.vless_ws }}</div>
           <button class="btn-copy" onclick="copyLink(event, 'vless_ws')">Copy</button>
@@ -296,7 +445,7 @@ body{font-family:var(--font-body);background:var(--bg0);color:var(--t1);
       {% endif %}
       {% if links.vless_ws_plain_front %}
       <div class="config-item">
-        <div class="config-label"><span class="config-badge" style="background:#e67e2222;color:#e67e22">VLESS-WS+TLS</span> Domain Fronting</div>
+        <div class="config-label"><span class="config-badge st-4570a48">VLESS-WS+TLS</span> Domain Fronting</div>
         <div class="config-box">
           <div class="config-link" id="link-vless_ws_plain_front">{{ links.vless_ws_plain_front }}</div>
           <button class="btn-copy" onclick="copyLink(event, 'vless_ws_plain_front')">Copy</button>
@@ -305,7 +454,7 @@ body{font-family:var(--font-body);background:var(--bg0);color:var(--t1);
       {% endif %}
       {% if links.vless_xhttp %}
       <div class="config-item">
-        <div class="config-label"><span class="config-badge" style="background:#9b59b622;color:#9b59b6">VLESS-XHTTP</span> XHTTP + Reality</div>
+        <div class="config-label"><span class="config-badge st-0c57bce">VLESS-XHTTP</span> XHTTP + Reality</div>
         <div class="config-box">
           <div class="config-link" id="link-vless_xhttp">{{ links.vless_xhttp }}</div>
           <button class="btn-copy" onclick="copyLink(event, 'vless_xhttp')">Copy</button>
@@ -314,7 +463,7 @@ body{font-family:var(--font-body);background:var(--bg0);color:var(--t1);
       {% endif %}
       {% if links.vless_vision %}
       <div class="config-item">
-        <div class="config-label"><span class="config-badge" style="background:#8e44ad22;color:#8e44ad">VLESS-Vision</span> Vision + Reality</div>
+        <div class="config-label"><span class="config-badge st-9ad3e3d">VLESS-Vision</span> Vision + Reality</div>
         <div class="config-box">
           <div class="config-link" id="link-vless_vision">{{ links.vless_vision }}</div>
           <button class="btn-copy" onclick="copyLink(event, 'vless_vision')">Copy</button>
@@ -323,7 +472,7 @@ body{font-family:var(--font-body);background:var(--bg0);color:var(--t1);
       {% endif %}
       {% if links.vless_reverse %}
       <div class="config-item">
-        <div class="config-label"><span class="config-badge" style="background:#34495e22;color:#34495e">VLESS-Reverse</span> Reverse Tunnel</div>
+        <div class="config-label"><span class="config-badge st-ffbd8c0">VLESS-Reverse</span> Reverse Tunnel</div>
         <div class="config-box">
           <div class="config-link" id="link-vless_reverse">{{ links.vless_reverse }}</div>
           <button class="btn-copy" onclick="copyLink(event, 'vless_reverse')">Copy</button>
@@ -332,7 +481,7 @@ body{font-family:var(--font-body);background:var(--bg0);color:var(--t1);
       {% endif %}
       {% if links.trojan_cdn %}
       <div class="config-item">
-        <div class="config-label"><span class="config-badge" style="background:#c0392b22;color:#c0392b">Trojan-CDN</span> WS + CDN</div>
+        <div class="config-label"><span class="config-badge st-2901aa9">Trojan-CDN</span> WS + CDN</div>
         <div class="config-box">
           <div class="config-link" id="link-trojan_cdn">{{ links.trojan_cdn }}</div>
           <button class="btn-copy" onclick="copyLink(event, 'trojan_cdn')">Copy</button>
@@ -341,7 +490,7 @@ body{font-family:var(--font-body);background:var(--bg0);color:var(--t1);
       {% endif %}
       {% if links.hysteria2 %}
       <div class="config-item">
-        <div class="config-label"><span class="config-badge" style="background:#f1c40f22;color:#f39c12">Hysteria2</span> UDP Proxy</div>
+        <div class="config-label"><span class="config-badge st-103b8b9">Hysteria2</span> UDP Proxy</div>
         <div class="config-box">
           <div class="config-link" id="link-hysteria2">{{ links.hysteria2 }}</div>
           <button class="btn-copy" onclick="copyLink(event, 'hysteria2')">Copy</button>
@@ -350,7 +499,7 @@ body{font-family:var(--font-body);background:var(--bg0);color:var(--t1);
       {% endif %}
       {% if links.tuic %}
       <div class="config-item">
-        <div class="config-label"><span class="config-badge" style="background:#16a08522;color:#16a085">TUIC</span> QUIC Proxy</div>
+        <div class="config-label"><span class="config-badge st-d0695c3">TUIC</span> QUIC Proxy</div>
         <div class="config-box">
           <div class="config-link" id="link-tuic">{{ links.tuic }}</div>
           <button class="btn-copy" onclick="copyLink(event, 'tuic')">Copy</button>
@@ -359,7 +508,7 @@ body{font-family:var(--font-body);background:var(--bg0);color:var(--t1);
       {% endif %}
       {% if links.amneziawg %}
       <div class="config-item">
-        <div class="config-label"><span class="config-badge" style="background:#27ae6022;color:#27ae60">AmneziaWG</span> AWG</div>
+        <div class="config-label"><span class="config-badge st-0a2c5fd">AmneziaWG</span> AWG</div>
         <div class="config-box">
           <div class="config-link" id="link-amneziawg">{{ links.amneziawg }}</div>
           <button class="btn-copy" onclick="copyLink(event, 'amneziawg')">Copy</button>
@@ -368,7 +517,7 @@ body{font-family:var(--font-body);background:var(--bg0);color:var(--t1);
       {% endif %}
       {% if links.shadowtls %}
       <div class="config-item">
-        <div class="config-label"><span class="config-badge" style="background:#2c3e5022;color:#2c3e50">ShadowTLS</span> TLS Obfuscation</div>
+        <div class="config-label"><span class="config-badge st-8a8fc03">ShadowTLS</span> TLS Obfuscation</div>
         <div class="config-box">
           <div class="config-link" id="link-shadowtls">{{ links.shadowtls }}</div>
           <button class="btn-copy" onclick="copyLink(event, 'shadowtls')">Copy</button>
@@ -377,7 +526,7 @@ body{font-family:var(--font-body);background:var(--bg0);color:var(--t1);
       {% endif %}
       {% if links.mieru %}
       <div class="config-item">
-        <div class="config-label"><span class="config-badge" style="background:#d3540022;color:#d35400">Mieru</span> TCP Proxy</div>
+        <div class="config-label"><span class="config-badge st-2b30d7a">Mieru</span> TCP Proxy</div>
         <div class="config-box">
           <div class="config-link" id="link-mieru">{{ links.mieru }}</div>
           <button class="btn-copy" onclick="copyLink(event, 'mieru')">Copy</button>
@@ -386,7 +535,7 @@ body{font-family:var(--font-body);background:var(--bg0);color:var(--t1);
       {% endif %}
       {% if links.naiveproxy %}
       <div class="config-item">
-        <div class="config-label"><span class="config-badge" style="background:#7f8c8d22;color:#7f8c8d">NaiveProxy</span> HTTP/2</div>
+        <div class="config-label"><span class="config-badge st-b7a2fa5">NaiveProxy</span> HTTP/2</div>
         <div class="config-box">
           <div class="config-link" id="link-naiveproxy">{{ links.naiveproxy }}</div>
           <button class="btn-copy" onclick="copyLink(event, 'naiveproxy')">Copy</button>
@@ -395,7 +544,7 @@ body{font-family:var(--font-body);background:var(--bg0);color:var(--t1);
       {% endif %}
       {% if links.wireguard %}
       <div class="config-item">
-        <div class="config-label"><span class="config-badge" style="background:#2980b922;color:#2980b9">WireGuard</span> UDP Tunnel</div>
+        <div class="config-label"><span class="config-badge st-92c0ced">WireGuard</span> UDP Tunnel</div>
         <div class="config-box">
           <div class="config-link" id="link-wireguard">{{ links.wireguard }}</div>
           <button class="btn-copy" onclick="copyLink(event, 'wireguard')">Copy</button>
@@ -404,7 +553,7 @@ body{font-family:var(--font-body);background:var(--bg0);color:var(--t1);
       {% endif %}
       {% if links.openvpn %}
       <div class="config-item">
-        <div class="config-label"><span class="config-badge" style="background:#e8439322;color:#e84393">OpenVPN</span> Classic VPN</div>
+        <div class="config-label"><span class="config-badge st-f161b5a">OpenVPN</span> Classic VPN</div>
         <div class="config-box">
           <div class="config-link" id="link-openvpn">{{ links.openvpn }}</div>
           <button class="btn-copy" onclick="copyLink(event, 'openvpn')">Copy</button>
@@ -416,12 +565,12 @@ body{font-family:var(--font-body);background:var(--bg0);color:var(--t1);
 
   <!-- IPv6 Configs -->
   {% if links.vmess_ipv6 or links.vless_ipv6 or links.vless_ws_ipv6 or links.vless_ws_plain_front_ipv6 or links.vless_xhttp_ipv6 or links.vless_vision_ipv6 %}
-  <div class="card" style="border-color:rgba(0,240,255,.15)">
-    <div class="card-title" style="color:var(--accent)">IPv6 Configs</div>
+  <div class="card st-0c3e3c7">
+    <div class="card-title st-a805525">IPv6 Configs</div>
     {% for key in ['vmess_ipv6','vless_ipv6','cdn_vmess_ipv6','vless_ws_ipv6','vless_ws_plain_front_ipv6','trojan_ipv6','grpc_vmess_ipv6','httpupgrade_vmess_ipv6','ss2022_ipv6','vless_xhttp_ipv6','vless_vision_ipv6','vless_reverse_ipv6','trojan_cdn_ipv6','hysteria2_ipv6','tuic_ipv6'] %}
     {% if links.get(key) %}
     <div class="config-item">
-      <div class="config-label"><span class="config-badge" style="background:rgba(0,240,255,.15);color:var(--accent)">IPv6</span> {{ key.replace('_ipv6','').replace('_',' ').upper() }}</div>
+      <div class="config-label"><span class="config-badge st-b2f3ffa">IPv6</span> {{ key.replace('_ipv6','').replace('_',' ').upper() }}</div>
       <div class="config-box">
         <div class="config-link" id="link-{{ key }}">{{ links[key] }}</div>
         <button class="btn-copy" onclick="copyLink(event, '{{ key }}')">Copy</button>
@@ -432,18 +581,21 @@ body{font-family:var(--font-body);background:var(--bg0);color:var(--t1);
   </div>
   {% endif %}
 
+    </div>
+  </details>
+
   <!-- Subscription Link -->
   <div class="card">
-    <div class="card-title">Subscription Link</div>
-    <p style="font-size:12px;color:var(--t3);margin-bottom:12px">
-      Use this link to auto-import configs in V2RayNG, Streisand, Hiddify, etc.
+    <div class="card-title">{{ 'لینک اشتراک' if fa else 'Subscription Link' }}</div>
+    <p class="st-1ddf086">
+      {{ 'این لینک را در V2RayNG، Streisand، Hiddify و مانند آن وارد کنید تا همهٔ سرورها خودکار اضافه و به‌روز شوند. این لینک را با کسی به اشتراک نگذارید.' if fa else 'Paste this link into V2RayNG, Streisand, Hiddify, etc. to add and keep all servers up to date. Do not share it with anyone.' }}
     </p>
     <div class="sub-box">
       <div class="sub-url" id="sub-url">{{ request.url_root }}sub-api/{{ user.uuid }}</div>
       <button class="btn-copy" onclick="copyLink(event, 'sub')">Copy</button>
     </div>
-    <div style="margin-top:12px">
-      <p style="font-size:12px;color:var(--t3);margin-bottom:8px">
+    <div class="st-56f4356">
+      <p class="st-47771e1">
         📦 JSON Config (includes Fragment + MUX + all protocols in one config):
       </p>
       <div class="sub-box">
@@ -455,58 +607,58 @@ body{font-family:var(--font-body);background:var(--bg0);color:var(--t1);
 
   <!-- Download Apps -->
   <div class="card">
-    <div class="card-title">Download Apps</div>
+    <div class="card-title">{{ 'دانلود برنامه' if fa else 'Download Apps' }}</div>
 
     <!-- Dedicated App — Android -->
-    <a class="app-btn dedicated-app" href="/download/app" style="margin-bottom:8px;border:1px solid var(--accent);background:linear-gradient(135deg,rgba(88,166,255,.08),rgba(188,140,255,.08));position:relative;overflow:hidden">
-      <span class="app-icon" style="font-size:34px">🚀</span>
-      <div style="flex:1">
-        <div class="app-name" style="font-size:15px;display:flex;align-items:center;gap:8px">
+    <a class="app-btn dedicated-app st-8471262" href="/download/app">
+      <span class="app-icon st-b96a383">🚀</span>
+      <div class="st-97445a8">
+        <div class="app-name st-d2787e5">
           اپلیکیشن اختصاصی
-          <span style="padding:2px 8px;border-radius:10px;font-size:9px;font-weight:700;background:var(--green-bg);color:var(--green)">پیشنهادی</span>
+          <span class="st-ed0cb43">پیشنهادی</span>
         </div>
-        <div class="app-platform" style="color:var(--t2);font-size:12px;margin-top:4px" lang="fa">سرعت بالاتر • کیفیت بهتر • اتصال پایدار</div>
-        <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">
-          <span style="padding:2px 8px;border-radius:8px;font-size:9px;font-weight:600;background:rgba(88,166,255,.12);color:var(--accent)">Android</span>
-          <span style="padding:2px 8px;border-radius:8px;font-size:9px;font-weight:600;background:rgba(63,185,80,.12);color:var(--green)">Fragment + MUX</span>
+        <div class="app-platform st-f1c714e" lang="fa">سرعت بالاتر • کیفیت بهتر • اتصال پایدار</div>
+        <div class="st-1518ef3">
+          <span class="st-4b350c1">Android</span>
+          <span class="st-10f125b">Fragment + MUX</span>
         </div>
       </div>
-      <span style="color:var(--accent);font-size:20px;flex-shrink:0">⬇</span>
+      <span class="st-6ed2879">⬇</span>
     </a>
 
     <!-- Dedicated App — Windows -->
-    <a class="app-btn dedicated-app" href="/download/app-windows" style="margin-bottom:14px;border:1px solid var(--purple);background:linear-gradient(135deg,rgba(188,140,255,.08),rgba(88,166,255,.08));position:relative;overflow:hidden">
-      <span class="app-icon" style="font-size:34px">💻</span>
-      <div style="flex:1">
-        <div class="app-name" style="font-size:15px;display:flex;align-items:center;gap:8px">
+    <a class="app-btn dedicated-app st-763bcd2" href="/download/app-windows">
+      <span class="app-icon st-b96a383">💻</span>
+      <div class="st-97445a8">
+        <div class="app-name st-d2787e5">
           نسخه ویندوز
-          <span style="padding:2px 8px;border-radius:10px;font-size:9px;font-weight:700;background:rgba(188,140,255,.12);color:var(--purple)">جدید</span>
+          <span class="st-5cde6fa">جدید</span>
         </div>
-        <div class="app-platform" style="color:var(--t2);font-size:12px;margin-top:4px" lang="fa">سرعت بالاتر • MUX • پروکسی سیستم خودکار</div>
-        <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">
-          <span style="padding:2px 8px;border-radius:8px;font-size:9px;font-weight:600;background:rgba(188,140,255,.12);color:var(--purple)">Windows</span>
-          <span style="padding:2px 8px;border-radius:8px;font-size:9px;font-weight:600;background:rgba(63,185,80,.12);color:var(--green)">Fragment + MUX</span>
+        <div class="app-platform st-f1c714e" lang="fa">سرعت بالاتر • MUX • پروکسی سیستم خودکار</div>
+        <div class="st-1518ef3">
+          <span class="st-8f0da40">Windows</span>
+          <span class="st-10f125b">Fragment + MUX</span>
         </div>
       </div>
-      <span style="color:var(--purple);font-size:20px;flex-shrink:0">⬇</span>
+      <span class="st-ef52db5">⬇</span>
     </a>
 
     {% if mobile_profile %}
     <!-- One-tap import into the dedicated app: QR (scan from another screen)
          or direct v7l:// link (tap on the phone itself). -->
-    <div style="text-align:center;margin-bottom:14px;padding:14px;border:1px dashed var(--accent);border-radius:12px">
-      <div style="font-size:12px;color:var(--t2);margin-bottom:10px" lang="fa">
+    <div class="st-e20f4a4">
+      <div lang="fa" class="st-e6a6978">
         بعد از نصب اپ اختصاصی، سرور و اشتراک شما با یک ضربه اضافه می‌شود:
       </div>
-      <div class="qr-box" id="mobile-import-qr" style="padding:10px;margin-bottom:8px"></div>
-      <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
-        <a class="btn-copy" style="text-decoration:none" href="{{ mobile_profile }}" lang="fa">افزودن خودکار به اپ 🚀</a>
+      <div class="qr-box st-44e5ff9" id="mobile-import-qr"></div>
+      <div class="st-5642863">
+        <a class="btn-copy st-80d654f" href="{{ mobile_profile }}" lang="fa">افزودن خودکار به اپ 🚀</a>
         <button class="btn-copy" onclick="copyLink(event, 'mobile_profile')" lang="fa">کپی لینک</button>
       </div>
     </div>
     {% endif %}
 
-    <div style="font-size:11px;color:var(--t3);margin-bottom:14px;text-align:center;line-height:1.6" lang="fa">
+    <div lang="fa" class="st-4059fee">
       سایر اپلیکیشن‌ های پشتیبانی شده:
     </div>
 
@@ -538,16 +690,29 @@ body{font-family:var(--font-body);background:var(--bg0);color:var(--t1);
     </div>
   </div>
 
+  <!-- Troubleshooting -->
+  <div class="card faq">
+    <div class="card-title">{{ 'مشکل دارید؟' if fa else 'Troubleshooting' }}</div>
+    <details><summary>{{ 'وصل می‌شود ولی اینترنت ندارم' if fa else 'It connects but there is no internet' }}</summary>
+      <p>{{ 'ساعت و تاریخ گوشی باید «خودکار» باشد. لیست سرورها را به‌روزرسانی کنید و سرور دیگری را امتحان کنید.' if fa else 'Make sure your phone date and time are set to automatic. Refresh the server list and try another server.' }}</p></details>
+    <details><summary>{{ 'اصلاً وصل نمی‌شود' if fa else 'It will not connect at all' }}</summary>
+      <p>{{ 'ابتدا اشتراک را به‌روزرسانی کنید (در برنامه روی بروزرسانی بزنید). بعد پروتکل دیگری مثل Reality یا Hysteria2 را امتحان کنید. اگر باز هم نشد، شبکهٔ دیگری (Wi‑Fi یا سیم‌کارت دیگر) را امتحان کنید.' if fa else 'Update the subscription first (use the refresh button in the app). Then try another protocol such as Reality or Hysteria2. If it still fails, try a different network (Wi‑Fi or another SIM).' }}</p></details>
+    <details><summary>{{ 'سرعت کم است' if fa else 'It is slow' }}</summary>
+      <p>{{ 'سرورهای دیگر لیست را تست کنید (در برنامه «تست تأخیر»). پروتکل‌های Hysteria2 و TUIC معمولاً سریع‌تر هستند.' if fa else 'Test the other servers in the list (use “latency test” in the app). Hysteria2 and TUIC are usually faster.' }}</p></details>
+    <details><summary>{{ 'چطور تمدید کنم یا حجم بگیرم؟' if fa else 'How do I renew or add traffic?' }}</summary>
+      <p>{{ 'با فروشنده یا پشتیبان خود تماس بگیرید. بعد از تمدید همین لینک کار می‌کند و نیازی به تنظیم دوباره نیست.' if fa else 'Contact your provider. After renewal the same link keeps working; no new setup is needed.' }}</p></details>
+  </div>
+
   <!-- Connection Details -->
   <div class="card">
-    <div class="card-title">Connection Details</div>
+    <div class="card-title">{{ 'مشخصات اتصال' if fa else 'Connection Details' }}</div>
     <div class="info-row"><span class="info-key">Server</span><span class="info-val">{{ server_ip }}</span></div>
     <div class="info-row"><span class="info-key">Port</span><span class="info-val">{{ server_port }}</span></div>
     <div class="info-row"><span class="info-key">Protocol</span><span class="info-val">VMess + WS + TLS</span></div>
     <div class="info-row"><span class="info-key">SNI</span><span class="info-val">{{ sni_host }}</span></div>
     <div class="info-row"><span class="info-key">Path</span><span class="info-val">{{ ws_path }}</span></div>
-    <div class="info-row"><span class="info-key">Created</span><span class="info-val">{{ user.created_at[:10] if user.created_at else '—' }}</span></div>
-    <div class="info-row"><span class="info-key">Expires</span><span class="info-val">{{ user.expire_at[:10] if user.expire_at else '—' }}</span></div>
+    <div class="info-row"><span class="info-key">{{ 'ساخته شده' if fa else 'Created' }}</span><span class="info-val">{{ user.created_at[:10] if user.created_at else '—' }}</span></div>
+    <div class="info-row"><span class="info-key">{{ 'انقضا' if fa else 'Expires' }}</span><span class="info-val">{{ user.expire_at[:10] if user.expire_at else '—' }}</span></div>
   </div>
 
   <div class="footer"></div>
@@ -573,7 +738,6 @@ async function toggleDirection() {
 
 const LINKS = JSON.parse(document.getElementById('data-links').textContent);
 const MOBILE_PROFILE = {{ (mobile_profile or '') | tojson }};
-const EXPIRE = "{{ user.expire_at or '' }}";
 let activeQr = 'vmess';
 
 /* Mobile-app import QR (v7l://import…) */
@@ -583,7 +747,7 @@ let activeQr = 'vmess';
   try {
     const qr = qrcode(0, 'M'); qr.addData(MOBILE_PROFILE); qr.make();
     box.innerHTML = qr.createSvgTag(4, 0);
-  } catch (e) { box.innerHTML = '<small style="color:var(--t3)">QR Error</small>'; }
+  } catch (e) { box.innerHTML = '<small class="muted-note">QR Error</small>'; }
 })();
 
 /* Apply traffic bar styles */
@@ -595,17 +759,12 @@ let activeQr = 'vmess';
   }
 })();
 
-/* Days left */
+/* Days left: value is computed server-side (same clock as the banner); only colour it here */
 (function(){
-  if (!EXPIRE) { document.getElementById('s-days').textContent = '—'; return; }
-  const exp = new Date(EXPIRE);
-  const now = new Date();
-  const diff = Math.ceil((exp - now) / 86400000);
   const el = document.getElementById('s-days');
-  el.textContent = diff > 0 ? diff : 0;
-  if (diff <= 3) el.style.color = 'var(--red)';
-  else if (diff <= 7) el.style.color = 'var(--yellow)';
-  else el.style.color = 'var(--green)';
+  const d = parseInt(el.getAttribute('data-days'), 10);
+  if (Number.isNaN(d)) return;
+  el.style.color = d <= 3 ? 'var(--red)' : d <= 7 ? 'var(--yellow)' : 'var(--green)';
 })();
 
 /* QR */
@@ -623,11 +782,11 @@ function showQr(type) {
   const key = keyMap[type] || type;
   const link = LINKS[key] || '';
   const box = document.getElementById('qr-display');
-  if (!link) { box.innerHTML = '<small style="color:var(--t3)">Not available</small>'; return; }
+  if (!link) { box.innerHTML = '<small class="muted-note">Not available</small>'; return; }
   try {
     const qr = qrcode(0, 'M'); qr.addData(link); qr.make();
     box.innerHTML = qr.createSvgTag(5, 0);
-  } catch(e) { box.innerHTML = '<small style="color:var(--t3)">QR Error</small>'; }
+  } catch(e) { box.innerHTML = '<small class="muted-note">QR Error</small>'; }
 }
 showQr('vmess');
 
@@ -653,9 +812,9 @@ function copyLink(ev, type) {
   } else {
     text = LINKS[type] || '';
   }
-  if (!text) { toast('Not available'); return; }
+  if (!text) { toast(document.documentElement.lang === 'fa' ? 'در دسترس نیست' : 'Not available'); return; }
   _copyText(text).then(() => {
-    toast('Copied!');
+    toast(document.documentElement.lang === 'fa' ? 'کپی شد!' : 'Copied!');
     const btns = document.querySelectorAll('.btn-copy');
     btns.forEach(b => { if (b.classList.contains('copied')) b.classList.remove('copied'); });
     const btn = ev.currentTarget;

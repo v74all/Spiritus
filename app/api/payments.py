@@ -9,18 +9,17 @@ Endpoints:
 - Available plans
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
-from pydantic import BaseModel, Field
-from typing import Optional, List
 import logging
 
-from ..auth import get_current_admin, get_current_user, User
-from ..database import get_async_db
-from ..models import Payment, PaymentGateway, PaymentStatus
-from ..payments import payment_manager, PLANS
-
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from pydantic import BaseModel, Field
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from ..auth import User, get_current_admin
+from ..database import get_async_db
+from ..models import Payment, PaymentStatus
+from ..payments import PLANS, payment_manager
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/payments", tags=["payments"])
@@ -32,14 +31,14 @@ class CreatePaymentRequest(BaseModel):
     user_id: int
     plan_id: str = Field(..., description="basic|standard|premium|unlimited")
     gateway: str = Field("zarinpal", description="zarinpal|idpay|usdt_trc20")
-    reseller_id: Optional[int] = None
+    reseller_id: int | None = None
 
 class VerifyPaymentRequest(BaseModel):
     payment_id: int
     gateway: str = "zarinpal"
-    authority: Optional[str] = None
-    gateway_id: Optional[str] = None
-    tx_hash: Optional[str] = Field(None, min_length=32, max_length=128)
+    authority: str | None = None
+    gateway_id: str | None = None
+    tx_hash: str | None = Field(None, min_length=32, max_length=128)
 
 class PaymentResponse(BaseModel):
     id: int
@@ -49,9 +48,9 @@ class PaymentResponse(BaseModel):
     currency: str
     plan_traffic_gb: float
     plan_days: int
-    pay_url: Optional[str] = None
-    created_at: Optional[str] = None
-    paid_at: Optional[str] = None
+    pay_url: str | None = None
+    created_at: str | None = None
+    paid_at: str | None = None
 
 class PlanResponse(BaseModel):
     id: str
@@ -69,7 +68,7 @@ class MessageResponse(BaseModel):
 
 # ── Plans ─────────────────────────────────────────────────
 
-@router.get("/plans", response_model=List[PlanResponse])
+@router.get("/plans", response_model=list[PlanResponse])
 async def get_plans():
     """Get available subscription plans."""
     return [
@@ -190,10 +189,10 @@ async def idpay_callback(
 
 # ── List Payments ────────────────────────────────────────
 
-@router.get("", response_model=List[PaymentResponse])
+@router.get("", response_model=list[PaymentResponse])
 async def list_payments(
-    user_id: Optional[int] = Query(None),
-    status_filter: Optional[str] = Query(None, alias="status"),
+    user_id: int | None = Query(None),
+    status_filter: str | None = Query(None, alias="status"),
     limit: int = Query(50, ge=1, le=500),
     admin: User = Depends(get_current_admin),
     db: AsyncSession = Depends(get_async_db),

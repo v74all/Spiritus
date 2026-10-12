@@ -8,21 +8,31 @@ Endpoints:
 - Self-service portal (user-facing)
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status, Query
-from pydantic import BaseModel, Field
-from typing import Optional, List
 import logging
 
-from ..auth import get_current_admin, get_current_user, User, create_access_token, validate_password_strength
+import jwt
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from pydantic import BaseModel, Field
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from ..audit import record_audit
+from ..auth import (
+    User,
+    _is_token_revoked,
+    create_access_token,
+    get_current_admin,
+    is_session_family_revoked,
+    validate_password_strength,
+)
+from ..commissions import InsufficientBalanceError, post_ledger_entry
 from ..config import settings
 from ..database import get_async_db
-from ..models import Reseller
+from ..models import Reseller, ResellerLedger
+from ..redis_client import get_redis
 from ..reseller import reseller_manager, self_service_portal
 from ..security import fail2ban_manager
-from ..redis_client import get_redis
-
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/resellers", tags=["resellers"])
@@ -36,6 +46,18 @@ class ResellerCreate(BaseModel):
     commission_rate: float = Field(10.0, ge=0, le=100)
     max_users: int = Field(100, ge=1)
     max_traffic_gb: float = Field(1000, ge=1)
+    parent_id: int | None = None
+
+class SubResellerCreate(BaseModel):
+    username: str = Field(..., min_length=3, max_length=100)
+    password: str = Field(..., min_length=12, max_length=100)
+    commission_rate: float = Field(5.0, ge=0, le=100)
+    max_users: int = Field(10, ge=1)
+    max_traffic_gb: float = Field(100, ge=1)
+
+class WalletAdjustment(BaseModel):
+    amount: int = Field(..., description="Signed IRR amount; negative debits the wallet")
+    note: str = Field(..., min_length=3, max_length=255)
 
 class ResellerLogin(BaseModel):
     username: str
@@ -45,7 +67,7 @@ class ResellerCreateUser(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     traffic_limit_gb: float = Field(10, ge=0)
     days: int = Field(30, ge=1)
-    agent_id: Optional[int] = None
+    agent_id: int | None = None
 
 class ResellerResponse(BaseModel):
     id: int
@@ -56,7 +78,8 @@ class ResellerResponse(BaseModel):
     max_traffic_gb: float
     active: bool
     portal_enabled: bool
-    created_at: Optional[str] = None
+    created_at: str | None = None
+    parent_id: int | None = None
 
 class MessageResponse(BaseModel):
     message: str
@@ -65,7 +88,7 @@ class MessageResponse(BaseModel):
 
 # ── Reseller CRUD ────────────────────────────────────────
 
-@router.get("", response_model=List[ResellerResponse])
+@router.get("", response_model=list[ResellerResponse])
 async def list_resellers(
     admin: User = Depends(get_current_admin),
     db: AsyncSession = Depends(get_async_db),
@@ -84,6 +107,7 @@ async def list_resellers(
             active=r.active,
             portal_enabled=r.portal_enabled,
             created_at=r.created_at.isoformat() if r.created_at else None,
+            parent_id=r.parent_id,
         )
         for r in resellers
     ]
@@ -106,9 +130,14 @@ async def create_reseller(
         commission_rate=data.commission_rate,
         max_users=data.max_users,
         max_traffic_gb=data.max_traffic_gb,
+        parent_id=data.parent_id,
     )
     if not result.get("success"):
         raise HTTPException(status_code=400, detail=result.get("error"))
+    await record_audit(
+        db, "reseller_create", admin_id=admin.id, target_type="reseller", target_id=result["id"],
+        details={"parent_id": data.parent_id},
+    )
 
     # Fetch the created reseller
     db_result = await db.execute(select(Reseller).where(Reseller.id == result["id"]))
@@ -127,7 +156,177 @@ async def create_reseller(
         active=reseller.active,
         portal_enabled=reseller.portal_enabled,
         created_at=reseller.created_at.isoformat() if reseller.created_at else None,
+        parent_id=reseller.parent_id,
     )
+
+
+# ── Reseller self-service (token issued by /resellers/login) ─────────────
+
+_reseller_bearer = HTTPBearer(auto_error=False)
+
+
+async def get_current_reseller(
+    credentials: HTTPAuthorizationCredentials | None = Depends(_reseller_bearer),
+    db: AsyncSession = Depends(get_async_db),
+) -> Reseller:
+    unauthorized = HTTPException(status_code=401, detail="Not authenticated")
+    if credentials is None:
+        raise unauthorized
+    try:
+        claims = jwt.decode(
+            credentials.credentials,
+            settings.jwt_secret_key,
+            algorithms=["HS256"],
+            options={"require": ["exp", "iat", "nbf", "jti", "sub"]},
+        )
+    except jwt.PyJWTError as exc:
+        raise unauthorized from exc
+    if claims.get("is_admin") or claims.get("reseller_id") is None:
+        raise unauthorized
+    if await _is_token_revoked(str(claims["jti"])) or await is_session_family_revoked(claims.get("fam")):
+        raise unauthorized
+    reseller = (
+        await db.execute(select(Reseller).where(Reseller.id == int(claims["reseller_id"])))
+    ).scalar_one_or_none()
+    if reseller is None or not reseller.active:
+        raise unauthorized
+    return reseller
+
+
+async def _ledger(db: AsyncSession, reseller_id: int, limit: int, offset: int) -> list[dict]:
+    rows = (
+        await db.execute(
+            select(ResellerLedger)
+            .where(ResellerLedger.reseller_id == reseller_id)
+            .order_by(ResellerLedger.id.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+    ).scalars().all()
+    return [
+        {
+            "id": r.id,
+            "kind": r.kind,
+            "amount": r.amount,
+            "balance_after": r.balance_after,
+            "payment_id": r.payment_id,
+            "note": r.note,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+        }
+        for r in rows
+    ]
+
+
+@router.get("/me")
+async def reseller_me(reseller: Reseller = Depends(get_current_reseller)):
+    return {
+        "id": reseller.id,
+        "username": reseller.username,
+        "commission_rate": reseller.commission_rate,
+        "balance": reseller.balance,
+        "parent_id": reseller.parent_id,
+        "max_users": reseller.max_users,
+        "max_traffic_gb": reseller.max_traffic_gb,
+    }
+
+
+@router.get("/me/ledger")
+async def reseller_my_ledger(
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    reseller: Reseller = Depends(get_current_reseller),
+    db: AsyncSession = Depends(get_async_db),
+):
+    return await _ledger(db, reseller.id, limit, offset)
+
+
+@router.get("/me/downline")
+async def reseller_my_downline(
+    reseller: Reseller = Depends(get_current_reseller),
+    db: AsyncSession = Depends(get_async_db),
+):
+    rows = await reseller_manager.downline(db, reseller.id)
+    return [
+        {"id": r.id, "username": r.username, "parent_id": r.parent_id,
+         "commission_rate": r.commission_rate, "balance": r.balance, "active": r.active}
+        for r in rows
+    ]
+
+
+@router.post("/me/sub-resellers", status_code=status.HTTP_201_CREATED)
+async def reseller_create_sub_reseller(
+    data: SubResellerCreate,
+    reseller: Reseller = Depends(get_current_reseller),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """A reseller recruits a sub-reseller; rate and limits are capped by the parent's."""
+    result = await reseller_manager.create_reseller(
+        db=db,
+        username=data.username,
+        password=data.password,
+        commission_rate=data.commission_rate,
+        max_users=data.max_users,
+        max_traffic_gb=data.max_traffic_gb,
+        parent_id=reseller.id,
+    )
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("error"))
+    await record_audit(
+        db, "sub_reseller_create", target_type="reseller", target_id=result["id"],
+        details={"parent_id": reseller.id},
+    )
+    return result
+
+
+@router.get("/{reseller_id}/ledger")
+async def reseller_ledger(
+    reseller_id: int,
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    admin: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_async_db),
+):
+    return await _ledger(db, reseller_id, limit, offset)
+
+
+@router.get("/{reseller_id}/downline")
+async def reseller_downline(
+    reseller_id: int,
+    admin: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_async_db),
+):
+    rows = await reseller_manager.downline(db, reseller_id)
+    return [{"id": r.id, "username": r.username, "parent_id": r.parent_id} for r in rows]
+
+
+@router.post("/{reseller_id}/wallet/adjust")
+async def reseller_wallet_adjust(
+    reseller_id: int,
+    data: WalletAdjustment,
+    admin: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """Manual credit/debit (payout, correction). Cannot overdraw the wallet."""
+    reseller = (
+        await db.execute(select(Reseller).where(Reseller.id == reseller_id))
+    ).scalar_one_or_none()
+    if reseller is None:
+        raise HTTPException(status_code=404, detail="Reseller not found")
+    if data.amount == 0:
+        raise HTTPException(status_code=422, detail="amount must be non-zero")
+    try:
+        entry = await post_ledger_entry(
+            db, reseller_id, data.amount, "adjustment", note=data.note, allow_negative=False
+        )
+    except InsufficientBalanceError:
+        await db.rollback()
+        raise HTTPException(status_code=400, detail="Insufficient balance") from None
+    await db.commit()
+    await record_audit(
+        db, "wallet_adjust", admin_id=admin.id, target_type="reseller", target_id=reseller_id,
+        details={"amount": data.amount, "note": data.note},
+    )
+    return {"success": True, "balance": entry.balance_after}
 
 
 @router.get("/{reseller_id}/stats")

@@ -10,11 +10,11 @@ import asyncio
 import grp
 import json
 import os
-from pathlib import Path
 import pwd
 import socket
 import struct
 import subprocess
+from pathlib import Path
 from typing import Any
 
 SOCKET_PATH = Path(os.environ.get("PRIVILEGED_HELPER_SOCKET", "/run/v7lthronyx/helper.sock"))
@@ -47,7 +47,10 @@ def _atomic_config(target_name: str, content: str) -> dict[str, Any]:
         return {"ok": False, "message": "config is not valid JSON"}
     target.parent.mkdir(parents=True, exist_ok=True)
     tmp = target.with_suffix(target.suffix + ".tmp")
-    tmp.write_text(content, encoding="utf-8")
+    # Create with final permissions so secrets are never briefly world-readable.
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o640)
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        handle.write(content)
     os.chmod(tmp, 0o640)
     os.replace(tmp, target)
     return {"ok": True, "message": "config installed"}
@@ -202,7 +205,7 @@ async def _handle(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) ->
                     result = {"ok": False, "message": "invalid request"}
                 else:
                     result = await asyncio.to_thread(_dispatch, operation, payload)
-    except (ValueError, json.JSONDecodeError, asyncio.TimeoutError, subprocess.SubprocessError) as exc:
+    except (TimeoutError, ValueError, json.JSONDecodeError, subprocess.SubprocessError) as exc:
         result = {"ok": False, "message": type(exc).__name__}
     writer.write(json.dumps(result, separators=(",", ":")).encode() + b"\n")
     await writer.drain()
@@ -218,7 +221,8 @@ async def main() -> None:
         SOCKET_PATH.unlink()
     server = await asyncio.start_unix_server(_handle, path=str(SOCKET_PATH))
     os.chown(SOCKET_PATH, 0, grp.getgrnam(PANEL_GROUP).gr_gid)
-    os.chmod(SOCKET_PATH, 0o660)
+    # Group-only socket (panel group); SO_PEERCRED additionally checks each caller.
+    os.chmod(SOCKET_PATH, 0o660)  # nosec B103
     async with server:
         await server.serve_forever()
 

@@ -11,7 +11,6 @@ import socket
 
 import pytest
 
-
 _METADATA_HOSTS = {
     "169.254.169.254",
     "fd00:ec2::254",

@@ -9,11 +9,10 @@ if a critical secret is missing or shorter than 32 chars — this is intentional
 to prevent accidentally running with weak/default credentials.
 """
 
-from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field, field_validator
-from typing import Optional
-import os
 import secrets
+
+from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _WEAK_SECRETS = {
     "change-me",
@@ -36,6 +35,11 @@ class Settings(BaseSettings):
     secret_key: str = Field(..., env="SECRET_KEY", min_length=32)
     jwt_secret_key: str = Field("", env="JWT_SECRET_KEY")
     csrf_secret: str = Field("", env="CSRF_SECRET")
+    # Shared secret Telegram echoes in X-Telegram-Bot-Api-Secret-Token on webhook calls.
+    # The webhook endpoint is disabled until this is set (>= 16 chars).
+    telegram_webhook_secret: str = Field("", env="TELEGRAM_WEBHOOK_SECRET")
+    # Dedicated backup encryption key (falls back to a key derived from SECRET_KEY).
+    backup_encryption_key: str = Field("", env="BACKUP_ENCRYPTION_KEY")
     # CORS — comma-separated list of allowed origins. Empty = no CORS middleware.
     # Wildcard "*" is REJECTED at startup (see validator below).
     cors_origins: str = Field("", env="CORS_ORIGINS")
@@ -44,6 +48,12 @@ class Settings(BaseSettings):
     # Comma-separated hostnames; empty = allow any (back-compat). Set this in
     # production to your panel domain(s), e.g. "panel.example.com".
     allowed_hosts: str = Field("", env="ALLOWED_HOSTS")
+    # Admin IP allowlist: comma-separated IPs/CIDRs allowed to reach /api/*
+    # (public endpoints such as subscriptions, payment webhooks, health and
+    # the self-service portal stay open). Empty = disabled. Loopback is always allowed.
+    admin_ip_allowlist: str = Field("", env="ADMIN_IP_ALLOWLIST")
+    # Extra path prefixes that stay public when the allowlist is active.
+    admin_ip_allowlist_public_prefixes: str = Field("", env="ADMIN_IP_ALLOWLIST_PUBLIC_PREFIXES")
     # Reject request bodies larger than this (anti-DoS). JSON API needs little;
     # 2 MiB is generous. 0 disables the check.
     max_request_body_bytes: int = Field(2 * 1024 * 1024, env="MAX_REQUEST_BODY_BYTES")
@@ -76,6 +86,7 @@ class Settings(BaseSettings):
     )
     session_lifetime_hours: int = 1
     mobile_token_lifetime_minutes: int = Field(30, env="MOBILE_TOKEN_LIFETIME_MINUTES")
+    mobile_refresh_lifetime_days: int = Field(30, env="MOBILE_REFRESH_LIFETIME_DAYS", ge=1, le=365)
     max_login_attempts: int = 5
     max_2fa_attempts: int = Field(10, env="MAX_2FA_ATTEMPTS")
     lockout_seconds: int = 1800
@@ -119,13 +130,25 @@ class Settings(BaseSettings):
             )
         return v
 
+    @field_validator("admin_ip_allowlist")
+    @classmethod
+    def _validate_admin_allowlist(cls, v: str):
+        import ipaddress
+
+        for part in (p.strip() for p in (v or "").split(",") if p.strip()):
+            try:
+                ipaddress.ip_network(part, strict=False)
+            except ValueError as exc:
+                raise ValueError(f"ADMIN_IP_ALLOWLIST contains invalid entry {part!r}") from exc
+        return v
+
     @field_validator("metrics_bearer_token")
     @classmethod
     def _validate_metrics_token(cls, v: str):
         if v and len(v) < 32:
             raise ValueError("METRICS_BEARER_TOKEN must be at least 32 chars")
         return v
-    
+
     # Xray
     vpn_server_ip: str = Field("", env="VPN_SERVER_IP")
     vpn_server_ipv6: str = Field("", env="VPN_SERVER_IPV6")
@@ -154,11 +177,11 @@ class Settings(BaseSettings):
     # (e.g. /etc/letsencrypt/live/<domain>/fullchain.pem).
     tls_cert_file: str = Field("/etc/ssl/certs/fullchain.pem", env="TLS_CERT_FILE")
     tls_key_file: str = Field("/etc/ssl/private/privkey.pem", env="TLS_KEY_FILE")
-    
+
     # REALITY — MUST be set via environment variables; no insecure defaults
     reality_private_key: str = Field("", env="REALITY_PRIVATE_KEY")
     reality_public_key: str = Field("", env="REALITY_PUBLIC_KEY")
-    
+
     # Protocols
     vless_ws_enabled: bool = Field(False, env="VLESS_WS_ENABLED")
     vless_ws_port: int = Field(2057, env="VLESS_WS_PORT")
@@ -190,13 +213,13 @@ class Settings(BaseSettings):
     vless_vision_reality_dest: str = Field("objects.githubusercontent.com:443", env="VLESS_VISION_REALITY_DEST")
     vless_vision_reality_short_id: str = Field("", env="VLESS_VISION_REALITY_SHORT_ID")
     vless_vision_reality_public_key: str = Field("", env="VLESS_VISION_REALITY_PUBLIC_KEY")
-    
+
     # CDN
     cdn_enabled: bool = Field(False, env="CDN_ENABLED")
     cdn_domain: str = Field("", env="CDN_DOMAIN")
     cdn_port: int = Field(2082, env="CDN_PORT")
     cdn_ws_path: str = Field("/cdn-ws", env="CDN_WS_PATH")
-    
+
     # Model configuration
     model_config = SettingsConfigDict(
         env_file=".env",

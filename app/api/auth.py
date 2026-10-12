@@ -19,33 +19,33 @@ Security guarantees (audited 2026-05-19):
   rare path where Redis is unavailable.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
-from pydantic import BaseModel, Field
-from typing import Optional
 import logging
+from datetime import UTC
 
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from pydantic import BaseModel, Field
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from ..audit import record_audit
 from ..auth import (
-    verify_password,
-    get_password_hash,
+    Token,
+    User,
     create_access_token,
     generate_totp_secret,
-    get_totp_uri,
-    verify_totp,
     get_current_user,
-    revoke_token,
+    get_password_hash,
+    get_totp_uri,
+    revoke_request_token,
     validate_password_strength,
-    User,
-    Token,
+    verify_password,
+    verify_totp,
 )
 from ..config import settings
 from ..database import get_async_db
 from ..models import Admin, UserRole
-from ..security import fail2ban_manager
 from ..redis_client import get_redis
-
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from jose import jwt as _jose_jwt
+from ..security import fail2ban_manager
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["authentication"])
@@ -183,14 +183,15 @@ async def login(request: LoginRequest, req: Request, db: AsyncSession = Depends(
         await _record_failed_login(client_ip)
         await fail2ban_manager.record_failed_attempt(client_ip, "panel", db, "Failed admin login")
         logger.warning("login.failure ip=%s user=%s", client_ip, request.username)
+        await record_audit(db, "login_failed", details={"username": request.username[:100]}, request=req)
         # Constant message — avoid user enumeration.
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
     locked_until = getattr(admin_user, "locked_until", None)
     if locked_until is not None:
-        from datetime import datetime, timezone
-        lu = locked_until if locked_until.tzinfo else locked_until.replace(tzinfo=timezone.utc)
-        if lu > datetime.now(timezone.utc):
+        from datetime import datetime
+        lu = locked_until if locked_until.tzinfo else locked_until.replace(tzinfo=UTC)
+        if lu > datetime.now(UTC):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account locked")
 
     await _clear_login_attempts(client_ip)
@@ -207,6 +208,7 @@ async def login(request: LoginRequest, req: Request, db: AsyncSession = Depends(
         data={"sub": request.username, "is_admin": is_admin_flag, "user_id": admin_user.id}
     )
     logger.info("login.success ip=%s user=%s", client_ip, request.username)
+    await record_audit(db, "login", admin_id=admin_user.id, details={"2fa": False}, request=req)
     return Token(
         access_token=access_token,
         token_type="bearer",
@@ -244,6 +246,7 @@ async def login_with_2fa(request: Login2FARequest, req: Request, db: AsyncSessio
     if not verify_totp(admin_user.totp_secret, request.totp_code):
         await _record_failed_2fa(client_ip, request.username)
         logger.warning("login.2fa_failure ip=%s user=%s", client_ip, request.username)
+        await record_audit(db, "login_2fa_failed", admin_id=admin_user.id, request=req)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid 2FA code")
 
     await _clear_login_attempts(client_ip)
@@ -254,6 +257,7 @@ async def login_with_2fa(request: Login2FARequest, req: Request, db: AsyncSessio
         data={"sub": request.username, "is_admin": is_admin_flag, "user_id": admin_user.id}
     )
     logger.info("login.2fa_success ip=%s user=%s", client_ip, request.username)
+    await record_audit(db, "login", admin_id=admin_user.id, details={"2fa": True}, request=req)
     return Token(
         access_token=access_token,
         token_type="bearer",
@@ -293,29 +297,16 @@ async def verify_2fa(request: Verify2FARequest, current_user: User = Depends(get
 
 
 @router.post("/logout", response_model=MessageResponse)
-async def logout(req: Request, current_user: User = Depends(get_current_user)):
-    """Revoke the bearer token by adding its jti to the Redis blacklist."""
-    auth_header = req.headers.get("Authorization", "")
-    if auth_header.lower().startswith("bearer "):
-        token = auth_header.split(" ", 1)[1].strip()
-        try:
-            # Decode WITHOUT signature check is unsafe; rely on the dependency
-            # that already ran (get_current_user) for validation, but read the
-            # raw payload here just for jti/exp.
-            payload = _jose_jwt.decode(
-                token, settings.jwt_secret_key, algorithms=["HS256"],
-                options={"verify_exp": False},
-            )
-            jti = payload.get("jti")
-            exp = payload.get("exp")
-            if jti and exp:
-                from datetime import datetime, timezone
-                ttl = int(exp - datetime.now(timezone.utc).timestamp())
-                await revoke_token(jti, ttl)
-                logger.info("logout user=%s jti=%s", current_user.username, jti[:8])
-        except Exception as e:
-            logger.warning("logout: token decode failed: %s", type(e).__name__)
-
+async def logout(
+    req: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """Revoke the presented token by adding its jti to the Redis blacklist."""
+    jti = await revoke_request_token(req)
+    if jti:
+        logger.info("logout user=%s jti=%s", current_user.username, jti[:8])
+    await record_audit(db, "logout", admin_id=current_user.id, request=req)
     return MessageResponse(message="Logged out successfully")
 
 

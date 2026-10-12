@@ -10,11 +10,11 @@ full panel boot. Tests assert:
 - Path exemptions (e.g. /api/auth/login) bypass CSRF.
 """
 
+import pytest
+from httpx import ASGITransport, AsyncClient
 from starlette.applications import Starlette
 from starlette.responses import JSONResponse
 from starlette.routing import Route
-from httpx import ASGITransport, AsyncClient
-import pytest
 
 from app.middleware.csrf import CSRFMiddleware
 

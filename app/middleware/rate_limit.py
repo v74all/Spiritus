@@ -17,7 +17,6 @@ Configuration via app.config.settings:
 from __future__ import annotations
 
 import logging
-from typing import Iterable
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request

@@ -11,9 +11,7 @@ the real install).
 
 from __future__ import annotations
 
-import json
 import os
-from typing import Any, Dict, Optional
 
 import pytest
 from fastapi.testclient import TestClient
@@ -30,20 +28,17 @@ from fastapi.testclient import TestClient
 os.environ.setdefault("SECRET_KEY", "x" * 64)
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
 
+from app.auth import create_access_token, get_password_hash  # noqa: E402
 from app.config import settings  # noqa: E402
+from app.database import AsyncSessionLocal  # noqa: E402
 
 # We need to import main AFTER the env vars are set so Settings
 # picks them up. main.py also wires the API routers we want to test.
 from app.main import app  # noqa: E402
-from app.database import AsyncSessionLocal  # noqa: E402
-from app.models import Admin, ProtocolConfig, UserRole  # noqa: E402
-from app.auth import get_password_hash, create_access_token  # noqa: E402
+from app.models import Admin, UserRole  # noqa: E402
 from app.services.protocol_sync import (  # noqa: E402
     SyncResult,
-    sync_and_reload,
-    runtime_status,
 )
-
 
 # ═══════════════════════════════════════════════════════════════
 #  Stubs
@@ -61,7 +56,7 @@ class _StubSyncResult:
     def __init__(self):
         self.calls: list = []
 
-    async def __call__(self, db, *, config_path: Optional[str] = None, dry_run: bool = False):
+    async def __call__(self, db, *, config_path: str | None = None, dry_run: bool = False):
         self.calls.append({"config_path": config_path, "dry_run": dry_run})
         return SyncResult(
             success=True,
@@ -78,7 +73,6 @@ class _StubSyncResult:
 # issue that bites the string form when `app/api/__init__.py`
 # is empty.
 from app.api import protocols as _protocols_module  # noqa: E402
-
 
 # ═══════════════════════════════════════════════════════════════
 #  Fixtures
@@ -140,7 +134,7 @@ def client():
         yield c
 
 
-def _auth_header(token: str) -> Dict[str, str]:
+def _auth_header(token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
@@ -289,6 +283,7 @@ def test_update_config_per_field_merge(client, admin_token, stub_sync):
     import asyncio
     async def fetch():
         from sqlalchemy import select
+
         from app.models import ProtocolConfig as PC
         async with AsyncSessionLocal() as db:
             r = await db.execute(

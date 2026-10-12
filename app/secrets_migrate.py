@@ -28,7 +28,6 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import Dict
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +70,7 @@ _SECRET_KEYS_FROM_SETTINGS = {
 }
 
 
-def _read_settings_file(path: Path) -> Dict[str, str]:
+def _read_settings_file(path: Path) -> dict[str, str]:
     """Read vpn-settings.json, return only the secret-bearing keys."""
     if not path.exists():
         return {}
@@ -81,7 +80,7 @@ def _read_settings_file(path: Path) -> Dict[str, str]:
     except (OSError, json.JSONDecodeError) as exc:
         logger.warning("could not read %s: %s", path, exc)
         return {}
-    secrets: Dict[str, str] = {}
+    secrets: dict[str, str] = {}
     for key in _SECRET_KEYS_FROM_SETTINGS:
         value = data.get(key)
         if isinstance(value, str) and value:
@@ -152,7 +151,7 @@ def main(argv: list[str] | None = None) -> int:
     settings_file = root / "vpn-settings.json"
     reality_file = root / "reality_private_key"
 
-    collected: Dict[str, str] = {}
+    collected: dict[str, str] = {}
 
     # 1. reality_private_key file
     pk = _read_top_level_secret_file(reality_file)

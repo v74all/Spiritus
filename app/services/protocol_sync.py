@@ -35,27 +35,26 @@ Concurrency:
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
-import shutil
+import secrets
 import subprocess
 import tempfile
 import threading
 import uuid as _uuid
-import asyncio
-import secrets
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .. import secrets as _secrets
 from ..config import settings
-from ..models import Agent, AgentBackend, AgentStatus, ProtocolConfig
+from ..models import Agent, ProtocolConfig
+from ..privileged_helper import PrivilegedHelperError, helper_request
 from ..protocol_engine import (
     PROTOCOLS,
     MieruConfigGenerator,
@@ -63,9 +62,8 @@ from ..protocol_engine import (
     SingboxConfigGenerator,
     XrayConfigGenerator,
 )
-from ..timeutil import utcnow as _utcnow
-from ..privileged_helper import helper_request, PrivilegedHelperError
 from ..redis_client import get_redis
+from ..timeutil import utcnow as _utcnow
 
 logger = logging.getLogger(__name__)
 
@@ -81,8 +79,8 @@ class ProtocolRuntimeStatus:
     enabled_in_db: bool
     running: bool
     connections: int
-    last_started_at: Optional[str]
-    last_error: Optional[str] = None
+    last_started_at: str | None
+    last_error: str | None = None
 
 
 @dataclass
@@ -91,17 +89,17 @@ class SyncResult:
     success: bool
     config_path: str
     validator_output: str = ""
-    reload_method: Optional[str] = None  # "reload" | "restart" | None
+    reload_method: str | None = None  # "reload" | "restart" | None
     rolled_back: bool = False
-    error: Optional[str] = None
+    error: str | None = None
     started_at: str = field(default_factory=lambda: _utcnow().isoformat())
-    finished_at: Optional[str] = None
+    finished_at: str | None = None
     # sing-box sync outcome (standalone protocols). None when no
     # sing-box protocol was enabled, so we never touched sing-box.
-    singbox_synced: Optional[bool] = None
+    singbox_synced: bool | None = None
     singbox_message: str = ""
     # Mieru (mita) sync outcome. None when Mieru was not enabled.
-    mieru_synced: Optional[bool] = None
+    mieru_synced: bool | None = None
     mieru_message: str = ""
 
 
@@ -141,7 +139,7 @@ async def _distributed_sync_lock():
 #  Reading the "what should be running" state
 # ═══════════════════════════════════════════════════════════════
 
-async def _load_enabled_protocols(db: AsyncSession) -> List[ProtocolConfig]:
+async def _load_enabled_protocols(db: AsyncSession) -> list[ProtocolConfig]:
     """Return every ProtocolConfig row whose `enabled` flag is True.
 
     Tied to an agent via `agent_id`. An operator may enable the same
@@ -154,7 +152,7 @@ async def _load_enabled_protocols(db: AsyncSession) -> List[ProtocolConfig]:
     return list(result.scalars().all())
 
 
-async def _load_agent_for(db: AsyncSession, protocol_cfg: ProtocolConfig) -> Optional[Agent]:
+async def _load_agent_for(db: AsyncSession, protocol_cfg: ProtocolConfig) -> Agent | None:
     """Resolve the agent a ProtocolConfig belongs to. Returns None if
     the FK is dangling (e.g. the agent row was deleted while the
     protocol config was kept)."""
@@ -170,7 +168,7 @@ async def _load_agent_for(db: AsyncSession, protocol_cfg: ProtocolConfig) -> Opt
 #  Composing the Xray config
 # ═══════════════════════════════════════════════════════════════
 
-async def _resolve_domain_defaults(db: AsyncSession) -> Dict[str, str]:
+async def _resolve_domain_defaults(db: AsyncSession) -> dict[str, str]:
     """Read the active domain + cert paths from the Setting table.
 
     Used as the default for every TLS-bearing inbound's SNI and
@@ -186,6 +184,7 @@ async def _resolve_domain_defaults(db: AsyncSession) -> Dict[str, str]:
     config.
     """
     from sqlalchemy import select as _select
+
     from ..models import Setting
     result = await db.execute(
         _select(Setting).where(Setting.key.in_([
@@ -203,11 +202,11 @@ async def _resolve_domain_defaults(db: AsyncSession) -> Dict[str, str]:
 
 
 def _apply_domain_defaults(
-    cfg: Dict[str, Any],
+    cfg: dict[str, Any],
     domain: str,
     cert_path: str,
     key_path: str,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Fill in any unset SNI / cert fields with the active domain.
 
     Why a function and not a dict merge inline:
@@ -241,7 +240,7 @@ def _apply_domain_defaults(
         # reality_dest is "host:port" — if the operator didn't
         # set it, point at the active domain on 443.
         if not out.get("reality_dest"):
-            out[f"reality_dest"] = f"{domain}:443"
+            out["reality_dest"] = f"{domain}:443"
     if cert_path and key_path:
         # Xray's TLS block. Some inbound builders read these
         # via `tlsSettings.certificates[0]`, others via a flat
@@ -258,7 +257,7 @@ def _apply_domain_defaults(
 #  Composing the Xray config
 # ═══════════════════════════════════════════════════════════════
 
-def _resolve_reality_keys(protocol_cfg: ProtocolConfig) -> Tuple[str, str, str]:
+def _resolve_reality_keys(protocol_cfg: ProtocolConfig) -> tuple[str, str, str]:
     """Pull REALITY key material from the DB config or the secrets
     manager. The DB config wins if the operator has explicitly set
     a per-protocol override; otherwise we fall back to whatever
@@ -304,8 +303,8 @@ def _build_inbound_for(
     protocol_key: str,
     protocol_cfg: ProtocolConfig,
     user_uuid: str,
-    domain_defaults: Optional[Dict[str, str]] = None,
-) -> Optional[Dict[str, Any]]:
+    domain_defaults: dict[str, str] | None = None,
+) -> dict[str, Any] | None:
     """Translate a ProtocolConfig row into an Xray inbound dict.
 
     Returns None when we don't know how to render the protocol — the
@@ -319,7 +318,7 @@ def _build_inbound_for(
     Domain feature: the operator sets the domain ONCE and every
     protocol inherits it.
     """
-    spec: Optional[ProtocolSpec] = PROTOCOLS.get(protocol_key)
+    spec: ProtocolSpec | None = PROTOCOLS.get(protocol_key)
     if spec is None:
         logger.warning("unknown protocol key %r in ProtocolConfig row", protocol_key)
         return None
@@ -347,9 +346,9 @@ def _build_inbound_for(
     # Resolve REALITY keys lazily — only protocols that actually use them
     # call _resolve_reality_keys(). Calling it unconditionally would break
     # every non-REALITY protocol when keys are not yet generated.
-    _reality_keys_cache: Optional[Tuple[str, str, str]] = None
+    _reality_keys_cache: tuple[str, str, str] | None = None
 
-    def _get_reality_keys() -> Tuple[str, str, str]:
+    def _get_reality_keys() -> tuple[str, str, str]:
         nonlocal _reality_keys_cache
         if _reality_keys_cache is None:
             _reality_keys_cache = _resolve_reality_keys(protocol_cfg)
@@ -485,8 +484,8 @@ SINGBOX_PROTOCOLS = {"hysteria2", "tuic", "shadowtls", "naiveproxy"}
 def _build_singbox_inbounds_for(
     protocol_key: str,
     protocol_cfg: ProtocolConfig,
-    domain_defaults: Optional[Dict[str, str]] = None,
-) -> Optional[List[Dict[str, Any]]]:
+    domain_defaults: dict[str, str] | None = None,
+) -> list[dict[str, Any]] | None:
     """Translate a ProtocolConfig row into sing-box inbound dict(s).
 
     Returns a list of inbounds (ShadowTLS yields two: the camouflage
@@ -580,7 +579,7 @@ def _build_singbox_inbounds_for(
 #  Filesystem + process interaction
 # ═══════════════════════════════════════════════════════════════
 
-def _write_xray_config(config: Dict[str, Any], path: str) -> None:
+def _write_xray_config(config: dict[str, Any], path: str) -> None:
     """Atomically replace the Xray config file.
 
     Atomicity matters here: Xray's reload path opens the file,
@@ -609,7 +608,7 @@ def _write_xray_config(config: Dict[str, Any], path: str) -> None:
         raise
 
 
-def _validate_xray_config(path: str) -> Tuple[bool, str]:
+def _validate_xray_config(path: str) -> tuple[bool, str]:
     """Run `xray -test -config <path>` and return (ok, output).
 
     The validator is what stops a typo in the inbound JSON from
@@ -644,7 +643,7 @@ def _validate_xray_config(path: str) -> Tuple[bool, str]:
     return True, output.strip()
 
 
-def _validate_singbox_config(path: str) -> Tuple[bool, str]:
+def _validate_singbox_config(path: str) -> tuple[bool, str]:
     """Run `sing-box check -c <path>` and return (ok, output).
 
     Mirrors `_validate_xray_config` for the standalone protocols. When
@@ -672,7 +671,7 @@ def _validate_singbox_config(path: str) -> Tuple[bool, str]:
     return True, output.strip()
 
 
-async def _reload_or_restart_xray(agent: Optional[Agent]) -> Tuple[bool, str, Optional[str]]:
+async def _reload_or_restart_xray(agent: Agent | None) -> tuple[bool, str, str | None]:
     """Apply the new config to the running Xray.
 
     Returns (ok, message, method). `method` is "reload" if we
@@ -701,7 +700,7 @@ async def _reload_or_restart_xray(agent: Optional[Agent]) -> Tuple[bool, str, Op
     return await _systemd_reload_or_restart("xray")
 
 
-async def _systemd_reload_or_restart(unit: str) -> Tuple[bool, str, Optional[str]]:
+async def _systemd_reload_or_restart(unit: str) -> tuple[bool, str, str | None]:
     """Try `systemctl reload <unit>` first; fall back to `restart`.
 
     `reload` (which sends SIGHUP) is preferred because it preserves
@@ -755,7 +754,7 @@ async def runtime_status(
     try:
         cfg_path = settings.xray_config_path
         if os.path.isfile(cfg_path):
-            with open(cfg_path, "r", encoding="utf-8") as f:
+            with open(cfg_path, encoding="utf-8") as f:
                 on_disk = json.load(f)
             tags = [
                 ib.get("tag", "")
@@ -783,9 +782,9 @@ async def runtime_status(
 # ═══════════════════════════════════════════════════════════════
 
 async def _sync_singbox(
-    enabled: List[ProtocolConfig],
-    domain_defaults: Dict[str, str],
-) -> Tuple[Optional[bool], str]:
+    enabled: list[ProtocolConfig],
+    domain_defaults: dict[str, str],
+) -> tuple[bool | None, str]:
     """Render + write + validate + reload the sing-box config.
 
     Returns (synced, message):
@@ -805,7 +804,7 @@ async def _sync_singbox(
     if not target:
         return False, "singbox_config_path is not configured"
 
-    inbounds: List[Dict[str, Any]] = []
+    inbounds: list[dict[str, Any]] = []
     for proto_cfg in sb_protocols:
         built = _build_singbox_inbounds_for(
             proto_cfg.protocol_key, proto_cfg, domain_defaults
@@ -855,7 +854,7 @@ async def _sync_singbox(
     return True, "sing-box synced and reloaded"
 
 
-async def _sync_mieru(enabled: List[ProtocolConfig]) -> Tuple[Optional[bool], str]:
+async def _sync_mieru(enabled: list[ProtocolConfig]) -> tuple[bool | None, str]:
     """Render + write + apply the Mieru (mita) server config.
 
     Mieru runs its own daemon configured via `mita apply config <file>`,
@@ -909,7 +908,7 @@ async def _sync_mieru(enabled: List[ProtocolConfig]) -> Tuple[Optional[bool], st
 async def sync_and_reload(
     db: AsyncSession,
     *,
-    config_path: Optional[str] = None,
+    config_path: str | None = None,
     dry_run: bool = False,
 ) -> SyncResult:
     """End-to-end sync: read DB → render config → write → validate → reload.
@@ -956,7 +955,7 @@ async def sync_and_reload(
                     api_port=int(getattr(settings, "api_port", 10085) or 10085),
                 )
             else:
-                inbounds: List[Dict[str, Any]] = []
+                inbounds: list[dict[str, Any]] = []
                 for proto_cfg in enabled:
                     inbound = _build_inbound_for(
                         proto_cfg.protocol_key,

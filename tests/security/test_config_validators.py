@@ -9,6 +9,7 @@ Ensures the panel refuses to load if:
 
 import importlib
 import os
+
 import pytest
 
 

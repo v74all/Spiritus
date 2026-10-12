@@ -26,6 +26,6 @@ _warnings.warn(
 # also exposed `init_db` — that helper now lives in `app.database`,
 # which is where the v2 entrypoint calls it. We re-export it here so
 # legacy scripts that ran `init_db()` keep working.
+from app.database import init_db  # noqa: E402,F401
 from app.models import *  # noqa: E402,F401,F403
 from app.models import Base  # noqa: E402,F401
-from app.database import init_db  # noqa: E402,F401

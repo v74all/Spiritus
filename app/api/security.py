@@ -7,20 +7,20 @@ Endpoints:
 - Fail2ban management
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, Request
-from pydantic import BaseModel, Field
-from typing import Optional, List
 import logging
 
-from ..auth import get_current_admin, get_current_user, create_access_token, User
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, Field
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from ..audit import verify_chain
+from ..auth import User, create_access_token, get_current_admin
 from ..config import settings
 from ..database import get_async_db
-from ..security import webauthn_manager, mtls_manager, fail2ban_manager
-from ..models import Admin
-from ..privileged_helper import helper_request, PrivilegedHelperError
-
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from ..models import Admin, AuditLog
+from ..privileged_helper import PrivilegedHelperError, helper_request
+from ..security import fail2ban_manager, mtls_manager, webauthn_manager
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/security", tags=["security"])
@@ -36,7 +36,7 @@ class WebAuthnRegistrationFinish(BaseModel):
     client_data_json: str
     attestation_object: str
     credential_id: str
-    transports: List[str] = Field(default_factory=list)
+    transports: list[str] = Field(default_factory=list)
 
 class WebAuthnAuthStart(BaseModel):
     username: str
@@ -47,7 +47,7 @@ class WebAuthnAuthFinish(BaseModel):
     client_data_json: str
     authenticator_data: str
     signature: str
-    user_handle: Optional[str] = None
+    user_handle: str | None = None
 
 class MTLSGenerateCert(BaseModel):
     username: str = Field(..., min_length=1, max_length=100)
@@ -271,3 +271,46 @@ async def unban_ip(
     if not success:
         raise HTTPException(status_code=404, detail="Ban not found")
     return MessageResponse(message=f"IP {data.ip_address} unbanned")
+
+
+# ── Audit log ─────────────────────────────────────────────
+
+@router.get("/audit")
+async def list_audit_log(
+    limit: int = 100,
+    offset: int = 0,
+    action: str | None = None,
+    admin: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_async_db),
+):
+    from sqlalchemy import select
+
+    query = select(AuditLog).order_by(AuditLog.id.desc())
+    if action:
+        query = query.where(AuditLog.action == action[:100])
+    rows = (
+        await db.execute(query.limit(max(1, min(limit, 500))).offset(max(0, offset)))
+    ).scalars().all()
+    return [
+        {
+            "id": r.id,
+            "admin_id": r.admin_id,
+            "action": r.action,
+            "target_type": r.target_type,
+            "target_id": r.target_id,
+            "details": r.details,
+            "ip_address": r.ip_address,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+            "entry_hash": r.entry_hash,
+        }
+        for r in rows
+    ]
+
+
+@router.get("/audit/verify")
+async def verify_audit_log(
+    admin: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """Re-compute the audit hash chain; ``ok=false`` means the log was tampered with."""
+    return await verify_chain(db)

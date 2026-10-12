@@ -8,20 +8,19 @@ Endpoints:
 - Config deployment
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from pydantic import BaseModel, Field
-from typing import Optional, List, Dict, Any
-from datetime import datetime
-from ..timeutil import utcnow as _utcnow
 import logging
+from typing import Any
 
-from ..auth import get_current_admin, User
-from ..database import get_async_db, safe_refresh
-from ..models import Agent, AgentBackend, AgentStatus, ProtocolConfig
-from ..orchestrator import orchestrator
-
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, Field
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from ..auth import User, get_current_admin
+from ..database import get_async_db, safe_refresh
+from ..models import Agent, AgentBackend, AgentStatus
+from ..orchestrator import orchestrator
+from ..timeutil import utcnow as _utcnow
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/agents", tags=["agents"])
@@ -34,29 +33,29 @@ class AgentCreate(BaseModel):
     backend: str = Field(..., description="xray|singbox|wireguard|openvpn")
     address: str = Field(..., min_length=1)
     api_port: int = Field(10085)
-    api_key: Optional[str] = None
-    config_path: Optional[str] = None
-    bin_path: Optional[str] = None
-    service_name: Optional[str] = None
+    api_key: str | None = None
+    config_path: str | None = None
+    bin_path: str | None = None
+    service_name: str | None = None
     # WireGuard fields
-    wg_interface: Optional[str] = None
-    wg_private_key: Optional[str] = None
-    wg_public_key: Optional[str] = None
-    wg_address: Optional[str] = None
-    wg_dns: Optional[str] = None
-    wg_listen_port: Optional[int] = None
-    wg_mtu: Optional[int] = 1280
+    wg_interface: str | None = None
+    wg_private_key: str | None = None
+    wg_public_key: str | None = None
+    wg_address: str | None = None
+    wg_dns: str | None = None
+    wg_listen_port: int | None = None
+    wg_mtu: int | None = 1280
 
 class AgentUpdate(BaseModel):
-    name: Optional[str] = None
-    address: Optional[str] = None
-    api_port: Optional[int] = None
-    api_key: Optional[str] = None
-    config_path: Optional[str] = None
-    bin_path: Optional[str] = None
-    service_name: Optional[str] = None
-    ech_enabled: Optional[bool] = None
-    ech_config: Optional[Dict[str, Any]] = None
+    name: str | None = None
+    address: str | None = None
+    api_port: int | None = None
+    api_key: str | None = None
+    config_path: str | None = None
+    bin_path: str | None = None
+    service_name: str | None = None
+    ech_enabled: bool | None = None
+    ech_config: dict[str, Any] | None = None
 
 class AgentResponse(BaseModel):
     id: int
@@ -66,11 +65,11 @@ class AgentResponse(BaseModel):
     address: str
     api_port: int
     ech_enabled: bool
-    last_heartbeat: Optional[str] = None
+    last_heartbeat: str | None = None
     cpu_usage: float = 0
     mem_usage: float = 0
     active_connections: int = 0
-    created_at: Optional[str] = None
+    created_at: str | None = None
 
 class ECHSetupRequest(BaseModel):
     public_name: str = Field("cloudflare-ech.com", description="ECH public name for DNS record")
@@ -82,7 +81,7 @@ class MessageResponse(BaseModel):
 
 # ── CRUD ──────────────────────────────────────────────────
 
-@router.get("", response_model=List[AgentResponse])
+@router.get("", response_model=list[AgentResponse])
 async def list_agents(
     admin: User = Depends(get_current_admin),
     db: AsyncSession = Depends(get_async_db),
@@ -286,6 +285,22 @@ async def check_all_agents_health(
     """Check health of all agents."""
     statuses = await orchestrator.health_check_all(db)
     return {"agents": statuses}
+
+
+class ConfigSyncRequest(BaseModel):
+    config: dict
+    agent_ids: list[int] | None = None
+    force: bool = False
+
+
+@router.post("/sync-config")
+async def sync_config(
+    data: ConfigSyncRequest,
+    admin: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """Push a config to all online agent nodes (unchanged nodes are skipped)."""
+    return {"agents": await orchestrator.sync_config_to_agents(db, data.config, data.agent_ids, data.force)}
 
 
 @router.post("/{agent_id}/restart")

@@ -5,29 +5,32 @@ This module initializes the FastAPI application, configures middleware,
 and mounts the API routers.
 """
 
-from fastapi import Depends, FastAPI, HTTPException, Request, Response
-from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from contextlib import asynccontextmanager
-from jinja2 import Environment, FileSystemLoader
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 import asyncio
 import base64
 import json
 import logging
+import math
 import os
 import re
 import subprocess
+from contextlib import asynccontextmanager
+
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+from jinja2 import Environment, FileSystemLoader
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from .auth import User, get_current_admin_cookie
 from .config import settings
 from .database import get_async_db, init_db, shutdown_db
 from .models import VpnUser
+from .observability import setup_opentelemetry
+from .privileged_helper import PrivilegedHelperError, helper_request
 from .redis_client import close_redis
-from .observability import setup_opentelemetry, prometheus_metrics
-from .privileged_helper import helper_request, PrivilegedHelperError
+from .timeutil import utcnow as _utcnow
 
 # Configure logging — stderr is always wired; the file handler is best-effort
 # so the panel can still start under tightened systemd profiles where the
@@ -79,8 +82,8 @@ async def lifespan(app: FastAPI):
     logger.info("DPI Evasion SNI Manager initialized")
 
     # Initialize Telegram bot
-    from .telegram_bot import telegram_bot
     from .config import settings as s
+    from .telegram_bot import telegram_bot
     if getattr(s, 'telegram_bot_token', None):
         telegram_bot.token = getattr(s, 'telegram_bot_token', '')
         telegram_bot.chat_id = getattr(s, 'telegram_chat_id', '')
@@ -110,7 +113,7 @@ async def lifespan(app: FastAPI):
             api_key=getattr(s, 'usdt_trongrid_api_key', ''),
         )
         logger.info("USDT TRC-20 gateway configured")
-    
+
     # First-run admin bootstrap (replaces the legacy plaintext password file).
     # Creates an Admin row from ADMIN_BOOTSTRAP_PASSWORD env if and only if
     # no admin exists yet. Bootstrap secret is consumed once — operators must
@@ -163,7 +166,7 @@ async def lifespan(app: FastAPI):
         logger.warning("Xray config bootstrap failed (non-fatal): %s", _xray_exc)
 
     yield
-    
+
     # Shutdown
     logger.info("Shutting down V7LTHRONYX VPN Panel...")
     await shutdown_db()
@@ -175,7 +178,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="V7LTHRONYX VPN Panel",
     description="Unified VPN management panel with multi-protocol support",
-    version="2.0.0",
+    version="2.1.0",
     lifespan=lifespan,
     docs_url="/api/docs" if settings.debug else None,
     redoc_url="/api/redoc" if settings.debug else None,
@@ -216,10 +219,18 @@ if _MAX_BODY > 0:
 
 # ── Rate limit (global) ──────────────────────────────────────────────────────
 from .middleware.rate_limit import RateLimitMiddleware
+
 app.add_middleware(RateLimitMiddleware)
+
+# ── Admin IP allowlist (opt-in via ADMIN_IP_ALLOWLIST) ───────────────────────
+if settings.admin_ip_allowlist.strip():
+    from .middleware.ip_allowlist import AdminIPAllowlistMiddleware
+
+    app.add_middleware(AdminIPAllowlistMiddleware)
 
 # ── CSRF (double-submit cookie) ──────────────────────────────────────────────
 from .middleware.csrf import CSRFMiddleware
+
 app.add_middleware(CSRFMiddleware)
 
 # ── Trusted Host allowlist (defence-in-depth vs Host-header poisoning) ────────
@@ -327,21 +338,28 @@ if os.path.exists("static"):
 
 # ── Mount API Routers ──────────────────────────────────
 
-from .api.auth import router as auth_router
-from .api.users import router as users_router
-from .api.system import router as system_router
-from .api.protocols import router as protocols_router
 from .api.abuse import router as abuse_router
-from .api.security import router as security_router
 from .api.agents import router as agents_router
-from .api.payments import router as payments_router
-from .api.resellers import router as resellers_router, portal_router
+from .api.auth import router as auth_router
 from .api.compat import router as compat_router
-from .api.mobile_auth import router as mobile_auth_router, session_router as mobile_session_router
+from .api.mobile_auth import router as mobile_auth_router
+from .api.mobile_auth import session_router as mobile_session_router
+from .api.payments import router as payments_router
+from .api.protocols import router as protocols_router
+from .api.resellers import portal_router
+from .api.resellers import router as resellers_router
+from .api.security import router as security_router
+from .api.system import router as system_router
+from .api.users import router as users_router
 
 # Legacy panel routes must be registered first so cookie-auth compatibility
 # handlers win over the bearer-token resource routers on shared paths.
 app.include_router(compat_router, prefix="/api")
+from .api.honeypot import router as honeypot_router
+from .api.telegram import router as telegram_router
+
+app.include_router(honeypot_router)
+app.include_router(telegram_router, prefix="/api")
 app.include_router(auth_router, prefix="/api")
 app.include_router(mobile_auth_router, prefix="/api")
 app.include_router(mobile_session_router, prefix="/api")
@@ -357,10 +375,12 @@ app.include_router(portal_router, prefix="/api")
 
 # DPI Evasion router
 from .api.dpi import router as dpi_router
+
 app.include_router(dpi_router, prefix="/api")
 
 # Domain & certificate manager
 from .api.domain import router as domain_router
+
 app.include_router(domain_router, prefix="/api")
 
 # ── Health check ────────────────────────────────────────
@@ -368,12 +388,13 @@ app.include_router(domain_router, prefix="/api")
 @app.get("/api/health", tags=["system"])
 async def health_check():
     """Health check endpoint for Kubernetes/load balancers."""
-    return {"status": "healthy", "service": "v7lthronyx-vpn-panel", "version": "2.0.0"}
+    return {"status": "healthy", "service": "v7lthronyx-vpn-panel", "version": "2.1.0"}
 
 @app.get("/api/ready", tags=["system"])
 async def readiness_check(db: AsyncSession = Depends(get_async_db)):
     """Check mandatory production dependencies without leaking internals."""
     from sqlalchemy import text
+
     from .redis_client import get_redis
 
     unavailable = []
@@ -431,8 +452,9 @@ async def google_relay_proxy(
     Response:
       {"status": 200, "body": "...response text..."}
     """
-    import httpx
     import ipaddress
+
+    import httpx
 
     try:
         if request.method == "POST":
@@ -462,8 +484,8 @@ async def google_relay_proxy(
         return JSONResponse({"error": "only http/https URLs allowed"}, status_code=400)
 
     # ─── SSRF protection ────────────────────────────────────────────────
-    from urllib.parse import urlparse
     import socket
+    from urllib.parse import urlparse
     parsed = urlparse(url)
     hostname = parsed.hostname
     port = parsed.port or (443 if parsed.scheme == "https" else 80)
@@ -664,6 +686,31 @@ def _subscription_user_dict(user: VpnUser) -> dict:
     }
 
 
+def _subscription_state(user: VpnUser) -> dict:
+    """Plain-language account state for the subscription page.
+
+    ``state``: expired | limit | expiring (<=3 days) | low_traffic (>=90% used) | ok.
+    ``days_left`` is None for accounts without an expiry date.
+    """
+    now = _utcnow()
+    days_left = None
+    if user.expire_at:
+        days_left = max(0, math.ceil((user.expire_at - now).total_seconds() / 86400))
+    limit = int(user.traffic_limit or 0)
+    used = int(user.traffic_used or 0)
+    if user.expire_at and user.expire_at <= now:
+        state = "expired"
+    elif limit > 0 and used >= limit:
+        state = "limit"
+    elif days_left is not None and days_left <= 3:
+        state = "expiring"
+    elif limit > 0 and used >= limit * 0.9:
+        state = "low_traffic"
+    else:
+        state = "ok"
+    return {"state": state, "days_left": days_left}
+
+
 async def _subscription_user(user_uuid: str, db: AsyncSession) -> VpnUser:
     result = await db.execute(select(VpnUser).where(VpnUser.uuid == user_uuid))
     user = result.scalar_one_or_none()
@@ -708,9 +755,18 @@ async def subscription_page(
     /sub-json. Without this an attacker with a leaked UUID could
     still read the configs of a disabled account from the HTML page.
     """
-    user = await _subscription_user(user_uuid, db)
-    if not user.active:
-        raise HTTPException(status_code=404, detail="Not found")
+    try:
+        user = await _subscription_user(user_uuid, db)
+        if not user.active:
+            raise HTTPException(status_code=404, detail="Not found")
+    except HTTPException:
+        # Same page for "unknown link" and "disabled account": a human-readable
+        # message without revealing which of the two it is.
+        html = _jinja_env.get_template("sub_unavailable.html").render(
+            dir=_detect_direction(request),
+            csp_nonce=getattr(request.state, "csp_nonce", ""),
+        )
+        return HTMLResponse(content=html, status_code=404)
     links = await _subscription_links(user, request, db)
     from .api.users import build_import_uri
 
@@ -721,6 +777,7 @@ async def subscription_page(
         dir=_detect_direction(request),
         request={"url_root": str(request.base_url)},
         user=_subscription_user_dict(user),
+        **_subscription_state(user),
         links=links,
         live_up=0,
         live_down=0,
@@ -1296,7 +1353,7 @@ def _generate_xray_server_config(panel_settings: dict) -> dict:
     sni = panel_settings.get("vmess_sni") or "www.aparat.com"
     fp = panel_settings.get("fingerprint") or "chrome"
     reality_pk = panel_settings.get("reality_private_key") or settings.reality_private_key
-    reality_pub = panel_settings.get("reality_public_key") or settings.reality_public_key
+    panel_settings.get("reality_public_key") or settings.reality_public_key
     reality_sid = panel_settings.get("reality_short_id") or ""
     # IPv6 dual-stack: "::" accepts both v4+v6 on Linux (IPV6_V6ONLY=false)
     listen_addr = "::" if panel_settings.get("ipv6_enabled") else "0.0.0.0"
@@ -1352,10 +1409,7 @@ def _generate_xray_server_config(panel_settings: dict) -> dict:
         xhttp_sid = panel_settings.get("vless_xhttp_reality_short_id") or ""
         raw_xhttp_port = int(panel_settings.get("vless_xhttp_port") or 0)
         vless_port_val = int(panel_settings.get("vless_port") or 2053)
-        if raw_xhttp_port and raw_xhttp_port != vless_port_val:
-            xhttp_port = raw_xhttp_port
-        else:
-            xhttp_port = 8449
+        xhttp_port = raw_xhttp_port if raw_xhttp_port and raw_xhttp_port != vless_port_val else 8449
         inbounds.append({
             "tag": "in-vless-xhttp",
             "port": xhttp_port,
@@ -1582,7 +1636,7 @@ async def sync_xray_config(
     """Generate and apply the Xray server config from current settings."""
     from .api.compat import _load_legacy_settings
 
-    panel_settings = await _load_legacy_settings(db)
+    await _load_legacy_settings(db)
 
     # Fetch active users for client authentication (in async context)
     result = await db.execute(

@@ -1,0 +1,47 @@
+image:
+  repository: ghcr.io/v74all/spiritus
+  tag: ""            # defaults to .Chart.AppVersion
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+# Name of an existing Secret holding the required keys:
+#   SECRET_KEY, DATABASE_URL, REDIS_URL, METRICS_BEARER_TOKEN
+# optional: JWT_SECRET_KEY, CSRF_SECRET, ARGON2_SALT, BACKUP_ENCRYPTION_KEY,
+#           ADMIN_BOOTSTRAP_PASSWORD
+existingSecret: spiritus-secrets
+
+config:
+  LOG_LEVEL: INFO
+  ALLOWED_HOSTS: ""
+  ADMIN_IP_ALLOWLIST: ""
+  CORS_ORIGINS: ""
+  MOBILE_REFRESH_LIFETIME_DAYS: "30"
+
+service:
+  type: ClusterIP
+  port: 38471
+
+ingress:
+  enabled: false
+  className: ""
+  host: panel.example.com
+  tlsSecretName: ""
+  annotations: {}
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    memory: 1Gi
+
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: ["ALL"]

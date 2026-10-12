@@ -12,27 +12,27 @@ Endpoints:
 - GET    /users/{user_id}/qr - Get QR code
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
-from pydantic import BaseModel, Field
-from typing import Optional, List
-from datetime import datetime
-import uuid as uuid_lib
-import logging
 import base64
-from urllib.parse import urlencode
+import logging
+import uuid as uuid_lib
+from datetime import datetime
 from pathlib import Path
+from urllib.parse import urlencode
+
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from pydantic import BaseModel, Field
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..auth import get_current_admin, User
+from ..auth import User, get_current_admin
 from ..config import settings
 from ..database import get_async_db, safe_refresh
-from ..models import VpnUser, Agent, Setting
+from ..models import Agent, Setting, VpnUser
 from ..orchestrator import orchestrator
-from ..protocol_engine import ClientConfigGenerator, PROTOCOLS
-
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from ..protocol_engine import ClientConfigGenerator
+from ..services.user_names import taken_vpn_user_names
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/users", tags=["users"])
@@ -77,20 +77,20 @@ async def _mobile_profile_uri(user: VpnUser, request: Request, db: AsyncSession)
 class UserCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     traffic_limit_gb: float = Field(10.0, ge=0)
-    expire_at: Optional[str] = None
-    agent_id: Optional[int] = None
+    expire_at: str | None = None
+    agent_id: int | None = None
     speed_limit_up: int = Field(0, ge=0)
     speed_limit_down: int = Field(0, ge=0)
     note: str = ""
 
 class UserUpdate(BaseModel):
-    name: Optional[str] = None
-    traffic_limit_gb: Optional[float] = None
-    expire_at: Optional[str] = None
-    active: Optional[int] = None
-    speed_limit_up: Optional[int] = None
-    speed_limit_down: Optional[int] = None
-    note: Optional[str] = None
+    name: str | None = None
+    traffic_limit_gb: float | None = None
+    expire_at: str | None = None
+    active: int | None = None
+    speed_limit_up: int | None = None
+    speed_limit_down: int | None = None
+    note: str | None = None
 
 class UserResponse(BaseModel):
     id: int
@@ -98,10 +98,10 @@ class UserResponse(BaseModel):
     uuid: str
     traffic_limit_gb: float
     traffic_used_gb: float
-    expire_at: Optional[str]
+    expire_at: str | None
     active: int
     created_at: str
-    agent_id: Optional[int]
+    agent_id: int | None
     speed_limit_up: int
     speed_limit_down: int
     note: str
@@ -126,10 +126,10 @@ def _user_to_response(u: VpnUser) -> UserResponse:
         note=u.note or "",
     )
 
-@router.get("", response_model=List[UserResponse])
+@router.get("", response_model=list[UserResponse])
 async def list_users(
-    search: Optional[str] = Query(None, description="Search by name", max_length=100),
-    active: Optional[int] = Query(None, description="Filter by active status"),
+    search: str | None = Query(None, description="Search by name", max_length=100),
+    active: int | None = Query(None, description="Filter by active status"),
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0),
     admin: User = Depends(get_current_admin),
@@ -170,6 +170,9 @@ async def create_user(
         agent_check = await db.execute(select(Agent).where(Agent.id == user.agent_id))
         if agent_check.scalar_one_or_none() is None:
             raise HTTPException(status_code=422, detail=f"Agent {user.agent_id} not found.")
+
+    if await taken_vpn_user_names(db, [user.name]):
+        raise HTTPException(status_code=409, detail=f"User '{user.name}' already exists.")
 
     db_user = VpnUser(
         uuid=user_uuid,

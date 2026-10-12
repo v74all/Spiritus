@@ -9,45 +9,40 @@ Let's Encrypt.
 
 from __future__ import annotations
 
-import os
 import socket as _socket
-from pathlib import Path
-from typing import Any, Dict
 from unittest import mock
 
 import pytest
 import pytest_asyncio
 
+import app.domain_manager as _domain_module  # noqa: E402  (for monkeypatch ref)
+from app.database import AsyncSessionLocal  # noqa: E402
+from app.domain_manager import (  # noqa: E402
+    KEY_DOMAIN_ACTIVE,
+    KEY_DOMAIN_CERT_PATH,
+    KEY_DOMAIN_CONTACT_EMAIL,
+    KEY_DOMAIN_EXPIRES_AT,
+    KEY_DOMAIN_ISSUER,
+    KEY_DOMAIN_KEY_PATH,
+    CertStatus,
+    _generate_self_signed_cert,
+    _parse_cert_expiry,
+    _parse_cert_subject,
+    _tls_paths_for,
+    _validate_domain,
+    disable_domain,
+    get_status,
+    maybe_autorenew,
+    set_domain,
+)
+
+# `_apply_domain_defaults` lives in the services layer.
+from app.services.protocol_sync import _apply_domain_defaults  # noqa: E402
+
 # conftest at the parent level wires the env. We do the rest
 # here because the domain tests need a fully-bootstrapped
 # `settings` table.
 from tests.security import conftest_domain  # noqa: E402,F401  (env+app imports)
-
-from app.config import settings  # noqa: E402
-from app.database import AsyncSessionLocal  # noqa: E402
-import app.domain_manager as _domain_module  # noqa: E402  (for monkeypatch ref)
-from app.domain_manager import (  # noqa: E402
-    CertStatus,
-    DEFAULT_AUTORENEW_DAYS,
-    KEY_DOMAIN_ACTIVE,
-    KEY_DOMAIN_CERT_PATH,
-    KEY_DOMAIN_EXPIRES_AT,
-    KEY_DOMAIN_ISSUER,
-    KEY_DOMAIN_KEY_PATH,
-    KEY_DOMAIN_CONTACT_EMAIL,
-    _validate_domain,
-    _parse_cert_subject,
-    _parse_cert_expiry,
-    _tls_paths_for,
-    _generate_self_signed_cert,
-    disable_domain,
-    get_status,
-    set_domain,
-    maybe_autorenew,
-)
-# `_apply_domain_defaults` lives in the services layer.
-from app.services.protocol_sync import _apply_domain_defaults  # noqa: E402
-
 
 # ═══════════════════════════════════════════════════════════════
 #  Fixtures
@@ -131,7 +126,7 @@ def test_validate_domain_rejects_resolves_to_private_ip(monkeypatch):
     # silently. So we make the assertion explicit: a None
     # here means our private-IP check is broken.
     err = _validate_domain("anything.example.com")
-    assert err is not None, f"expected rejection, got None; private IP check is broken"
+    assert err is not None, "expected rejection, got None; private IP check is broken"
     assert "private" in err.lower()
 
 
@@ -233,9 +228,9 @@ async def test_set_domain_writes_atomic_settings(tmp_path, monkeypatch):
         _socket, "getaddrinfo",
         lambda *a, **k: [(2, 1, 6, "", ("93.184.216.34", 0))],
     )
-    from app.privileged_helper import HelperResponse
     import app.privileged_helper as _helper_module
     import app.services.protocol_sync as _sync_module
+    from app.privileged_helper import HelperResponse
     async def _issued(*args, **kwargs):
         return HelperResponse(ok=True, data={"steps": [], "issuer": "self-signed"})
     async def _synced(*args, **kwargs):
@@ -252,6 +247,7 @@ async def test_set_domain_writes_atomic_settings(tmp_path, monkeypatch):
         assert result.success, result.error
 
         from sqlalchemy import select
+
         from app.models import Setting
         rows = (await db.execute(
             select(Setting).where(Setting.key.in_([

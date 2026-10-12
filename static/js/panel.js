@@ -484,7 +484,18 @@ function renderUsers() {
   const filtered = getFilteredUsers();
   updateFilterCounts();
   if (!users.length) {
-    grid.innerHTML = '<div class="empty"><div class="empty-icon">📡</div><div class="empty-text">No users created yet</div></div>';
+    grid.innerHTML = '<div class="empty-guide">'
+      + '<h3>👋 Welcome / خوش آمدید</h3>'
+      + '<ol class="help-en"><li>Choose protocols in <b>Settings</b> (Reality + Hysteria2 is a good start).</li>'
+      + '<li>Press <b>Add User</b> and pick a plan.</li>'
+      + '<li>Send the user their <b>subscription link</b> from the card.</li></ol>'
+      + '<ol class="help-fa" lang="fa"><li>در <b>Settings</b> پروتکل‌ها را انتخاب کنید (Reality + Hysteria2 شروع خوبی است).</li>'
+      + '<li>روی <b>Add User</b> بزنید و یک پلن انتخاب کنید.</li>'
+      + '<li>لینک اشتراک را از کارت کاربر برای او بفرستید.</li></ol>'
+      + '<div class="empty-actions">'
+      + '<button class="btn btn-primary" onclick="showModal(\'add-modal\')">+ Add User / افزودن کاربر</button>'
+      + '<button class="btn btn-outline" onclick="showModal(\'help-modal\')">? Guide / راهنما</button>'
+      + '</div></div>';
     return;
   }
   if (!filtered.length) {
@@ -653,9 +664,12 @@ async function doAddUser() {
   const traffic = parseFloat(document.getElementById('add-traffic').value);
   const days = parseInt(document.getElementById('add-days').value);
   const note = (document.getElementById('add-note').value || '').trim();
-  const speed_limit_down = parseInt(document.getElementById('add-speed-down').value) || 200;
-  const speed_limit_up = parseInt(document.getElementById('add-speed-up').value) || 200;
-  if (!name) {toast('Please enter a username','error'); return;}
+  const speedOr = (id) => { const v = parseInt(document.getElementById(id).value); return Number.isNaN(v) ? 200 : v; };
+  const speed_limit_down = speedOr('add-speed-down');
+  const speed_limit_up = speedOr('add-speed-up');
+  if (!name) {toast('Please enter a username / نام کاربری را وارد کنید','error'); return;}
+  if (Number.isNaN(traffic) || traffic < 0) {toast('Traffic must be 0 (unlimited) or more / حجم نامعتبر است','error'); return;}
+  if (Number.isNaN(days) || days < 0) {toast('Days must be 0 (never expires) or more / مدت نامعتبر است','error'); return;}
   try {
     const d = await apiCall(API+'/users', {method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({name, traffic, days, speed_limit_up, speed_limit_down, note})});
@@ -2548,6 +2562,12 @@ function showModal(id) {
   if (id === 'agents-modal') fetchAgents();
   if (id === 'sysmon-modal') openSysmonDetail();
   if (id === 'online-modal') fetchOnlineUsers();
+}
+function applyUserPreset(gb, days) {
+  const t = document.getElementById('add-traffic');
+  const d = document.getElementById('add-days');
+  if (t) t.value = gb;
+  if (d) d.value = days;
 }
 function closeModal(id){const modal=document.getElementById(id); if(modal) modal.classList.remove('show')}
 function hideModal(id){closeModal(id)}

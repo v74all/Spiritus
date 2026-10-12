@@ -32,10 +32,10 @@ _warnings.warn(
 
 # Re-export the password/JWT/TOTP helpers from app.auth.
 from app.auth import (  # noqa: E402,F401
-    get_password_hash,
-    verify_password,
     create_access_token,
     generate_totp_secret,
+    get_password_hash,
     get_totp_uri,
+    verify_password,
     verify_totp,
 )

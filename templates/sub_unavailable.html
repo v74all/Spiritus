@@ -1,0 +1,25 @@
+{% set fa = (dir == 'rtl') %}<!DOCTYPE html>
+<html lang="{{ 'fa' if fa else 'en' }}" dir="{{ dir }}">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>{{ 'لینک در دسترس نیست' if fa else 'Link unavailable' }}</title>
+<link rel="stylesheet" href="/static/css/panel.css">
+<style nonce="{{ csp_nonce }}">
+body{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;background:var(--bg0);color:var(--t1);font-family:var(--font-body)}
+.box{max-width:460px;text-align:center;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:32px}
+.ico{font-size:44px;margin-bottom:12px}
+h1{font-size:20px;color:var(--t0);margin-bottom:12px}
+p{font-size:14px;line-height:1.8;color:var(--t2);margin-bottom:10px}
+</style>
+</head>
+<body>
+<main class="box">
+  <div class="ico">🔗</div>
+  <h1>{{ 'این لینک اشتراک در دسترس نیست' if fa else 'This subscription link is not available' }}</h1>
+  <p>{{ 'ممکن است لینک را اشتباه کپی کرده باشید، یا اشتراک شما غیرفعال شده باشد.' if fa else 'The link may have been copied incorrectly, or the account may have been disabled.' }}</p>
+  <p>{{ 'لینک کامل را دوباره از فروشندهٔ خود بگیرید؛ اگر اشتراک شما تمام شده، برای تمدید با او تماس بگیرید.' if fa else 'Ask your provider for the full link again. If your subscription ended, contact them to renew.' }}</p>
+</main>
+</body>
+</html>

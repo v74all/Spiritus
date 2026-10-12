@@ -93,3 +93,22 @@ local files deleted; **do not push until explicitly authorised**.
 4. **Legacy UI cleanup**: CSP is nonce-only for scripts and styles. The compatibility binder still migrates old event/style attributes at runtime, so the next UI cleanup should replace those attributes with first-class classes and listeners.
 5. **Audit log persistence**: structured login/2FA/logout events are emitted to the Python logger. Wiring them into the `Audit` model (already present) is a small follow-up.
 6. **`STRICT_CONFIG=1`** should be set in production `.env` to enforce weak-secret rejection on the legacy `app_config.py` import path as well.
+
+---
+
+# Follow-up hardening — 2026-10-01
+
+| #  | Severity | Finding                                                                                              | Status |
+|----|----------|------------------------------------------------------------------------------------------------------|--------|
+| 23 | HIGH     | `python-jose` → vulnerable `ecdsa` (PYSEC-2026-1325); `pip-audit` now clean after moving to PyJWT.     | FIXED  |
+| 24 | HIGH     | Legacy `/api/logout` only cleared the cookie; a stolen token stayed valid until expiry.              | FIXED  |
+| 25 | MEDIUM   | Backups were plaintext JSON (client UUIDs, server keys) with default permissions.                   | FIXED  |
+| 26 | MEDIUM   | Audit events existed only as log lines; `audit_log` table unused.                                    | FIXED (HMAC hash-chain; tail truncation is not detectable) |
+| 27 | MEDIUM   | No refresh/rotation for mobile tokens (long-lived bearer only).                                      | FIXED  |
+| 28 | LOW      | Privileged helper wrote config via `write_text` then `chmod` (brief world-readable window).          | FIXED  |
+| 29 | LOW      | `greenlet` missing from requirements (clean installs failed to import async SQLAlchemy).             | FIXED  |
+
+New controls: admin IP allowlist, honeypot endpoints, Telegram webhook secret-token check, link-brute-force throttle on Telegram `/link`.
+
+Not done / out of scope: GeoIP blocking, mTLS for the panel (helpers exist in `app/security.py` but are not enforced), Vault/SOPS secret management, OpenVPN backend.
+

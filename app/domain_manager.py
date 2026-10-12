@@ -62,18 +62,18 @@ Failure handling:
 
 from __future__ import annotations
 
+import ipaddress
 import logging
 import os
 import re
 import shutil
 import socket
-import ipaddress
 import subprocess
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -149,12 +149,12 @@ class CertHealth:
     cert_path: str
     key_path: str
     issuer: str
-    expires_at: Optional[str] = None
-    days_remaining: Optional[int] = None
+    expires_at: str | None = None
+    days_remaining: int | None = None
     last_check: str = field(default_factory=lambda: _utcnow().isoformat())
-    error: Optional[str] = None
+    error: str | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "status": self.status.value,
             "domain": self.domain,
@@ -174,16 +174,16 @@ class DomainSetResult:
     verbatim so the UI can render the next-step hints."""
     success: bool
     domain: str = ""
-    health: Optional[CertHealth] = None
-    error: Optional[str] = None
-    steps: List[str] = field(default_factory=list)  # human-readable log of what we did
+    health: CertHealth | None = None
+    error: str | None = None
+    steps: list[str] = field(default_factory=list)  # human-readable log of what we did
 
 
 # ═══════════════════════════════════════════════════════════════
 #  Storage helpers
 # ═══════════════════════════════════════════════════════════════
 
-async def _get_setting(db: AsyncSession, key: str) -> Optional[str]:
+async def _get_setting(db: AsyncSession, key: str) -> str | None:
     result = await db.execute(select(Setting).where(Setting.key == key))
     row = result.scalar_one_or_none()
     return row.value if row else None
@@ -214,7 +214,7 @@ async def _set_setting(db: AsyncSession, key: str, value: str) -> None:
     await db.commit()
 
 
-async def _set_settings_bulk(db: AsyncSession, mapping: Dict[str, str]) -> None:
+async def _set_settings_bulk(db: AsyncSession, mapping: dict[str, str]) -> None:
     """Upsert several keys in a single commit.
 
     Used by set_domain() so a half-applied set (cert saved but
@@ -238,7 +238,7 @@ async def _set_settings_bulk(db: AsyncSession, mapping: Dict[str, str]) -> None:
     await db.commit()
 
 
-async def _delete_settings(db: AsyncSession, keys: List[str]) -> None:
+async def _delete_settings(db: AsyncSession, keys: list[str]) -> None:
     """Used by disable_domain() to wipe a clean slate."""
     for key in keys:
         result = await db.execute(select(Setting).where(Setting.key == key))
@@ -252,7 +252,7 @@ async def _delete_settings(db: AsyncSession, keys: List[str]) -> None:
 #  Validation
 # ═══════════════════════════════════════════════════════════════
 
-def _validate_domain(domain: str) -> Optional[str]:
+def _validate_domain(domain: str) -> str | None:
     """Return None if `domain` is a usable FQDN, else a reason string.
 
     Why regex AND DNS resolution:
@@ -293,7 +293,7 @@ def _validate_domain(domain: str) -> Optional[str]:
 #  Filesystem layout
 # ═══════════════════════════════════════════════════════════════
 
-def _tls_paths_for(domain: str) -> Dict[str, Path]:
+def _tls_paths_for(domain: str) -> dict[str, Path]:
     """Return the canonical on-disk locations for a domain's cert.
 
     We standardise on /etc/v7lthronyx/tls/<domain>/fullchain.pem
@@ -316,7 +316,7 @@ def _tls_paths_for(domain: str) -> Dict[str, Path]:
 #  Cert generation
 # ═══════════════════════════════════════════════════════════════
 
-def _ensure_openssl() -> Optional[str]:
+def _ensure_openssl() -> str | None:
     """Confirm openssl is on $PATH; return an error string if not."""
     if shutil.which("openssl") is None:
         return "openssl binary not found on PATH"
@@ -562,7 +562,7 @@ def _issue_letsencrypt_cert(
 #  Cert parsing
 # ═══════════════════════════════════════════════════════════════
 
-def _parse_cert_expiry(cert_path: Path) -> Optional[datetime]:
+def _parse_cert_expiry(cert_path: Path) -> datetime | None:
     """Return the notAfter timestamp from the cert at `cert_path`.
 
     We use openssl because the python `cryptography` package
@@ -592,7 +592,7 @@ def _parse_cert_expiry(cert_path: Path) -> Optional[datetime]:
         return None
 
 
-def _parse_cert_subject(cert_path: Path) -> Optional[str]:
+def _parse_cert_subject(cert_path: Path) -> str | None:
     """Return the CN of the cert at `cert_path`."""
     if not cert_path.exists():
         return None
@@ -611,7 +611,7 @@ def _parse_cert_subject(cert_path: Path) -> Optional[str]:
     return m.group(1).strip() if m else None
 
 
-def _parse_cert_issuer(cert_path: Path) -> Optional[str]:
+def _parse_cert_issuer(cert_path: Path) -> str | None:
     if not cert_path.exists():
         return None
     try:
@@ -653,7 +653,7 @@ class DomainStatus:
     server_ip: str                # what the panel would use if no domain were set
     can_use_letsencrypt: bool      # is acme.sh / certbot installed?
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "active_domain": self.active_domain,
             "enabled": self.enabled,
@@ -672,7 +672,7 @@ async def get_status(db: AsyncSession) -> DomainStatus:
     active = (await _get_setting(db, KEY_DOMAIN_ACTIVE) or "").strip()
     cert_path = (await _get_setting(db, KEY_DOMAIN_CERT_PATH) or "").strip()
     key_path = (await _get_setting(db, KEY_DOMAIN_KEY_PATH) or "").strip()
-    expires_at = await _get_setting(db, KEY_DOMAIN_EXPIRES_AT)
+    await _get_setting(db, KEY_DOMAIN_EXPIRES_AT)
     issuer = await _get_setting(db, KEY_DOMAIN_ISSUER) or ""
     contact = (await _get_setting(db, KEY_DOMAIN_CONTACT_EMAIL) or "").strip()
     last_check = (await _get_setting(db, KEY_DOMAIN_LAST_CHECK) or "").strip()
@@ -753,7 +753,7 @@ async def _probe_cert(
     now = _utcnow()
     # Make expires timezone-aware if it isn't (openssl returns naive).
     if expires.tzinfo is None:
-        expires = expires.replace(tzinfo=timezone.utc)
+        expires = expires.replace(tzinfo=UTC)
     days_remaining = (expires - now).days
     if days_remaining < 0:
         status = CertStatus.EXPIRED
@@ -808,7 +808,7 @@ async def set_domain(
     if err:
         return DomainSetResult(success=False, domain=domain, error=err)
 
-    from .privileged_helper import helper_request, PrivilegedHelperError
+    from .privileged_helper import PrivilegedHelperError, helper_request
     issuer = "self-signed" if prefer_self_signed else "letsencrypt"
     try:
         result = await helper_request(
@@ -904,7 +904,7 @@ async def rotate_cert(db: AsyncSession) -> DomainSetResult:
 #  Autorenewal check (called from Celery)
 # ═══════════════════════════════════════════════════════════════
 
-async def maybe_autorenew(db: AsyncSession) -> Optional[DomainSetResult]:
+async def maybe_autorenew(db: AsyncSession) -> DomainSetResult | None:
     """Rotate the cert if it's inside the autorenew window.
 
     Returns None when no action was needed (cert is healthy);

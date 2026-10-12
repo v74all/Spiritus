@@ -16,25 +16,23 @@ Features:
 """
 
 import asyncio
+import hashlib
 import json
+import logging
 import os
 import subprocess
 import tempfile
 import time
-import logging
-from typing import Dict, Any, Optional, List
-from dataclasses import dataclass
-from datetime import datetime
-from .timeutil import utcnow as _utcnow
-from enum import Enum
+from typing import Any
 
 import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .models import Agent, AgentBackend, AgentStatus, ProtocolConfig, VpnUser
-from .protocol_engine import XrayConfigGenerator, ech_mgr
-from .privileged_helper import helper_request, PrivilegedHelperError
+from .privileged_helper import PrivilegedHelperError, helper_request
+from .protocol_engine import ech_mgr
+from .timeutil import utcnow as _utcnow
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +46,7 @@ class AgentConnection:
 
     def __init__(self, agent: Agent):
         self.agent = agent
-        self._client: Optional[httpx.AsyncClient] = None
+        self._client: httpx.AsyncClient | None = None
         self._last_heartbeat = 0
 
     async def get_client(self) -> httpx.AsyncClient:
@@ -78,7 +76,7 @@ class AgentConnection:
         except Exception:
             return False
 
-    async def get_stats(self) -> Dict[str, Any]:
+    async def get_stats(self) -> dict[str, Any]:
         """Get agent statistics."""
         try:
             client = await self.get_client()
@@ -123,7 +121,7 @@ class XrayBackend:
             logger.error(f"Failed to reload Xray config on {self.agent.name}: {e}")
             return False
 
-    async def get_user_traffic(self, user_email: str) -> Dict[str, int]:
+    async def get_user_traffic(self, user_email: str) -> dict[str, int]:
         """Get a user's traffic via `xray api statsquery`.
 
         Xray tracks per-user counters as `user>>>{email}>>>traffic>>>uplink`
@@ -156,7 +154,7 @@ class XrayBackend:
             logger.error("Failed to get traffic for %s: %s", user_email, e)
             return {"upload": 0, "download": 0}
 
-    async def deploy_config(self, config: Dict[str, Any]) -> bool:
+    async def deploy_config(self, config: dict[str, Any]) -> bool:
         """Deploy Xray configuration to agent."""
         try:
             with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as candidate:
@@ -194,13 +192,13 @@ class XrayBackend:
         from .config import settings as _settings
         return self.agent.bin_path or _settings.xray_bin_path or "/usr/local/bin/xray"
 
-    def _read_live_inbounds(self) -> List[Dict[str, Any]]:
+    def _read_live_inbounds(self) -> list[dict[str, Any]]:
         """Read non-API inbounds from the on-disk Xray config so we can
         target every enabled protocol when adding/removing a user."""
         from .config import settings as _settings
         path = self.agent.config_path or _settings.xray_config_path
         try:
-            with open(path, "r", encoding="utf-8") as f:
+            with open(path, encoding="utf-8") as f:
                 cfg = json.load(f)
         except (OSError, json.JSONDecodeError) as exc:
             logger.error("xray add_user: cannot read config %s: %s", path, exc)
@@ -211,7 +209,7 @@ class XrayBackend:
         ]
 
     @staticmethod
-    def _client_entry(protocol: str, user: VpnUser) -> Optional[Dict[str, Any]]:
+    def _client_entry(protocol: str, user: VpnUser) -> dict[str, Any] | None:
         """Build the settings.clients entry for `user` for a given
         inbound protocol. Returns None for protocols that don't take
         a per-user credential here."""
@@ -240,7 +238,7 @@ class XrayBackend:
             logger.warning("xray add_user: no live inbounds found; nothing to do")
             return False
 
-        adu_inbounds: List[Dict[str, Any]] = []
+        adu_inbounds: list[dict[str, Any]] = []
         for ib in inbounds:
             entry = self._client_entry(ib.get("protocol", ""), user)
             if entry is None:
@@ -279,7 +277,7 @@ class XrayBackend:
             except OSError:
                 pass
 
-    async def remove_user(self, user_uuid: str, email: Optional[str] = None) -> bool:
+    async def remove_user(self, user_uuid: str, email: str | None = None) -> bool:
         """Remove a user from every live Xray inbound via `xray api rmu`.
 
         rmu identifies users by email, so we remove `email` from each
@@ -332,7 +330,7 @@ class SingboxBackend:
             logger.error(f"Failed to restart sing-box on {self.agent.name}: {e}")
             return False
 
-    async def deploy_config(self, config: Dict[str, Any]) -> bool:
+    async def deploy_config(self, config: dict[str, Any]) -> bool:
         """Deploy sing-box configuration."""
         try:
             installed = await helper_request(
@@ -379,7 +377,7 @@ class WireGuardBackend:
         self.agent = agent
         self.conn = AgentConnection(agent)
 
-    async def add_user(self, user: VpnUser, protocol_config: ProtocolConfig) -> Dict[str, str]:
+    async def add_user(self, user: VpnUser, protocol_config: ProtocolConfig) -> dict[str, str]:
         """Add a WireGuard peer. Returns client config."""
         try:
             import subprocess as sp
@@ -494,7 +492,8 @@ class Orchestrator:
     """
 
     def __init__(self):
-        self._backends: Dict[int, Any] = {}  # agent_id -> backend instance
+        self._backends: dict[int, Any] = {}  # agent_id -> backend instance
+        self._config_hashes: dict[int, str] = {}  # agent_id -> sha256 of last synced config
 
     def _get_backend(self, agent: Agent):
         """Get the appropriate backend for an agent."""
@@ -513,7 +512,7 @@ class Orchestrator:
         self._backends[agent.id] = backend
         return backend
 
-    async def health_check_all(self, db: AsyncSession) -> List[Dict[str, Any]]:
+    async def health_check_all(self, db: AsyncSession) -> list[dict[str, Any]]:
         """Check health of all agents."""
         result = await db.execute(select(Agent))
         agents = result.scalars().all()
@@ -541,7 +540,7 @@ class Orchestrator:
 
     async def add_user_to_agent(
         self, user: VpnUser, agent: Agent, protocol_config: ProtocolConfig
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Add a user to the appropriate backend."""
         backend = self._get_backend(agent)
         result = await backend.add_user(user, protocol_config)
@@ -561,11 +560,43 @@ class Orchestrator:
         return await backend.remove_user(user.uuid)
 
     async def deploy_agent_config(
-        self, agent: Agent, config: Dict[str, Any]
+        self, agent: Agent, config: dict[str, Any]
     ) -> bool:
         """Deploy configuration to an agent."""
         backend = self._get_backend(agent)
         return await backend.deploy_config(config)
+
+    async def sync_config_to_agents(
+        self,
+        db: AsyncSession,
+        config: dict[str, Any],
+        agent_ids: list[int] | None = None,
+        force: bool = False,
+    ) -> list[dict[str, Any]]:
+        """Push one config to every online agent, skipping nodes already on this exact config.
+
+        A failure on one node never blocks the others; per-node results are returned.
+        """
+        digest = hashlib.sha256(json.dumps(config, sort_keys=True).encode()).hexdigest()
+        query = select(Agent).where(Agent.status == AgentStatus.online)
+        if agent_ids:
+            query = query.where(Agent.id.in_(agent_ids))
+        agents = (await db.execute(query)).scalars().all()
+
+        results: list[dict[str, Any]] = []
+        for agent in agents:
+            if not force and self._config_hashes.get(agent.id) == digest:
+                results.append({"id": agent.id, "name": agent.name, "status": "unchanged"})
+                continue
+            try:
+                ok = await self.deploy_agent_config(agent, config)
+            except Exception as exc:
+                logger.warning("config sync to agent %s failed: %s", agent.name, type(exc).__name__)
+                ok = False
+            if ok:
+                self._config_hashes[agent.id] = digest
+            results.append({"id": agent.id, "name": agent.name, "status": "synced" if ok else "failed"})
+        return results
 
     async def restart_agent(self, agent: Agent) -> bool:
         """Restart an agent's service."""
@@ -574,7 +605,7 @@ class Orchestrator:
 
     async def get_user_traffic(
         self, user: VpnUser, agent: Agent
-    ) -> Dict[str, int]:
+    ) -> dict[str, int]:
         """Get user traffic from the backend."""
         backend = self._get_backend(agent)
         if isinstance(backend, XrayBackend):
@@ -584,7 +615,7 @@ class Orchestrator:
 
     async def setup_ech(
         self, agent: Agent, public_name: str = "cloudflare-ech.com"
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Setup ECH (Encrypted Client Hello) for an agent."""
         keys = ech_mgr.generate_ech_keys()
         ech_config = ech_mgr.generate_ech_config(

@@ -26,13 +26,10 @@ from __future__ import annotations
 import hmac
 import logging
 import secrets
-from typing import Iterable
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
-
-from ..config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -64,9 +61,11 @@ _EXEMPT_PATH_PREFIXES: tuple[str, ...] = (
     "/api/agent/login",           # agent login
     "/api/mobile/auth/login",     # token-based mobile login
     "/api/mobile/auth/2fa",       # one-time mobile 2FA challenge
+    "/api/mobile/auth/refresh",   # single-use refresh token (bearer-equivalent secret)
     "/api/security/webauthn/authenticate",  # passkey login has no session yet
     "/api/payments/callback/",    # signed webhooks
     "/api/payments/webhook",
+    "/api/telegram/webhook",       # authenticated by Telegram secret-token header
     "/sub/", "/sub-api/", "/sub-json/",
     # /api/direction is a pure UI preference (LTR/RTL) — no security value
     # in CSRF-protecting it, and gating it behind a cookie that's not yet

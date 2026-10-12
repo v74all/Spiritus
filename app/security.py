@@ -17,32 +17,38 @@ Fail2ban:
 - Custom filter and action configurations
 """
 
-import base64
 import hashlib
 import json
+import logging
 import os
+import re
 import secrets
 import subprocess
-import time
-import logging
-import re
-from typing import Dict, Any, Optional, List, Tuple
-from datetime import datetime, timedelta, timezone
-from .timeutil import utcnow as _utcnow
+from datetime import timedelta
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .models import Admin, Fail2banBan
 from .config import settings
+from .models import Admin, Fail2banBan
 from .redis_client import get_redis
+from .timeutil import utcnow as _utcnow
 
 try:
     from webauthn import (
         generate_authentication_options as _wa_generate_authentication_options,
+    )
+    from webauthn import (
         generate_registration_options as _wa_generate_registration_options,
+    )
+    from webauthn import (
         options_to_json as _wa_options_to_json,
+    )
+    from webauthn import (
         verify_authentication_response as _wa_verify_authentication_response,
+    )
+    from webauthn import (
         verify_registration_response as _wa_verify_registration_response,
     )
     from webauthn.helpers import base64url_to_bytes, bytes_to_base64url
@@ -85,10 +91,10 @@ class WebAuthnManager:
         return base64url_to_bytes(raw)
 
     @staticmethod
-    def _valid_credentials(credentials: List[Dict] | None) -> List[Dict]:
+    def _valid_credentials(credentials: list[dict] | None) -> list[dict]:
         return [c for c in (credentials or []) if c.get("version") == 1 and c.get("public_key")]
 
-    async def generate_registration_options(self, username: str, existing_credentials=None) -> Dict[str, Any]:
+    async def generate_registration_options(self, username: str, existing_credentials=None) -> dict[str, Any]:
         self._configured()
         exclude = [
             PublicKeyCredentialDescriptor(id=base64url_to_bytes(c["id"]))
@@ -107,8 +113,8 @@ class WebAuthnManager:
 
     async def verify_registration(
         self, username: str, client_data_json: str, attestation_object: str,
-        credential_id: str, transports: Optional[List[str]] = None,
-    ) -> Dict[str, Any]:
+        credential_id: str, transports: list[str] | None = None,
+    ) -> dict[str, Any]:
         self._configured()
         challenge = await self._take_challenge("register", username)
         credential = {
@@ -148,7 +154,7 @@ class WebAuthnManager:
             "version": 1,
         }
 
-    async def generate_authentication_options(self, username: str, credentials: List[Dict]) -> Dict[str, Any]:
+    async def generate_authentication_options(self, username: str, credentials: list[dict]) -> dict[str, Any]:
         self._configured()
         valid = self._valid_credentials(credentials)
         if not valid:
@@ -164,9 +170,9 @@ class WebAuthnManager:
 
     async def verify_authentication(
         self, username: str, credential_id: str, client_data_json: str,
-        authenticator_data: str, signature: str, stored_credentials: List[Dict],
-        user_handle: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        authenticator_data: str, signature: str, stored_credentials: list[dict],
+        user_handle: str | None = None,
+    ) -> dict[str, Any]:
         self._configured()
         challenge = await self._take_challenge("authenticate", username)
         matched = next(
@@ -228,7 +234,7 @@ class MTLSManager:
         self.ca_key_path = ca_key_path
         self.certs_dir = certs_dir
 
-    def init_ca(self) -> Dict[str, str]:
+    def init_ca(self) -> dict[str, str]:
         """Initialize the Certificate Authority."""
         os.makedirs(os.path.dirname(self.ca_cert_path), exist_ok=True)
         os.makedirs(self.certs_dir, exist_ok=True)
@@ -260,7 +266,7 @@ class MTLSManager:
         self,
         username: str,
         days: int = 365,
-    ) -> Dict[str, str]:
+    ) -> dict[str, str]:
         """Generate a client certificate for an admin user."""
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}", username):
             raise ValueError("username contains unsafe certificate filename characters")
@@ -385,7 +391,7 @@ server {{
 }}
 """
 
-    async def verify_client_cert_cn(self, cn: str, db: AsyncSession) -> Optional[Admin]:
+    async def verify_client_cert_cn(self, cn: str, db: AsyncSession) -> Admin | None:
         """Look up an admin by their mTLS certificate CN."""
         result = await db.execute(
             select(Admin).where(Admin.mtls_cn == cn)
@@ -564,10 +570,7 @@ action = iptables-multiport[name=v7lthronyx-{service}, port="{jail['port']}", pr
         if not ban:
             return False
 
-        if ban.banned_until and ban.banned_until > _utcnow():
-            return True
-
-        return False
+        return bool(ban.banned_until and ban.banned_until > _utcnow())
 
     async def unban(
         self, ip_address: str, service: str, db: AsyncSession
@@ -587,7 +590,7 @@ action = iptables-multiport[name=v7lthronyx-{service}, port="{jail['port']}", pr
             return True
         return False
 
-    async def get_all_bans(self, db: AsyncSession) -> List[Dict[str, Any]]:
+    async def get_all_bans(self, db: AsyncSession) -> list[dict[str, Any]]:
         """Get all active bans."""
         result = await db.execute(
             select(Fail2banBan).order_by(Fail2banBan.created_at.desc())
@@ -607,7 +610,7 @@ action = iptables-multiport[name=v7lthronyx-{service}, port="{jail['port']}", pr
             for b in bans
         ]
 
-    def install_all(self) -> Dict[str, bool]:
+    def install_all(self) -> dict[str, bool]:
         """Install all fail2ban filters and jails."""
         results = {}
         for service in ["panel", "ssh", "xray"]:

@@ -4,17 +4,18 @@ Redis module for V7LTHRONYX VPN Panel.
 Provides caching, rate limiting, and session management.
 """
 
-import redis.asyncio as aioredis
-from typing import Optional, Any
 import json
 import logging
+from typing import Any
+
+import redis.asyncio as aioredis
 
 from .config import settings
 
 logger = logging.getLogger(__name__)
 
 # Redis connection pool
-_redis_pool: Optional[aioredis.Redis] = None
+_redis_pool: aioredis.Redis | None = None
 
 async def get_redis() -> aioredis.Redis:
     """Get Redis connection."""
@@ -38,14 +39,14 @@ async def close_redis():
 
 class CacheManager:
     """Redis-based cache manager."""
-    
+
     def __init__(self, prefix: str = "vpn:cache"):
         self.prefix = prefix
-    
+
     async def _get_conn(self) -> aioredis.Redis:
         return await get_redis()
-    
-    async def get(self, key: str) -> Optional[Any]:
+
+    async def get(self, key: str) -> Any | None:
         """Get a cached value."""
         conn = await self._get_conn()
         value = await conn.get(f"{self.prefix}:{key}")
@@ -55,19 +56,19 @@ class CacheManager:
             except json.JSONDecodeError:
                 return value
         return None
-    
+
     async def set(self, key: str, value: Any, expire: int = 300):
         """Set a cached value with expiration (default 5 minutes)."""
         conn = await self._get_conn()
         if isinstance(value, (dict, list)):
             value = json.dumps(value)
         await conn.set(f"{self.prefix}:{key}", value, ex=expire)
-    
+
     async def delete(self, key: str):
         """Delete a cached value."""
         conn = await self._get_conn()
         await conn.delete(f"{self.prefix}:{key}")
-    
+
     async def exists(self, key: str) -> bool:
         """Check if a key exists."""
         conn = await self._get_conn()
@@ -75,13 +76,13 @@ class CacheManager:
 
 class RateLimiter:
     """Redis-based rate limiter."""
-    
+
     def __init__(self, prefix: str = "vpn:ratelimit"):
         self.prefix = prefix
-    
+
     async def _get_conn(self) -> aioredis.Redis:
         return await get_redis()
-    
+
     async def is_rate_limited(
         self,
         key: str,
@@ -91,16 +92,16 @@ class RateLimiter:
         """Check if a key has exceeded rate limit."""
         conn = await self._get_conn()
         redis_key = f"{self.prefix}:{key}"
-        
+
         # Increment counter
         current = await conn.incr(redis_key)
-        
+
         # Set expiration on first request
         if current == 1:
             await conn.expire(redis_key, window_seconds)
-        
+
         return current > max_requests
-    
+
     async def get_remaining(
         self,
         key: str,

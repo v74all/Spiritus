@@ -17,7 +17,7 @@ challenge hint.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -28,13 +28,12 @@ from ..database import get_async_db
 from ..domain_manager import (
     DomainSetResult,
     DomainStatus,
-    set_domain,
-    disable_domain,
-    rotate_cert,
-    get_status,
     _have_acme_sh,
     _have_certbot,
-    CertHealth,
+    disable_domain,
+    get_status,
+    rotate_cert,
+    set_domain,
 )
 
 logger = logging.getLogger(__name__)
@@ -58,15 +57,15 @@ class DomainSetRequest(BaseModel):
 class DomainSetResponse(BaseModel):
     success: bool
     domain: str = ""
-    health: Optional[Dict[str, Any]] = None
-    error: Optional[str] = None
-    steps: List[str] = []
+    health: dict[str, Any] | None = None
+    error: str | None = None
+    steps: list[str] = []
 
 
 class DomainStatusResponse(BaseModel):
     active_domain: str
     enabled: bool
-    cert: Dict[str, Any]
+    cert: dict[str, Any]
     autorenew_days: int
     contact_email: str
     last_check: str

@@ -8,10 +8,8 @@ Features:
 - Brute force detection
 """
 
-import psutil
-import time
 import logging
-from typing import Dict, List, Optional, Tuple
+import time
 from collections import defaultdict
 from dataclasses import dataclass, field
 
@@ -31,7 +29,7 @@ BLOCKED_PORTS = {
     3389: "RDP - Brute force target",
 }
 
-def generate_egress_iptables_rules() -> List[str]:
+def generate_egress_iptables_rules() -> list[str]:
     """Generate iptables rules to block egress traffic on dangerous ports."""
     rules = []
     for port, reason in BLOCKED_PORTS.items():
@@ -81,46 +79,46 @@ class AnomalyAlert:
 
 class AnomalyDetector:
     """Detect anomalous traffic patterns."""
-    
+
     def __init__(self):
-        self.baselines: Dict[int, TrafficBaseline] = {}
-        self.alerts: List[AnomalyAlert] = []
-        self._traffic_history: Dict[int, List[Tuple[float, int]]] = defaultdict(list)
-    
+        self.baselines: dict[int, TrafficBaseline] = {}
+        self.alerts: list[AnomalyAlert] = []
+        self._traffic_history: dict[int, list[tuple[float, int]]] = defaultdict(list)
+
     def record_traffic(self, user_id: int, bytes_transferred: int):
         """Record traffic for a user."""
         now = time.time()
         self._traffic_history[user_id].append((now, bytes_transferred))
-        
+
         # Keep only last 60 minutes of data
         cutoff = now - 3600
         self._traffic_history[user_id] = [
             (t, b) for t, b in self._traffic_history[user_id] if t > cutoff
         ]
-    
+
     def update_baseline(self, user_id: int):
         """Update baseline for a user based on traffic history."""
         history = self._traffic_history.get(user_id, [])
         if len(history) < 10:
             return
-        
+
         bytes_list = [b for _, b in history]
         avg = sum(bytes_list) / len(bytes_list)
         peak = max(bytes_list)
-        
+
         baseline = self.baselines.get(user_id, TrafficBaseline(user_id=user_id))
         baseline.avg_bytes_per_minute = avg
         baseline.peak_bytes_per_minute = peak
         baseline.sample_count = len(history)
         baseline.last_updated = time.time()
         self.baselines[user_id] = baseline
-    
-    def check_anomaly(self, user_id: int, current_bytes: int) -> Optional[AnomalyAlert]:
+
+    def check_anomaly(self, user_id: int, current_bytes: int) -> AnomalyAlert | None:
         """Check if current traffic is anomalous."""
         baseline = self.baselines.get(user_id)
         if not baseline or baseline.sample_count < 10:
             return None
-        
+
         # Traffic spike: 5x above average
         if current_bytes > baseline.avg_bytes_per_minute * 5:
             alert = AnomalyAlert(
@@ -131,10 +129,10 @@ class AnomalyDetector:
             )
             self.alerts.append(alert)
             return alert
-        
+
         return None
-    
-    def get_alerts(self, since: float = 0) -> List[AnomalyAlert]:
+
+    def get_alerts(self, since: float = 0) -> list[AnomalyAlert]:
         """Get alerts since timestamp."""
         return [a for a in self.alerts if a.timestamp > since]
 
@@ -144,26 +142,26 @@ class AnomalyDetector:
 
 class PortScanDetector:
     """Detect port scanning activity."""
-    
+
     def __init__(self, threshold: int = 10, window_seconds: int = 60):
         self.threshold = threshold
         self.window_seconds = window_seconds
-        self._connection_attempts: Dict[str, List[Tuple[float, int]]] = defaultdict(list)
-        self._scan_alerts: List[Dict] = []
-    
+        self._connection_attempts: dict[str, list[tuple[float, int]]] = defaultdict(list)
+        self._scan_alerts: list[dict] = []
+
     def record_connection(self, source_ip: str, dest_port: int):
         """Record a connection attempt."""
         now = time.time()
         self._connection_attempts[source_ip].append((now, dest_port))
-        
+
         # Clean old entries
         cutoff = now - self.window_seconds
         self._connection_attempts[source_ip] = [
             (t, p) for t, p in self._connection_attempts[source_ip] if t > cutoff
         ]
-        
+
         # Check for port scan
-        unique_ports = set(p for _, p in self._connection_attempts[source_ip])
+        unique_ports = {p for _, p in self._connection_attempts[source_ip]}
         if len(unique_ports) >= self.threshold:
             alert = {
                 "source_ip": source_ip,
@@ -176,10 +174,10 @@ class PortScanDetector:
             # Reset for this IP
             self._connection_attempts[source_ip] = []
             return alert
-        
+
         return None
-    
-    def get_scan_alerts(self, since: float = 0) -> List[Dict]:
+
+    def get_scan_alerts(self, since: float = 0) -> list[dict]:
         """Get port scan alerts since timestamp."""
         return [a for a in self._scan_alerts if a["timestamp"] > since]
 

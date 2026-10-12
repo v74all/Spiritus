@@ -10,8 +10,9 @@ from __future__ import annotations
 import asyncio
 import json
 import socket
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any
 
 from .config import settings
 
@@ -64,7 +65,7 @@ async def helper_request(
         raw = await asyncio.wait_for(reader.readline(), timeout=timeout)
         writer.close()
         await writer.wait_closed()
-    except (OSError, asyncio.TimeoutError) as exc:
+    except (TimeoutError, OSError) as exc:
         raise PrivilegedHelperError("privileged helper unavailable") from exc
 
     return _decode_response(raw)

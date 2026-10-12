@@ -9,13 +9,9 @@ even on a fresh checkout. Run with:
 from __future__ import annotations
 
 import json
-import os
 import stat
-from pathlib import Path
-from unittest import mock
 
 import pytest
-
 
 # ═══════════════════════════════════════════════════════════════
 #  Fixtures
@@ -129,8 +125,8 @@ def test_audit_clean_for_safe_file(tmp_path):
 # ═══════════════════════════════════════════════════════════════
 
 def test_migration_picks_up_legacy_files(tmp_path, monkeypatch, capsys):
-    from app import secrets_migrate
     from app import secrets as secrets_mod
+    from app import secrets_migrate
 
     # Lay down legacy artifacts in a temp project root.
     project = tmp_path / "proj"
@@ -169,8 +165,8 @@ def test_migration_picks_up_legacy_files(tmp_path, monkeypatch, capsys):
 
 
 def test_migration_dry_run_does_not_write(tmp_path, monkeypatch):
-    from app import secrets_migrate
     from app import secrets as secrets_mod
+    from app import secrets_migrate
 
     project = tmp_path / "proj"
     project.mkdir()

@@ -2418,3 +2418,28 @@ input, button, textarea, select { font-family: inherit; font-size: inherit; }
   0%, 100% { box-shadow: 0 0 6px rgba(255, 180, 171, 0.2); }
   50% { box-shadow: 0 0 12px rgba(255, 180, 171, 0.4); }
 }
+
+
+/* ── Onboarding / help ── */
+.nav-fa { opacity: .6; font-size: .85em; margin-inline-start: 4px; }
+.hint-box { padding: 10px 12px; margin-bottom: 12px; background: var(--bg3); border-radius: var(--radius-sm);
+  font-size: 12px; line-height: 1.7; color: var(--t2); }
+.hint-box b { color: var(--t0); }
+.preset-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+.field-hint { color: var(--t3); font-weight: 400; margin-inline-start: 6px; }
+.help-section { margin-bottom: 20px; }
+.help-section h4 { font-size: 14px; color: var(--accent); margin: 0 0 10px; }
+.help-steps { padding-inline-start: 20px; margin: 0; font-size: 13px; line-height: 1.9; color: var(--t1); }
+.help-dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; margin: 0; font-size: 13px; color: var(--t1); }
+.help-dl dt { font-weight: 700; color: var(--t0); }
+.help-dl dd { margin: 0; color: var(--t2); }
+.help-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.help-table th, .help-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: start; vertical-align: top; }
+.help-table td:first-child { font-weight: 600; color: var(--t0); white-space: nowrap; }
+/* Bilingual blocks follow the RTL/LTR toggle */
+[dir="rtl"] .help-en { display: none; }
+[dir="ltr"] .help-fa { display: none; }
+.empty-guide { max-width: 520px; margin: 40px auto; text-align: start; line-height: 1.9; font-size: 14px; color: var(--t2); }
+.empty-guide h3 { color: var(--t0); text-align: center; margin-bottom: 10px; }
+.empty-guide ol { padding-inline-start: 22px; }
+.empty-guide .empty-actions { display: flex; gap: 8px; justify-content: center; margin-top: 16px; flex-wrap: wrap; }

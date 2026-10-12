@@ -19,6 +19,7 @@
 
 <p align="center">
   <a href="#-highlights">Highlights</a> ·
+  <a href="#-screenshots">Screenshots</a> ·
   <a href="#-protocols">Protocols</a> ·
   <a href="#-security">Security</a> ·
   <a href="#-quick-start">Quick Start</a> ·
@@ -36,6 +37,31 @@
 - **Native mobile client** — a Kotlin/Compose Android app (Xray + sing-box + tun2socks engines) that consumes the same subscription API.
 - **Security-first** — CSP with per-request nonces, HSTS preload, double-submit CSRF, pinned-algorithm JWT, TOTP 2FA, host-header allowlisting, rate-limiting + fail2ban, and a dependency set audited clean.
 - **Operable** — one-command installer, systemd units, Prometheus/Grafana observability, Telegram bot, and automated backups.
+
+---
+
+## 📸 Screenshots
+
+<p align="center">
+  <img src="docs/screenshots/dashboard.png" alt="Admin dashboard — live stats, protocol toggles, per-user cards" width="800">
+</p>
+<p align="center"><em>Admin dashboard — live CPU/RAM/traffic, one-tap protocol toggles, and per-user cards with usage, expiry and speed.</em></p>
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/settings-protocols.png" alt="Protocol & REALITY settings"><br><sub>Protocol / REALITY / CDN configuration</sub></td>
+    <td width="50%"><img src="docs/screenshots/anti-censorship.png" alt="Anti-censorship resilience tools"><br><sub>DPI-evasion & resilience tools</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/analytics.png" alt="Traffic analytics"><br><sub>Traffic analytics & top users</sub></td>
+    <td width="50%"><img src="docs/screenshots/agents.png" alt="Agent & reseller management"><br><sub>Agent / reseller management</sub></td>
+  </tr>
+</table>
+
+<p align="center">
+  <img src="docs/screenshots/subscription-page.png" alt="Per-user subscription page" width="620">
+</p>
+<p align="center"><em>Branded, plain-language subscription page (bilingual, RTL) — what each customer sees.</em></p>
 
 ---
 
@@ -79,6 +105,13 @@ Spiritus is built to be exposed to hostile networks. Defenses are layered:
 - Cookies are `HttpOnly` + `Secure` + `SameSite=Strict`
 - **Double-submit-cookie CSRF** on every unsafe method
 - Brute-force lockout + global rate-limiting + fail2ban integration
+- **Mobile refresh tokens** — single-use rotation with reuse detection (a replayed token revokes the whole session family)
+- Optional **admin IP allowlist** (`ADMIN_IP_ALLOWLIST`)
+
+**Data & auditing**
+- **Tamper-evident audit log** — HMAC hash-chain, verifiable via `GET /api/security/audit/verify`
+- **Encrypted backups** (Fernet) with `0600` permissions
+- Honeypot endpoints that feed the audit log and fail2ban
 
 **Supply chain & code**
 - Dependencies **audited with `pip-audit` (0 known CVEs)** and pinned to patched floors
@@ -134,6 +167,10 @@ All settings come from environment variables (`.env`). The essentials:
 | `MAX_REQUEST_BODY_BYTES` | Max request body in bytes (default 2 MiB). |
 | `ADMIN_BOOTSTRAP_PASSWORD` | One-shot first-admin password (auto-cleared). |
 | `CORS_ORIGINS` | Off by default; set an explicit allowlist if needed. |
+| `ADMIN_IP_ALLOWLIST` | Optional IPs/CIDRs allowed to reach the admin API (loopback always allowed). |
+| `BACKUP_ENCRYPTION_KEY` | Dedicated key for encrypted backups (else derived from `SECRET_KEY`). |
+| `TELEGRAM_WEBHOOK_SECRET` | Enables `POST /api/telegram/webhook` (≥16 chars; pass as `secret_token` to `setWebhook`). |
+| `MOBILE_REFRESH_LIFETIME_DAYS` | Mobile refresh-token lifetime (default 30). |
 
 > ⚠️ Never commit a real `.env`. It is git-ignored by default — keep it that way.
 
@@ -176,8 +213,11 @@ A native **Android** app (Kotlin + Jetpack Compose) ships alongside the panel:
 pip install -r requirements-dev.txt
 pytest -q                 # security & contract test suite
 pip-audit                 # dependency CVE scan
-bandit -r app             # static analysis
+bandit -c pyproject.toml -r app main.py   # static analysis
+ruff check app tests main.py             # lint
 ```
+
+Kubernetes: a Helm chart lives in [`deploy/helm/spiritus`](deploy/helm/spiritus) (probes: `/api/ready`, `/api/live`).
 
 ---
 

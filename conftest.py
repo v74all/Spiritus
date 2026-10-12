@@ -34,6 +34,6 @@ os.environ["METRICS_BEARER_TOKEN"] = "m" * 48
 import app  # noqa: F401
 import app.api  # noqa: F401
 import app.api.protocols  # noqa: F401
+import app.domain_manager  # noqa: F401
 import app.services  # noqa: F401
 import app.services.protocol_sync  # noqa: F401
-import app.domain_manager  # noqa: F401

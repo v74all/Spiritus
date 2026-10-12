@@ -3,32 +3,32 @@
 ## 🔐 امنیت (اولویت ۱)
 
 ### Authentication & Authorization
-- [ ] 2FA/TOTP برای ورود ادمین
-- [ ] WebAuthn (Passkey) support
-- [ ] Argon2id password hashing
-- [ ] JWT + refresh token rotation
-- [ ] Session revocation list
-- [ ] IP allowlist for admin endpoints
+- [x] 2FA/TOTP برای ورود ادمین
+- [x] WebAuthn (Passkey) support
+- [x] Argon2id password hashing
+- [x] JWT + refresh token rotation
+- [x] Session revocation list
+- [x] IP allowlist for admin endpoints
 - [ ] GeoIP blocking
 
 ### Network Security
 - [ ] mTLS برای پنل ادمین
-- [ ] HSTS + Preload
-- [ ] Content Security Policy (CSP) سخت‌گیرانه
-- [ ] COOP/CORP/COEP headers
+- [x] HSTS + Preload
+- [x] Content Security Policy (CSP) سخت‌گیرانه
+- [x] COOP/CORP/COEP headers
 - [ ] Fail2ban integration
 
 ### Data Protection
 - [ ] Secret management (Vault/SOPS)
-- [ ] Audit log با hash-chain
-- [ ] Honey-tokens for intrusion detection
-- [ ] Encrypted backup
+- [x] Audit log با hash-chain
+- [x] Honey-tokens for intrusion detection
+- [x] Encrypted backup
 
 ### Security Scanning
-- [ ] Bandit + Semgrep
-- [ ] pip-audit + Trivy
-- [ ] GitHub Dependabot
-- [ ] CI/CD security gates
+- [x] Bandit + Semgrep
+- [x] pip-audit + Trivy
+- [x] GitHub Dependabot
+- [x] CI/CD security gates
 
 ---
 
@@ -48,7 +48,7 @@
 - [ ] ShadowTLS v3 — TLS-encrypted SOCKS5 proxy with custom TLS fingerprint
 - [ ] Mieru — TCP/UDP multiplexing proxy with encryption and traffic shaping
 - [ ] NaiveProxy (official) — Chromium network stack proxy with Chrome TLS fingerprint
-- [ ] Plain WireGuard — Standard WireGuard tunnel (no obfuscation)
+- [x] Plain WireGuard — Standard WireGuard tunnel (no obfuscation)
 - [ ] Plain OpenVPN — Standard OpenVPN tunnel (UDP/TCP)
 
 ### Protocol Infrastructure
@@ -57,46 +57,46 @@
 - [ ] Multi-backend orchestrator — Unified interface for Xray/Hysteria/sing-box/WG
 
 ### Traffic Obfuscation
-- [ ] uTLS fingerprint rotation — Auto-rotate Chrome/Firefox/Safari fingerprints
-- [ ] Auto protocol rotation — Switch protocols on detection/blocking
+- [x] uTLS fingerprint rotation — Auto-rotate Chrome/Firefox/Safari fingerprints
+- [x] Auto protocol rotation — Switch protocols on detection/blocking
 - [ ] Traffic morphing (WhatsApp/Zoom patterns) — Shape traffic to mimic legit apps
 - [ ] Snowflake/meek bridge fallback — Tor bridge integration
 - [ ] XHTTP transport — HTTP/2 and HTTP/3 transport with streaming
 - [ ] Salamander obfuscation — Hysteria2-specific traffic obfuscation
-- [ ] Port-hopping — Automatic port rotation to evade port-based blocking
+- [x] Port-hopping — Automatic port rotation to evade port-based blocking
 
 ---
 
 ## 🏗️ معماری و مقیاس‌پذیری (اولویت ۱)
 
 ### Framework Upgrade
-- [ ] Flask → FastAPI
+- [x] Flask → FastAPI
 - [ ] Async/await support
 - [ ] WebSocket support
-- [ ] Automatic API docs
+- [x] Automatic API docs
 
 ### Database Layer
-- [ ] PostgreSQL migration
-- [ ] SQLAlchemy 2.0
-- [ ] Alembic migrations
+- [x] PostgreSQL migration
+- [x] SQLAlchemy 2.0
+- [x] Alembic migrations
 - [ ] Litestream for SQLite replication
 
 ### Caching & Sessions
-- [ ] Redis integration
-- [ ] Session management
-- [ ] Rate limiting
+- [x] Redis integration
+- [x] Session management
+- [x] Rate limiting
 - [ ] Analytics caching
 
 ### Scalability
 - [ ] Multi-node architecture
 - [ ] gRPC communication
-- [ ] Config synchronization
-- [ ] Central panel + agent nodes
+- [x] Config synchronization
+- [x] Central panel + agent nodes
 
 ### Deployment
-- [ ] Docker Compose setup
-- [ ] Helm charts
-- [ ] Kubernetes support
+- [x] Docker Compose setup
+- [x] Helm charts
+- [x] Kubernetes support
 - [ ] CI/CD pipelines
 
 ### Background Jobs
@@ -110,7 +110,7 @@
 ## 📊 Observability (اولویت ۲)
 
 ### Metrics & Monitoring
-- [ ] Prometheus `/metrics` endpoint
+- [x] Prometheus `/metrics` endpoint
 - [ ] Grafana dashboard
 - [ ] Performance monitoring
 - [ ] Alert system
@@ -122,31 +122,31 @@
 - [ ] Request tracing
 
 ### Health Checks
-- [ ] Kubernetes liveness probe
-- [ ] Readiness probe
+- [x] Kubernetes liveness probe
+- [x] Readiness probe
 - [ ] Startup probe
-- [ ] Health endpoint
+- [x] Health endpoint
 
 ---
 
 ## 👥 Userland Features (اولویت ۲)
 
 ### Self-Service Portal
-- [ ] Telegram bot integration
-- [ ] Self-service renewal
+- [x] Telegram bot integration
+- [x] Self-service renewal
 - [ ] Config generation
-- [ ] Traffic checking
+- [x] Traffic checking
 
 ### Payment Integration
-- [ ] Zarinpal gateway
-- [ ] IDPay gateway
-- [ ] USDT TRC20 crypto
-- [ ] Payment tracking
+- [x] Zarinpal gateway
+- [x] IDPay gateway
+- [x] USDT TRC20 crypto
+- [x] Payment tracking
 
 ### Reseller System
-- [ ] Multi-level reseller
-- [ ] Commission management
-- [ ] Reseller wallet
+- [x] Multi-level reseller
+- [x] Commission management
+- [x] Reseller wallet
 - [ ] Sub-affiliate system
 
 ### Per-User Controls
@@ -163,21 +163,21 @@
 ### Code Quality
 - [ ] Full type hints
 - [ ] mypy strict mode
-- [ ] Ruff linter
+- [x] Ruff linter
 - [ ] Pre-commit hooks
 
 ### Testing
-- [ ] Unit tests (pytest)
+- [x] Unit tests (pytest)
 - [ ] Integration tests
 - [ ] Property-based tests (Hypothesis)
 - [ ] E2E tests (Playwright)
 - [ ] Coverage > 80%
 
 ### CI/CD
-- [ ] GitHub Actions
+- [x] GitHub Actions
 - [ ] Python 3.10/3.11/3.12 matrix
-- [ ] Docker build
-- [ ] Security scanning
+- [x] Docker build
+- [x] Security scanning
 - [ ] Automatic releases
 
 ### Documentation
@@ -244,7 +244,7 @@
 ### Security
 ```
 pyotp>=2.8.0              # TOTP support
-python-jose>=3.3.0        # JWT handling
+PyJWT>=2.10.1            # JWT handling (replaced python-jose: ecdsa CVE)
 argon2-cffi>=21.3.0       # Argon2id hashing
 cryptography>=41.0.0      # Encryption
 ```

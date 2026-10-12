@@ -30,10 +30,9 @@ import json
 import logging
 import os
 import secrets as _py_secrets
-import stat
 import threading
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -82,11 +81,11 @@ def _resolve_secrets_file() -> Path:
 # hot paths (every API call) don't hit the disk. A single lock keeps
 # concurrent reloads from clobbering each other.
 _cache_lock = threading.RLock()
-_cache: Optional[Dict[str, Any]] = None
-_cache_loaded_from: Optional[Path] = None
+_cache: dict[str, Any] | None = None
+_cache_loaded_from: Path | None = None
 
 
-def _load_cache() -> Dict[str, Any]:
+def _load_cache() -> dict[str, Any]:
     """Read secrets.json from disk, return {} if missing or invalid."""
     global _cache, _cache_loaded_from
     with _cache_lock:
@@ -140,7 +139,7 @@ def _flush_cache() -> None:
 #  Public API
 # ═══════════════════════════════════════════════════════════════
 
-def get(name: str, default: Optional[str] = None) -> Optional[str]:
+def get(name: str, default: str | None = None) -> str | None:
     """Look up a single secret.
 
     Resolution order:
@@ -302,7 +301,7 @@ _LEAKED_KEY_FINGERPRINTS = {
 }
 
 
-def audit_no_leaked_keys(extra_paths: Optional[list] = None) -> list:
+def audit_no_leaked_keys(extra_paths: list | None = None) -> list:
     """Walk the project for any of the leaked key fingerprints.
 
     Returns the list of (path, line_no, line) tuples that contain a

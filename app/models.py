@@ -13,16 +13,28 @@ Tables:
 - audit_log       Immutable audit trail
 """
 
+import enum
+
 from sqlalchemy import (
-    Column, Integer, BigInteger, String, Float, Boolean,
-    DateTime, Text, JSON, ForeignKey, Enum, Index, UniqueConstraint, text
+    JSON,
+    BigInteger,
+    Boolean,
+    Column,
+    DateTime,
+    Enum,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    text,
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-import enum
 
 from .database import Base
-
 
 # ═══════════════════════════════════════════════════════════════
 #  Enums
@@ -136,6 +148,9 @@ class VpnUser(Base):
     # Reseller
     reseller_id = Column(Integer, ForeignKey("resellers.id"), nullable=True)
     reseller = relationship("Reseller", back_populates="users")
+
+    # Telegram self-service binding (set by /link in the bot)
+    telegram_chat_id = Column(String(32), nullable=True, index=True)
 
     # Protocol-specific config overrides (JSON)
     protocol_config = Column(JSON, default=dict)
@@ -320,6 +335,9 @@ class Reseller(Base):
     # Status
     active = Column(Boolean, default=True)
 
+    # Multi-level reseller tree (NULL = top-level reseller)
+    parent_id = Column(Integer, ForeignKey("resellers.id"), nullable=True, index=True)
+
     # Self-service portal settings
     portal_enabled = Column(Boolean, default=True)
     portal_custom_domain = Column(String(255), nullable=True)
@@ -332,6 +350,25 @@ class Reseller(Base):
     # Relationships
     users = relationship("VpnUser", back_populates="reseller")
     payments = relationship("Payment", back_populates="reseller")
+
+
+class ResellerLedger(Base):
+    """Append-only wallet ledger. ``Reseller.balance`` is the running total."""
+
+    __tablename__ = "reseller_ledger"
+    __table_args__ = (
+        UniqueConstraint("payment_id", "reseller_id", "kind", name="uq_reseller_ledger_payment"),
+        Index("ix_reseller_ledger_reseller_id", "reseller_id"),
+    )
+
+    id = Column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True)
+    reseller_id = Column(Integer, ForeignKey("resellers.id"), nullable=False)
+    payment_id = Column(Integer, ForeignKey("payments.id"), nullable=True)
+    kind = Column(String(20), nullable=False)  # commission | override | adjustment
+    amount = Column(BigInteger, nullable=False)  # signed, IRR
+    balance_after = Column(BigInteger, nullable=False)
+    note = Column(String(255), nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -363,7 +400,7 @@ class AuditLog(Base):
         Index("ix_audit_log_created_at", "created_at"),
     )
 
-    id = Column(BigInteger, primary_key=True)
+    id = Column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True)
     admin_id = Column(Integer, ForeignKey("admins.id"), nullable=True)
     admin = relationship("Admin", back_populates="audit_entries")
 
@@ -375,6 +412,10 @@ class AuditLog(Base):
     user_agent = Column(String(500), nullable=True)
 
     created_at = Column(DateTime, server_default=func.now())
+
+    # Hash chain (see app/audit.py). NULL on rows written before the chain existed.
+    prev_hash = Column(String(64), nullable=True)
+    entry_hash = Column(String(64), nullable=True, index=True)
 
 
 # ═══════════════════════════════════════════════════════════════
