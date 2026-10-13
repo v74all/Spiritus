@@ -12,7 +12,7 @@ cryptography==41.0.7
 psutil==5.9.6
 
 # For QUIC protocol support
-aioquic==0.9.20
+aioquic==1.3.0
 hyperframe==6.0.1
 
 # For HTTP/2 protocol support
