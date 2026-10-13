@@ -15,6 +15,6 @@ PyJWT==2.12.1
 cryptography==47.0.0
 celery==5.6.3
 psutil==7.2.2
-requests==2.33.1
+requests==2.34.2
 httpx==0.28.1
 pyyaml==6.0.3
