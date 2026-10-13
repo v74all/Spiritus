@@ -33,7 +33,7 @@ jobs:
         run: bandit -c pyproject.toml -r app/ main.py -f json -o bandit-report.json
       
       - name: Upload Bandit Report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: bandit-report-${{ matrix.python-version }}
           path: bandit-report.json
@@ -189,7 +189,7 @@ jobs:
           output: sbom.json
       
       - name: Upload SBOM
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sbom
           path: sbom.json
