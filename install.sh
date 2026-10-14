@@ -357,7 +357,15 @@ setup_redis() {
             systemctl start redis
             systemctl enable redis
         fi
-        print_success "Redis started"
+
+        # Verify Redis successfully started
+        sleep 2
+        if systemctl is-active --quiet redis-server || systemctl is-active --quiet redis; then
+            print_success "Redis started"
+        else
+            print_error "Redis failed to start! The panel requires Redis to manage sessions. Please check 'journalctl -u redis-server'."
+            exit 1
+        fi
     fi
 }
 

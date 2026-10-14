@@ -251,3 +251,8 @@ bash <(curl -sL https://raw.githubusercontent.com/v74all/Spiritus/main/install.s
 > ⚠️ فایل `.env` واقعی هرگز نباید commit شود (پیش‌فرض در `.gitignore` است).
 
 پروژه تحت لایسنس **MIT** منتشر شده و فقط برای استفاده‌ی قانونی، حفظ حریم خصوصی و مدیریت مجاز شبکه در نظر گرفته شده است.
+
+### Troubleshooting
+
+- **Error 401 Unauthorized during login or after deployment:**
+  If you are unable to login to the panel after installation or receive repeated 401 Unauthorized errors despite correct credentials, ensure that the Redis service is running. The panel uses Redis to verify session revocations, and for security reasons, it fails-closed (denies access) if it cannot reach Redis. You can check the logs using `journalctl -u redis-server` to diagnose any startup issues.
