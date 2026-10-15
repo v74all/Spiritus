@@ -801,6 +801,14 @@ ExecStart=${INSTALL_DIR}/venv/bin/python3 -m app.privileged_helper_daemon
 Restart=on-failure
 RestartSec=3
 UMask=0027
+# /run is tmpfs and is recreated empty on every boot. RuntimeDirectory=
+# has systemd create /run/v7lthronyx (mode below) immediately before
+# each start and remove it on stop — without this, ReadWritePaths below
+# referencing a path that doesn't exist yet made systemd refuse to set
+# up the mount namespace at all (226/NAMESPACE), so the helper
+# crash-looped forever and PRIVILEGED_HELPER_SOCKET was never created.
+RuntimeDirectory=v7lthronyx
+RuntimeDirectoryMode=0750
 PrivateTmp=true
 PrivateDevices=true
 ProtectHome=true
@@ -813,9 +821,18 @@ RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
 RestrictNamespaces=true
 RestrictRealtime=true
 LockPersonality=true
-CapabilityBoundingSet=CAP_DAC_OVERRIDE CAP_NET_ADMIN CAP_NET_RAW
-AmbientCapabilities=CAP_DAC_OVERRIDE CAP_NET_ADMIN CAP_NET_RAW
-ReadWritePaths=/run/v7lthronyx /etc/v7lthronyx /etc/letsencrypt /etc/fail2ban /usr/local/etc /var/www /var/log/xray
+# CAP_CHOWN: privileged_helper_daemon.main() chgrps the unix socket to
+# PANEL_GROUP (vpnpanel) so the unprivileged panel process can connect
+# to it. The service runs as root, but CapabilityBoundingSet= strips
+# every capability not listed here — including from root — so without
+# CAP_CHOWN that chown() call fails with EPERM and the helper exits on
+# every single start (os.chown(SOCKET_PATH, 0, vpnpanel_gid)).
+CapabilityBoundingSet=CAP_CHOWN CAP_DAC_OVERRIDE CAP_NET_ADMIN CAP_NET_RAW
+AmbientCapabilities=CAP_CHOWN CAP_DAC_OVERRIDE CAP_NET_ADMIN CAP_NET_RAW
+# /var/www is only used by the optional nginx-fallback site (not set up
+# by this installer) — prefixed with '-' so a box without it doesn't
+# hit the same "path doesn't exist" namespace failure as /run above.
+ReadWritePaths=/run/v7lthronyx /etc/v7lthronyx /etc/letsencrypt /etc/fail2ban /usr/local/etc -/var/www /var/log/xray
 
 [Install]
 WantedBy=multi-user.target
@@ -1153,25 +1170,32 @@ main() {
     echo -e "${CYAN}[5/13]${NC} Setting up Redis..."
     setup_redis
     
-    echo -e "${CYAN}[6/13]${NC} Setting up Fail2ban..."
-    setup_fail2ban
-    
-    echo -e "${CYAN}[7/13]${NC} Setting up Python environment..."
+    echo -e "${CYAN}[6/13]${NC} Setting up Python environment..."
     setup_python
 
-    echo -e "${CYAN}[8/13]${NC} Creating unprivileged service user..."
+    echo -e "${CYAN}[7/13]${NC} Creating unprivileged service user..."
     setup_panel_user
 
-    echo -e "${CYAN}[9/13]${NC} Generating self-signed TLS cert..."
+    echo -e "${CYAN}[8/13]${NC} Generating self-signed TLS cert..."
     setup_tls_cert
 
-    echo -e "${CYAN}[10a/13]${NC} Prompting for domain (optional)..."
+    echo -e "${CYAN}[9a/13]${NC} Prompting for domain (optional)..."
     prompt_domain || true
 
-    echo -e "${CYAN}[10/13]${NC} Setting up environment config..."
+    echo -e "${CYAN}[9/13]${NC} Setting up environment config..."
     setup_env
 
-    echo -e "${CYAN}[10c/13]${NC} Applying database migrations..."
+    # setup_fail2ban MUST run after both setup_python (needs the venv's
+    # sqlalchemy etc.) AND setup_env (app.config.Settings() validates
+    # SECRET_KEY etc. at import time — `from app.security import
+    # fail2ban_manager` fails with a pydantic "field required" error
+    # until .env exists). It used to run as step 6/13, before either
+    # precondition was met, so the jail install always failed and every
+    # fresh install silently shipped with NO fail2ban brute-force jails.
+    echo -e "${CYAN}[9b/13]${NC} Setting up Fail2ban..."
+    setup_fail2ban
+
+    echo -e "${CYAN}[10/13]${NC} Applying database migrations..."
     run_migrations
 
     echo -e "${CYAN}[11/13]${NC} Configuring services..."
