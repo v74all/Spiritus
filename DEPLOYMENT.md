@@ -135,7 +135,7 @@ git checkout v2.0
 pip install -r requirements.txt
 docker-compose up -d
 alembic upgrade head
-uvicorn main:app --reload
+uvicorn app.main:app --reload
 ```
 
 ### Docker Production

@@ -37,7 +37,7 @@ docker-compose up -d db redis
 alembic upgrade head
 
 # Start development server
-uvicorn main:app --reload --host 0.0.0.0 --port 38471
+uvicorn app.main:app --reload --host 0.0.0.0 --port 38471
 ```
 
 ---

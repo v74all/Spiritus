@@ -98,7 +98,7 @@ print('Admin user created. Change password immediately!')
 "
 
 # 8. Run
-uvicorn main:app --host 0.0.0.0 --port 38471
+uvicorn app.main:app --host 0.0.0.0 --port 38471
 ```
 
 ### Option B: Migrate from v1.x (SQLite → PostgreSQL)
@@ -230,7 +230,7 @@ LITESTREAM_CONFIG
 
 # Run with replication
 litestream replicate &
-uvicorn main:app --host 0.0.0.0 --port 38471
+uvicorn app.main:app --host 0.0.0.0 --port 38471
 ```
 
 ---
