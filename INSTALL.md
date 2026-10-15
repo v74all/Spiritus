@@ -18,6 +18,8 @@ sudo bash install.sh --port 8080         # custom web port (default 38471)
 sudo bash install.sh --help              # all options
 sudo bash install.sh uninstall           # remove (keeps the DB)
 sudo bash install.sh uninstall --purge   # remove everything, including the DB
+sudo bash install.sh reset-password      # forgot the admin password: print a new one
+                                         #   (--username NAME, --disable-2fa)
 ```
 
 ## Manual Install

@@ -1087,6 +1087,18 @@ show_info() {
     echo -e "${CYAN}═══════════════════════════════════════════════════════════${NC}"
 }
 
+reset_password() {
+    check_root
+    if [[ ! -x "${INSTALL_DIR}/venv/bin/python" ]]; then
+        print_error "Panel is not installed in ${INSTALL_DIR}"
+        exit 1
+    fi
+    # Run as the panel user from the install dir so .env, the secrets store
+    # and the DB credentials load exactly as they do for the service.
+    cd "${INSTALL_DIR}"
+    runuser -u "${PANEL_USER:-vpnpanel}" -- "${INSTALL_DIR}/venv/bin/python" -m app.reset_password "$@"
+}
+
 uninstall() {
     print_banner
     echo -e "${RED}  V7LTHRONYX v${VERSION} - Uninstaller${NC}"
@@ -1155,6 +1167,9 @@ Commands:
   (no command)        Install or update the panel
   uninstall           Stop services and remove the panel (keeps the DB)
   uninstall --purge   Also drop the PostgreSQL DB and flush Redis
+  reset-password      Set a new random admin password and print it
+      --username NAME   Admin to reset (needed if there is more than one)
+      --disable-2fa     Also turn off 2FA for that admin
 
 Options (install):
   --port N            Web panel port (default 38471; persisted to .env)
@@ -1243,8 +1258,14 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         uninstall|--uninstall)
             COMMAND="uninstall"; shift ;;
+        reset-password|--reset-password)
+            COMMAND="reset-password"; shift ;;
         --purge)
             _args+=("--purge"); shift ;;
+        --username)
+            _args+=("--username" "${2:?--username needs a value}"); shift 2 ;;
+        --disable-2fa)
+            _args+=("--disable-2fa"); shift ;;
         --port)
             WEB_PORT="${2:?--port needs a value}"; shift 2 ;;
         --port=*)
@@ -1263,5 +1284,6 @@ fi
 
 case "$COMMAND" in
     uninstall) uninstall "${_args[@]}" ;;
+    reset-password) reset_password "${_args[@]}" ;;
     *)         main ;;
 esac

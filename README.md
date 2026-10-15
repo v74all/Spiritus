@@ -139,9 +139,10 @@ sudo ./install.sh --port 8080         # custom web port
 sudo ./install.sh --help              # all options
 sudo ./install.sh uninstall           # remove (keep data)
 sudo ./install.sh uninstall --purge   # remove everything
+sudo ./install.sh reset-password      # forgot the admin password: print a new one
 ```
 
-The installer provisions PostgreSQL + Redis, a Python virtualenv, Xray/sing-box binaries, TLS certificates (acme.sh), the systemd service, and an Nginx fallback.
+The installer provisions PostgreSQL + Redis, a Python virtualenv, Xray/sing-box binaries, TLS certificates (acme.sh), and the systemd services.
 
 **Manual / development run:**
 

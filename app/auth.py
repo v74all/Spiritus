@@ -208,7 +208,7 @@ async def revoke_request_token(request: Request) -> str | None:
     return str(jti)
 
 
-async def invalidate_sessions(username: str) -> None:
+async def invalidate_sessions(username: str) -> bool:
     """Invalidate every previously-issued token for this admin at once.
 
     The jti blacklist (revoke_token) only kills one specific session on
@@ -217,7 +217,8 @@ async def invalidate_sessions(username: str) -> None:
     natural expiry, defeating the whole point of the password change. Stores
     the invalidation instant in Redis; _decode_token_to_user rejects any
     token whose `iat` predates it. Call this on password change (and on any
-    other "kick everyone out" action, e.g. 2FA reset).
+    other "kick everyone out" action, e.g. 2FA reset). Returns False when
+    Redis is unreachable and nothing was invalidated.
     """
     try:
         from .redis_client import get_redis
@@ -232,8 +233,10 @@ async def invalidate_sessions(username: str) -> None:
             settings.session_lifetime_hours * 3600,
             str(now),
         )
+        return True
     except Exception:
         logger.warning("session invalidation failed: Redis unavailable")
+        return False
 
 
 async def _tokens_invalidated_since(username: str, iat: Any) -> bool:
