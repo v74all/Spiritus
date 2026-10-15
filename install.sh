@@ -812,7 +812,17 @@ UMask=0027
 # up the mount namespace at all (226/NAMESPACE), so the helper
 # crash-looped forever and PRIVILEGED_HELPER_SOCKET was never created.
 RuntimeDirectory=v7lthronyx
-RuntimeDirectoryMode=0750
+# 0751, not 0750: the directory is owned by root:root (this service's
+# User=/Group=) since RuntimeDirectory has no separate "owning group"
+# knob, but the panel runs as the unrelated `vpnpanel` user. The 'x'
+# bit for "other" lets it traverse into the dir and connect() to the
+# socket by its known path without being able to list the directory's
+# contents or create files in it; the socket file itself is still the
+# real access control (0660, group vpnpanel, chowned in
+# privileged_helper_daemon.main()). Without this, every connect() from
+# the panel process failed with EACCES before even reaching the
+# daemon's own SO_PEERCRED check.
+RuntimeDirectoryMode=0751
 PrivateTmp=true
 PrivateDevices=true
 ProtectHome=true
