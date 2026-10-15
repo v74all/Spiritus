@@ -735,6 +735,11 @@ setup_panel_user() {
 configure_systemd() {
     print_info "Configuring systemd service..."
     PANEL_USER="${PANEL_USER:-vpnpanel}"
+    # uvicorn binds from its --host CLI arg, not settings.host, so the unit
+    # must carry the HOST that setup_env wrote (0.0.0.0 unless the operator
+    # chose a specific address for a reverse proxy).
+    local bind_host; bind_host=$(_env_get HOST "${INSTALL_DIR}/.env")
+    bind_host="${bind_host:-0.0.0.0}"
 
     cat > /etc/systemd/system/${SERVICE_NAME}.service << EOF
 [Unit]
@@ -749,9 +754,9 @@ Group=${PANEL_USER}
 WorkingDirectory=${INSTALL_DIR}
 Environment="PYTHONUNBUFFERED=1"
 Environment="PATH=${INSTALL_DIR}/venv/bin:/usr/local/bin:/usr/bin:/bin"
-# Bind to loopback only. External access goes through a TLS-terminating
-# reverse proxy (nginx/Caddy) on 80/443.
-ExecStart=${INSTALL_DIR}/venv/bin/python3 -m uvicorn app.main:app --host 127.0.0.1 --port ${WEB_PORT} --workers 2 --proxy-headers --forwarded-allow-ips='127.0.0.1'
+# Bind address comes from HOST in .env. The installer sets up no reverse
+# proxy, so a loopback bind here leaves the panel unreachable.
+ExecStart=${INSTALL_DIR}/venv/bin/python3 -m uvicorn app.main:app --host ${bind_host} --port ${WEB_PORT} --workers 2 --proxy-headers --forwarded-allow-ips='127.0.0.1'
 ExecReload=/bin/kill -HUP \$MAINPID
 Restart=always
 RestartSec=10
