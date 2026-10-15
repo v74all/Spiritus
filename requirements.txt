@@ -45,7 +45,7 @@ httpx>=0.25.0
 python-wireguard>=0.1.0
 
 # OpenVPN management
-openvpn-api>=0.1.0
+openvpn-api>=0.3.0
 
 # DPI Evasion (scapy + aiohttp)
 scapy>=2.5.0
