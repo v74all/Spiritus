@@ -208,11 +208,15 @@ install_mieru() {
     local ver
     ver=$(curl -fsSL --max-time 20 https://api.github.com/repos/enfein/mieru/releases/latest 2>/dev/null \
           | grep -oP '"tag_name":\s*"v\K[^"]+' | head -1)
-    [[ -z "$ver" ]] && ver="3.19.0"
+    [[ -z "$ver" ]] && ver="3.38.1"  # known-good fallback if the API call above fails
 
-    # mieru publishes a .deb for the mita server; fall back to tar.gz.
+    # mieru publishes a .deb for the mita server. Note the asset naming
+    # is NOT consistent across its own release: .deb assets are
+    # "mita_<ver>_<arch>.deb" (no "linux_" infix) while the generic
+    # tar.gz assets are "mita_<ver>_linux_<arch>.tar.gz". Using the
+    # tar.gz-style name for the .deb 404s on every install.
     local tmp; tmp=$(mktemp -d)
-    local deb="mita_${ver}_linux_${arch}.deb"
+    local deb="mita_${ver}_${arch}.deb"
     local deb_url="https://github.com/enfein/mieru/releases/download/v${ver}/${deb}"
     if curl -fsSL --max-time 120 -o "$tmp/$deb" "$deb_url" && dpkg -i "$tmp/$deb" >/dev/null 2>&1; then
         mkdir -p /usr/local/etc/mieru
