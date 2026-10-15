@@ -782,6 +782,9 @@ def _user_to_legacy(u: VpnUser, server_ip: str | None = None) -> dict[str, Any]:
         "vless_reverse": links.get("vless_reverse", ""),
         "hysteria2": links.get("hysteria2", ""),
         "tuic": links.get("tuic", ""),
+        "shadowtls": links.get("shadowtls", ""),
+        "naiveproxy": links.get("naiveproxy", ""),
+        "mieru": links.get("mieru", ""),
         # IPv6 variants
         "vmess_ipv6": links.get("vmess_ipv6", ""),
         "vless_ipv6": links.get("vless_ipv6", ""),
