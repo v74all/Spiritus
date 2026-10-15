@@ -63,9 +63,9 @@ install_dependencies() {
 
     if [[ "$PKG_MANAGER" == "apt" ]]; then
         apt update -y
-        apt install -y python3 python3-pip python3-venv curl wget unzip postgresql postgresql-contrib redis-server fail2ban
+        apt install -y git ca-certificates openssl cron sudo python3 python3-pip python3-venv curl wget unzip postgresql postgresql-contrib redis-server fail2ban
     elif [[ "$PKG_MANAGER" == "yum" ]]; then
-        yum install -y python3 python3-pip curl wget unzip postgresql-server redis fail2ban
+        yum install -y git ca-certificates openssl cronie sudo python3 python3-pip curl wget unzip postgresql-server redis fail2ban
     fi
 
     print_success "System dependencies installed"
@@ -86,10 +86,13 @@ install_acme() {
     local acme_home="/etc/v7lthronyx/acme"   # matches LE_WORKING_DIR used by domain_manager
     mkdir -p "$acme_home"
     local tmp; tmp=$(mktemp -d)
-    if curl -fsSL --max-time 60 -o "$tmp/acme-install.sh" https://get.acme.sh 2>/dev/null; then
+    # Fetch acme.sh itself, not the get.acme.sh wrapper: the wrapper treats
+    # its first argument as "email=..." and mangles `--home` into `----home`,
+    # so the install always failed.
+    if curl -fsSL --max-time 60 -o "$tmp/acme.sh" https://raw.githubusercontent.com/acmesh-official/acme.sh/master/acme.sh 2>/dev/null; then
         # --nocron: the panel's Celery task handles renewal; --home pins
         # the working dir to the one domain_manager exports as HOME.
-        if HOME="$acme_home" sh "$tmp/acme-install.sh" --home "$acme_home" --nocron >/dev/null 2>&1 \
+        if (cd "$tmp" && HOME="$acme_home" sh ./acme.sh --install-online --home "$acme_home" --nocron) >/dev/null 2>&1 \
            && [[ -f "$acme_home/acme.sh" ]]; then
             ln -sf "$acme_home/acme.sh" /usr/local/bin/acme.sh
             print_success "acme.sh installed (symlinked to /usr/local/bin/acme.sh)"
