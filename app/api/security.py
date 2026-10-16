@@ -174,9 +174,19 @@ async def webauthn_authenticate_complete(
         if credential.get("id") == verified["credential_id"]:
             credential["sign_count"] = verified["sign_count"]
     admin_user.webauthn_credentials = credentials
+    role = getattr(admin_user, "role", None)
+    role_value = str(getattr(role, "value", role) or "").lower()
+    if role_value not in {"admin", "superadmin"}:
+        await db.commit()
+        raise HTTPException(status_code=403, detail="Admin privileges required")
     await db.commit()
     token = create_access_token(
-        {"sub": admin_user.username, "user_id": admin_user.id, "is_admin": True, "role": "admin"}
+        {
+            "sub": admin_user.username,
+            "user_id": admin_user.id,
+            "is_admin": True,
+            "role": role_value,
+        }
     )
     return {
         "access_token": token,

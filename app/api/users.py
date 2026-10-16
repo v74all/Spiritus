@@ -32,7 +32,7 @@ from ..database import get_async_db, safe_refresh
 from ..models import Agent, Setting, VpnUser
 from ..orchestrator import orchestrator
 from ..protocol_engine import ClientConfigGenerator
-from ..services.user_names import taken_vpn_user_names
+from ..services.user_names import display_name_error, taken_vpn_user_names
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/users", tags=["users"])
@@ -171,6 +171,9 @@ async def create_user(
         if agent_check.scalar_one_or_none() is None:
             raise HTTPException(status_code=422, detail=f"Agent {user.agent_id} not found.")
 
+    name_error = display_name_error(user.name)
+    if name_error:
+        raise HTTPException(status_code=422, detail=name_error)
     if await taken_vpn_user_names(db, [user.name]):
         raise HTTPException(status_code=409, detail=f"User '{user.name}' already exists.")
 

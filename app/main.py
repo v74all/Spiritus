@@ -653,24 +653,12 @@ async def set_direction(request: Request):
 
 
 def _public_server_ip(request: Request) -> str:
-    # Use explicit VPN_SERVER_IP env var first (most reliable)
-    if settings.vpn_server_ip and settings.vpn_server_ip.strip():
-        return settings.vpn_server_ip.strip()
-    configured_host = (settings.host or "").strip()
-    if configured_host and configured_host not in {"0.0.0.0", "127.0.0.1", "localhost", "::1"}:
-        return settings.host
-    forwarded_host = (request.headers.get("x-forwarded-host") or "").split(",", 1)[0].strip()
-    request_host = forwarded_host or (request.headers.get("host") or "")
-    # For non-localhost requests, extract host from Host header
-    if request_host and request_host not in ("localhost", "127.0.0.1", "[::1]"):
-        if request_host.startswith("[") and "]" in request_host:
-            return request_host[1:request_host.index("]")]
-        if ":" in request_host:
-            host, port = request_host.rsplit(":", 1)
-            if port.isdigit():
-                return host
-        return request_host
-    return request.url.hostname or ""
+    # One policy for every share link: configured address, then a safe Host.
+    # X-Forwarded-Host is not trusted unless it is on ALLOWED_HOSTS, and the
+    # value is never cached on the process — see resolve_public_host.
+    from .api.compat import resolve_public_host
+
+    return resolve_public_host(request)
 
 
 def _subscription_user_dict(user: VpnUser) -> dict:
@@ -720,11 +708,9 @@ async def _subscription_user(user_uuid: str, db: AsyncSession) -> VpnUser:
 
 
 async def _subscription_links(user: VpnUser, request: Request, db: AsyncSession) -> dict:
-    from .api.compat import _load_legacy_settings, _settings_state, _user_to_legacy
+    from .api.compat import _load_legacy_settings, _user_to_legacy
 
     await _load_legacy_settings(db)
-    if not _settings_state.get("server_ip"):
-        _settings_state["server_ip"] = _public_server_ip(request)
     server_ip = _public_server_ip(request)
     # Return ALL non-empty links including IPv6 variants and VLESS Plain
     legacy = _user_to_legacy(user, server_ip=server_ip)

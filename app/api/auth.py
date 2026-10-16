@@ -32,6 +32,7 @@ from ..auth import (
     Token,
     User,
     create_access_token,
+    dummy_password_hash,
     generate_totp_secret,
     get_current_user,
     get_password_hash,
@@ -179,7 +180,8 @@ async def login(request: LoginRequest, req: Request, db: AsyncSession = Depends(
     db_result = await db.execute(select(Admin).where(Admin.username == request.username))
     admin_user = db_result.scalar_one_or_none()
 
-    if admin_user is None or not verify_password(request.password, admin_user.password_hash):
+    password_hash = admin_user.password_hash if admin_user is not None else dummy_password_hash()
+    if admin_user is None or not verify_password(request.password, password_hash):
         await _record_failed_login(client_ip)
         await fail2ban_manager.record_failed_attempt(client_ip, "panel", db, "Failed admin login")
         logger.warning("login.failure ip=%s user=%s", client_ip, request.username)
@@ -235,7 +237,8 @@ async def login_with_2fa(request: Login2FARequest, req: Request, db: AsyncSessio
     db_result = await db.execute(select(Admin).where(Admin.username == request.username))
     admin_user = db_result.scalar_one_or_none()
 
-    if admin_user is None or not verify_password(request.password, admin_user.password_hash):
+    password_hash = admin_user.password_hash if admin_user is not None else dummy_password_hash()
+    if admin_user is None or not verify_password(request.password, password_hash):
         await _record_failed_login(client_ip)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 

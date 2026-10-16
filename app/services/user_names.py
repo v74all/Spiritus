@@ -10,12 +10,29 @@ path checks here first.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models import VpnUser
+
+# Quotes, angle brackets and path/URL separators break the panel (they land in
+# HTML attributes and in /users/{name} paths). Letters from any language stay.
+_UNSAFE_NAME = re.compile(r"[\x00-\x1f\x7f/\\?#%<>\"']")
+
+
+def display_name_error(value: str, *, label: str = "Name") -> str | None:
+    """Return a reason the label cannot be stored, or None when it is fine."""
+    if not isinstance(value, str):
+        return f"{label} is required."
+    name = value.strip()
+    if not name or len(name) > 100:
+        return f"{label} must be 1–100 characters."
+    if _UNSAFE_NAME.search(name):
+        return f"{label} contains characters that are not allowed."
+    return None
 
 
 async def taken_vpn_user_names(db: AsyncSession, names: Iterable[str]) -> set[str]:

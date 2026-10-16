@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
+from ...auth import dummy_password_hash
 from ._core import *  # noqa: F403
 
 router = APIRouter(tags=["compat"])
@@ -42,7 +43,8 @@ async def legacy_login(
 
     db_result = await db.execute(select(Admin).where(Admin.username == username))
     admin_user = db_result.scalar_one_or_none()
-    if admin_user and verify_password(request.password, admin_user.password_hash):
+    password_hash = admin_user.password_hash if admin_user is not None else dummy_password_hash()
+    if admin_user and verify_password(request.password, password_hash):
         authenticated = True
         admin_id = admin_user.id
 

@@ -13,6 +13,7 @@ import asyncio
 import base64
 import csv
 import io
+import ipaddress
 import json
 import logging
 import os
@@ -205,20 +206,70 @@ def _is_placeholder_host(host: str) -> bool:
     return host in {"", "0.0.0.0", "127.0.0.1", "localhost", "::1", "your-server-ip"}
 
 
-def _request_config_host(request: Request) -> str:
-    for header in ("x-forwarded-host", "host"):
-        raw = (request.headers.get(header) or "").split(",", 1)[0].strip()
-        host = _strip_host_port(raw)
-        if not _is_placeholder_host(host):
+_HOST_LABEL = re.compile(r"(?!-)[A-Za-z0-9-]{1,63}(?<!-)(?:\.(?!-)[A-Za-z0-9-]{1,63}(?<!-))*")
+
+
+def _is_safe_config_host(host: str) -> bool:
+    """A hostname or IP that can be embedded in a share link without breaking it.
+
+    Rejects whitespace, path characters and anything that would smuggle a second
+    authority (`user@host`) or a header (`\\r\\n`) into a generated URI.
+    """
+    host = _strip_host_port(host)
+    if _is_placeholder_host(host) or len(host) > 253:
+        return False
+    if any(c in host for c in " \t\r\n/@\\?#\"'<>"):
+        return False
+    try:
+        ipaddress.ip_address(host)
+        return True
+    except ValueError:
+        return bool(_HOST_LABEL.fullmatch(host))
+
+
+def _allowlisted_hosts() -> set[str]:
+    return {h.strip().lower() for h in (settings.allowed_hosts or "").split(",") if h.strip()}
+
+
+def resolve_public_host(request: Request | None) -> str:
+    """Address written into client configs.
+
+    Operator-configured values win. The request Host is only a last resort,
+    and only when it is a safe hostname (and on ALLOWED_HOSTS when that list
+    is set). X-Forwarded-Host is client-spoofable, so it is accepted only when
+    it is itself on the allowlist. The result is never written back into the
+    process-wide settings dict — one poisoned request must not rewrite the
+    address every other subscriber receives.
+    """
+    for candidate in (
+        _settings_state.get("server_ip"),
+        _settings_state.get("domain_active"),
+        settings.vpn_server_ip,
+    ):
+        host = _strip_host_port(str(candidate or ""))
+        if _is_safe_config_host(host):
             return host
-    # settings.host is the bind address (0.0.0.0 on most installs) — it is
-    # a placeholder and must not appear in client configs. Fall through to
-    # VPN_SERVER_IP which is the actual public IP.
-    if not _is_placeholder_host(settings.host):
-        return settings.host
-    if settings.vpn_server_ip and not _is_placeholder_host(settings.vpn_server_ip):
-        return settings.vpn_server_ip
+
+    if request is None:
+        return ""
+
+    allowed = _allowlisted_hosts()
+    forwarded = _strip_host_port((request.headers.get("x-forwarded-host") or "").split(",", 1)[0])
+    if forwarded and _is_safe_config_host(forwarded) and allowed and forwarded.lower() in allowed:
+        return forwarded
+
+    host_header = _strip_host_port((request.headers.get("host") or "").split(",", 1)[0])
+    if _is_safe_config_host(host_header) and (not allowed or host_header.lower() in allowed):
+        return host_header
+
+    configured = _strip_host_port(settings.host or "")
+    if _is_safe_config_host(configured) and (not allowed or configured.lower() in allowed):
+        return configured
     return ""
+
+
+def _request_config_host(request: Request) -> str:
+    return resolve_public_host(request)
 
 
 # NOTE: The legacy _read_password_file / _write_password_file helpers were

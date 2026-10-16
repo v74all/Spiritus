@@ -1,7 +1,16 @@
 from __future__ import annotations
 
 from fastapi import APIRouter
+from fastapi.responses import JSONResponse
 
+from ...auth import (
+    _is_token_revoked,
+    agent_sessions_invalidated,
+    dummy_password_hash,
+    invalidate_agent_sessions,
+    revoke_token,
+    validate_password_strength,
+)
 from ._core import *  # noqa: F403
 from .legacy_users import (
     BulkCreateRequest,
@@ -32,11 +41,42 @@ def _agent_to_legacy(a: Agent, user_count: int = 0) -> dict[str, Any]:
     return {
         "id": a.id,
         "name": a.name,
-        "active": a.status.value != "offline" if hasattr(a, "status") and a.status else True,
+        "active": _panel_enabled(a),
         "traffic_quota_gb": float(meta.get("traffic_quota_gb") or 0),
         "traffic_used_gb": float(meta.get("traffic_used_gb") or 0),
+        "traffic_allocated_gb": float(meta.get("traffic_allocated_gb") or 0),
         "user_count": user_count,
     }
+
+
+def _panel_enabled(agent: Agent) -> bool:
+    """Account switch for the agent panel, independent of node health.
+
+    `Agent.status` is rewritten by health checks (online/offline). Using it as
+    the login gate locked agents out whenever their node blinked, and a later
+    healthy check silently re-enabled an account an admin had disabled.
+    Rows saved before this flag existed keep their previous meaning: offline
+    could not log in. The first read persists that snapshot.
+    """
+    meta = _agent_meta(agent)
+    if "panel_enabled" in meta:
+        return bool(meta["panel_enabled"])
+    status = getattr(agent, "status", None)
+    value = getattr(status, "value", status)
+    return str(value or "") != "offline"
+
+
+def _ensure_panel_enabled(agent: Agent) -> bool:
+    meta = _agent_meta(agent)
+    if "panel_enabled" in meta:
+        return bool(meta["panel_enabled"])
+    enabled = _panel_enabled(agent)
+    _set_agent_meta(agent, panel_enabled=enabled)
+    return enabled
+
+
+def _like_prefix(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
 
 
 def _agent_meta(agent: Agent) -> dict[str, Any]:
@@ -49,14 +89,21 @@ def _set_agent_meta(agent: Agent, **updates: Any) -> None:
     agent.ech_config = meta
 
 
-async def _agent_used_gb(agent_id: int, db: AsyncSession) -> float:
+async def _agent_sum_gb(agent_id: int, column, db: AsyncSession) -> float:
     result = await db.execute(
-        select(func.coalesce(func.sum(VpnUser.traffic_used), 0)).where(
-            VpnUser.agent_id == agent_id
-        )
+        select(func.coalesce(func.sum(column), 0)).where(VpnUser.agent_id == agent_id)
     )
-    used = result.scalar() or 0
-    return float(used) / (1024**3)
+    return float(result.scalar() or 0) / (1024**3)
+
+
+async def _agent_used_gb(agent_id: int, db: AsyncSession) -> float:
+    """Bytes customers have already consumed."""
+    return await _agent_sum_gb(agent_id, VpnUser.traffic_used, db)
+
+
+async def _agent_allocated_gb(agent_id: int, db: AsyncSession) -> float:
+    """Sum of package sizes the agent has sold. This is what the quota caps."""
+    return await _agent_sum_gb(agent_id, VpnUser.traffic_limit, db)
 
 
 async def _get_current_agent_cookie(
@@ -74,18 +121,42 @@ async def _get_current_agent_cookie(
     try:
         # Tokens are signed with jwt_secret_key (same as all other JWTs in the app).
         # Using secret_key here was a bug — it's the app secret, not the JWT key.
-        payload = jwt.decode(token, settings.jwt_secret_key, algorithms=["HS256"])
+        payload = jwt.decode(
+            token,
+            settings.jwt_secret_key,
+            algorithms=["HS256"],
+            options={"require": ["exp", "iat", "sub"]},
+        )
     except JWTError:
         raise HTTPException(status_code=401, detail="Could not validate credentials")
 
     if payload.get("role") != "agent":
         raise HTTPException(status_code=403, detail="Agent privileges required")
 
+    jti = payload.get("jti")
+    if not jti or await _is_token_revoked(str(jti)):
+        raise HTTPException(status_code=401, detail="Could not validate credentials")
+
     agent_id = payload.get("agent_id") or payload.get("user_id")
-    result = await db.execute(select(Agent).where(Agent.id == agent_id))
+    try:
+        agent_id_int = int(agent_id)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=401, detail="Could not validate credentials")
+    if await agent_sessions_invalidated(agent_id_int, payload.get("iat")):
+        raise HTTPException(status_code=401, detail="Could not validate credentials")
+
+    result = await db.execute(select(Agent).where(Agent.id == agent_id_int))
     agent = result.scalar_one_or_none()
     if agent is None:
         raise HTTPException(status_code=401, detail="Agent not found")
+    # Snapshot the pre-flag meaning of status before deciding, so a health
+    # check that flips online/offline cannot change who is allowed in.
+    backfill = "panel_enabled" not in _agent_meta(agent)
+    enabled = _ensure_panel_enabled(agent)
+    if backfill:
+        await db.commit()
+    if not enabled:
+        raise HTTPException(status_code=401, detail="Account is disabled")
     return agent
 
 
@@ -111,11 +182,26 @@ async def legacy_list_agents(
             .group_by(VpnUser.agent_id)
         )
         traffic_used = {row[0]: float(row[1] or 0) / (1024**3) for row in traffic_result.all()}
+    allocated: dict[int, float] = {}
+    if agents:
+        alloc_result = await db.execute(
+            select(VpnUser.agent_id, func.coalesce(func.sum(VpnUser.traffic_limit), 0))
+            .where(VpnUser.agent_id.in_([a.id for a in agents]))
+            .group_by(VpnUser.agent_id)
+        )
+        allocated = {row[0]: float(row[1] or 0) / (1024**3) for row in alloc_result.all()}
+    changed = False
     out = []
     for a in agents:
+        if "panel_enabled" not in _agent_meta(a):
+            _ensure_panel_enabled(a)
+            changed = True
         item = _agent_to_legacy(a, user_counts.get(a.id, 0))
         item["traffic_used_gb"] = round(traffic_used.get(a.id, 0), 2)
+        item["traffic_allocated_gb"] = round(allocated.get(a.id, 0), 2)
         out.append(item)
+    if changed:
+        await db.commit()
     return out
 
 
@@ -125,14 +211,19 @@ async def legacy_create_agent(
     admin: User = Depends(get_current_admin_cookie),
     db: AsyncSession = Depends(get_async_db),
 ):
-    if not body.name:
-        return {"ok": False, "error": "Name required"}
-    if len(body.password) < 6:
-        return {"ok": False, "error": "Password too short"}
+    from ...services.user_names import display_name_error
+
+    agent_name = body.name.strip()
+    name_error = display_name_error(agent_name, label="Name")
+    if name_error:
+        return {"ok": False, "error": name_error}
+    password_error = validate_password_strength(body.password)
+    if password_error:
+        return {"ok": False, "error": password_error}
     from ...models import AgentBackend, AgentStatus
     try:
         agent = Agent(
-            name=body.name,
+            name=agent_name,
             backend=AgentBackend.xray,
             status=AgentStatus.offline,
             address="127.0.0.1",
@@ -142,6 +233,9 @@ async def legacy_create_agent(
                 "traffic_quota_gb": body.traffic_quota_gb,
                 "speed_limit_default": body.speed_limit_default,
                 "brand_name": "",
+                # Account starts disabled. Node status stays offline until a
+                # health check; enabling the account does not pretend the node is up.
+                "panel_enabled": False,
             },
         )
         db.add(agent)
@@ -165,8 +259,10 @@ async def legacy_edit_agent(
     if agent is None:
         return {"ok": False, "error": "Agent not found"}
     if "active" in body:
-        from ...models import AgentStatus
-        agent.status = AgentStatus.online if body["active"] else AgentStatus.offline
+        enabled = bool(body["active"])
+        _set_agent_meta(agent, panel_enabled=enabled)
+        if not enabled:
+            await invalidate_agent_sessions(agent.id)
     meta_updates: dict[str, Any] = {}
     if "traffic_quota_gb" in body:
         meta_updates["traffic_quota_gb"] = float(body["traffic_quota_gb"] or 0)
@@ -186,14 +282,16 @@ async def legacy_reset_agent_password(
     db: AsyncSession = Depends(get_async_db),
 ):
     pw = body.get("password", "")
-    if len(pw) < 6:
-        return {"ok": False, "error": "Password too short"}
+    password_error = validate_password_strength(pw if isinstance(pw, str) else "")
+    if password_error:
+        return {"ok": False, "error": password_error}
     result = await db.execute(select(Agent).where(Agent.id == agent_id))
     agent = result.scalar_one_or_none()
     if agent is None:
         return {"ok": False, "error": "Agent not found"}
     agent.api_key = get_password_hash(pw)
     await db.commit()
+    await invalidate_agent_sessions(agent.id)
     return {"ok": True}
 
 
@@ -238,6 +336,43 @@ class LegacyAgentLoginRequest(BaseModel):
     password: str
 
 
+def _agent_login_key(ip: str) -> str:
+    return f"agent_login:{ip}"
+
+
+async def _agent_login_locked(ip: str) -> bool:
+    try:
+        from ...redis_client import get_redis
+        redis = await get_redis()
+        val = await redis.get(_agent_login_key(ip))
+        return bool(val and int(val) >= settings.max_login_attempts)
+    except Exception as exc:
+        logger.error("agent rate-limit check failed: %s", exc)
+        raise HTTPException(status_code=503, detail="Auth service temporarily unavailable") from exc
+
+
+async def _record_agent_login_failure(ip: str) -> None:
+    try:
+        from ...redis_client import get_redis
+        redis = await get_redis()
+        key = _agent_login_key(ip)
+        count = await redis.incr(key)
+        if count == 1:
+            await redis.expire(key, settings.lockout_seconds)
+    except Exception as exc:
+        logger.error("agent failure-record failed: %s", exc)
+        raise HTTPException(status_code=503, detail="Auth service temporarily unavailable") from exc
+
+
+async def _clear_agent_login_failures(ip: str) -> None:
+    try:
+        from ...redis_client import get_redis
+        redis = await get_redis()
+        await redis.delete(_agent_login_key(ip))
+    except Exception as exc:
+        logger.debug("agent attempt-clear failed: %s", exc)
+
+
 @router.post("/agent/login")
 async def legacy_agent_login(
     body: LegacyAgentLoginRequest,
@@ -245,13 +380,39 @@ async def legacy_agent_login(
     response: Response,
     db: AsyncSession = Depends(get_async_db),
 ):
+    client_ip = req.client.host if req.client else "unknown"
+    if await fail2ban_manager.is_banned(client_ip, "panel", db):
+        return JSONResponse(
+            {"ok": False, "locked": True, "error": "Too many failed attempts."},
+            status_code=429,
+        )
+    if await _agent_login_locked(client_ip):
+        return JSONResponse(
+            {
+                "ok": False,
+                "locked": True,
+                "error": f"Too many failed attempts. Try again in {settings.lockout_seconds}s",
+            },
+            status_code=429,
+        )
+
     result = await db.execute(select(Agent).where(Agent.name == body.name.strip()))
     agent = result.scalar_one_or_none()
-    if agent is None or not agent.api_key or not verify_password(body.password, agent.api_key):
+    password_hash = agent.api_key if agent is not None and agent.api_key else dummy_password_hash()
+    password_ok = verify_password(body.password, password_hash)
+    if agent is None or not agent.api_key or not password_ok:
+        await _record_agent_login_failure(client_ip)
+        await fail2ban_manager.record_failed_attempt(client_ip, "panel", db, "Failed agent login")
         return {"ok": False, "error": "Invalid credentials"}
-    if agent.status and agent.status.value == "offline":
+
+    backfill = "panel_enabled" not in _agent_meta(agent)
+    enabled = _ensure_panel_enabled(agent)
+    if backfill:
+        await db.commit()
+    if not enabled:
         return {"ok": False, "error": "Account is disabled"}
 
+    await _clear_agent_login_failures(client_ip)
     token = create_access_token(
         data={
             "sub": agent.name,
@@ -274,7 +435,21 @@ async def legacy_agent_login(
 
 
 @router.post("/agent/logout")
-async def legacy_agent_logout(response: Response):
+async def legacy_agent_logout(request: Request, response: Response):
+    token = request.cookies.get("agent_access_token")
+    if token:
+        try:
+            payload = jwt.decode(
+                token,
+                settings.jwt_secret_key,
+                algorithms=["HS256"],
+                options={"verify_exp": False},
+            )
+            jti, exp = payload.get("jti"), payload.get("exp")
+            if jti and exp:
+                await revoke_token(str(jti), int(exp - _utcnow().timestamp()))
+        except JWTError:
+            pass
     response.delete_cookie("agent_access_token", path="/")
     return {"ok": True}
 
@@ -320,12 +495,14 @@ async def legacy_agent_me(
     meta = _agent_meta(agent)
     quota = float(meta.get("traffic_quota_gb") or 0)
     used = await _agent_used_gb(agent.id, db)
+    allocated = await _agent_allocated_gb(agent.id, db)
     return {
         "name": agent.name,
         "traffic_quota_gb": quota,
         "traffic_used_gb": round(used, 2),
-        "traffic_remaining_gb": round(max(0, quota - used), 2) if quota else 0,
-        "active": agent.status.value != "offline" if agent.status else True,
+        "traffic_allocated_gb": round(allocated, 2),
+        "traffic_remaining_gb": round(max(0, quota - allocated), 2) if quota else 0,
+        "active": _panel_enabled(agent),
         "brand_name": meta.get("brand_name", ""),
         "speed_limit_default": int(meta.get("speed_limit_default") or 0),
     }
@@ -344,12 +521,27 @@ async def legacy_agent_brand(
 
 
 async def _check_agent_quota(agent: Agent, requested_gb: float, db: AsyncSession) -> str | None:
+    """Reject a sale that would push allocated package size past the quota.
+
+    Consumption (traffic_used) is the wrong meter: an agent could sell many
+    full packages while customers had not yet used them, and a later renew
+    compared the new package size with bytes already transferred.
+    """
     quota = float(_agent_meta(agent).get("traffic_quota_gb") or 0)
     if quota <= 0:
         return None
-    used = await _agent_used_gb(agent.id, db)
-    if used + requested_gb > quota:
-        return f"Quota exceeded. Remaining: {max(0, quota - used):.1f} GB"
+    if requested_gb < 0:
+        return "Traffic limit must be zero or greater."
+    allocated = await _agent_allocated_gb(agent.id, db)
+    if allocated + requested_gb > quota:
+        return f"Quota exceeded. Remaining: {max(0, quota - allocated):.1f} GB"
+    return None
+
+
+def _quota_requires_limit(agent: Agent, traffic_gb: float) -> str | None:
+    quota = float(_agent_meta(agent).get("traffic_quota_gb") or 0)
+    if quota > 0 and traffic_gb <= 0:
+        return "Traffic limit must be greater than zero while a quota is set."
     return None
 
 
@@ -376,17 +568,26 @@ async def legacy_agent_create_user(
     agent: Agent = Depends(_get_current_agent_cookie),
     db: AsyncSession = Depends(get_async_db),
 ):
+    from ...services.user_names import display_name_error
+
+    user_name = body.name.strip()
+    name_error = display_name_error(user_name)
+    if name_error:
+        return {"ok": False, "error": name_error}
+    limit_error = _quota_requires_limit(agent, body.traffic)
+    if limit_error:
+        return {"ok": False, "error": limit_error}
     quota_error = await _check_agent_quota(agent, body.traffic, db)
     if quota_error:
         return {"ok": False, "error": quota_error}
 
-    if await taken_vpn_user_names(db, [body.name]):
-        return {"ok": False, "error": f"User '{body.name}' already exists"}
+    if await taken_vpn_user_names(db, [user_name]):
+        return {"ok": False, "error": f"User '{user_name}' already exists"}
     expire_at = _utcnow() + timedelta(days=body.days) if body.days else None
     default_speed = int(_agent_meta(agent).get("speed_limit_default") or 0)
     db_user = VpnUser(
         uuid=str(uuid_lib.uuid4()),
-        name=body.name,
+        name=user_name,
         traffic_limit=int(body.traffic * (1024**3)),
         traffic_used=0,
         expire_at=expire_at,
@@ -415,12 +616,21 @@ async def legacy_agent_bulk_users(
     agent: Agent = Depends(_get_current_agent_cookie),
     db: AsyncSession = Depends(get_async_db),
 ):
+    from ...services.user_names import display_name_error
+
+    prefix = body.prefix.strip()
+    prefix_error = display_name_error(prefix, label="Prefix")
+    if prefix_error:
+        return {"ok": False, "error": prefix_error}
+    limit_error = _quota_requires_limit(agent, body.traffic)
+    if limit_error:
+        return {"ok": False, "error": limit_error}
     quota_error = await _check_agent_quota(agent, body.traffic * body.count, db)
     if quota_error:
         return {"ok": False, "error": quota_error}
 
     if body.numbered:
-        names = [f"{body.prefix}-{str(body.start + i).zfill(body.pad)}" for i in range(body.count)]
+        names = [f"{prefix}-{str(body.start + i).zfill(body.pad)}" for i in range(body.count)]
         taken = await taken_vpn_user_names(db, names)
         if taken:
             return {"ok": False, "error": "Users already exist: " + ", ".join(sorted(taken))}
@@ -429,9 +639,9 @@ async def legacy_agent_bulk_users(
     default_speed = int(_agent_meta(agent).get("speed_limit_default") or 0)
     for i in range(body.count):
         name = (
-            f"{body.prefix}-{str(body.start + i).zfill(body.pad)}"
+            f"{prefix}-{str(body.start + i).zfill(body.pad)}"
             if body.numbered
-            else f"{body.prefix}-{uuid_lib.uuid4().hex[:8]}"
+            else f"{prefix}-{uuid_lib.uuid4().hex[:8]}"
         )
         u = VpnUser(
             uuid=str(uuid_lib.uuid4()),
@@ -548,6 +758,9 @@ async def legacy_agent_renew_user(
     user = result.scalar_one_or_none()
     if user is None:
         return {"ok": False, "error": "User not found or not yours"}
+    limit_error = _quota_requires_limit(agent, body.traffic)
+    if limit_error:
+        return {"ok": False, "error": limit_error}
     extra_gb = max(0, body.traffic - ((user.traffic_limit or 0) / (1024**3)))
     quota_error = await _check_agent_quota(agent, extra_gb, db)
     if quota_error:
@@ -652,7 +865,7 @@ async def legacy_agent_group_users(
     result = await db.execute(
         select(VpnUser).where(
             VpnUser.agent_id == agent.id,
-            VpnUser.name.like(f"{group_id}%"),
+            VpnUser.name.like(f"{_like_prefix(group_id)}%", escape="\\"),
         )
     )
     server_ip = _request_config_host(request)

@@ -6,7 +6,7 @@ full panel boot. Tests assert:
 - Safe methods (GET) issue/preserve the csrf_token cookie.
 - Unsafe methods without a matching header → 403.
 - Unsafe methods with a matching cookie+header → pass through.
-- Bearer-authenticated requests bypass CSRF (per double-submit semantics).
+- A signed bearer bypasses CSRF. A forged bearer does not.
 - Path exemptions (e.g. /api/auth/login) bypass CSRF.
 """
 
@@ -68,9 +68,18 @@ async def test_post_with_wrong_token_is_rejected():
 
 
 async def test_bearer_request_bypasses_csrf():
+    from app.auth import create_access_token
+
+    token = create_access_token({"sub": "csrf-tester", "is_admin": True})
+    async with _client() as c:
+        r = await c.post("/api/users", json={}, headers={"Authorization": f"Bearer {token}"})
+        assert r.status_code == 200
+
+
+async def test_forged_bearer_does_not_bypass_csrf():
     async with _client() as c:
         r = await c.post("/api/users", json={}, headers={"Authorization": "Bearer dummy"})
-        assert r.status_code == 200
+        assert r.status_code == 403
 
 
 async def test_login_endpoint_is_exempt():

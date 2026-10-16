@@ -11,8 +11,9 @@ How it works:
   request is rejected with 403.
 
 Exemptions:
-- Token-based auth (Authorization: Bearer …) bypasses the check because the
-  attacker cannot read the token from a cross-origin context.
+- A bearer token bypasses the check only when its signature verifies. A
+  forged Authorization header must not skip CSRF while the session cookie
+  is still attached.
 - The static subscription URLs `/sub/…`, `/sub-api/…`, `/sub-json/…` are
   GET-only and exempt by virtue of method.
 - The dedicated login endpoint is exempt because no session exists yet — the
@@ -27,11 +28,41 @@ import hmac
 import logging
 import secrets
 
+import jwt
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
+from ..config import settings
+
 logger = logging.getLogger(__name__)
+
+
+def _signed_bearer(header: str) -> bool:
+    """True only when the Authorization value is a JWT signed with our key.
+
+    Expiry is ignored here: an expired but genuine token is still not something
+    an attacker can mint, and the endpoint itself rejects it. A forged or
+    unsigned bearer must fall through to the cookie CSRF check.
+    """
+    if not header.lower().startswith("bearer "):
+        return False
+    token = header.split(" ", 1)[1].strip()
+    if not token:
+        return False
+    try:
+        # Use the settings object captured at import. Tests that reload
+        # app.config install a second Settings instance; tokens are signed
+        # with the instance the rest of the app already holds.
+        jwt.decode(
+            token,
+            settings.jwt_secret_key,
+            algorithms=["HS256"],
+            options={"verify_exp": False, "require": ["sub"]},
+        )
+        return True
+    except Exception:
+        return False
 
 
 SAFE_METHODS: tuple[str, ...] = ("GET", "HEAD", "OPTIONS", "TRACE")
@@ -92,9 +123,12 @@ class CSRFMiddleware(BaseHTTPMiddleware):
             self._ensure_cookie(request, response)
             return response
 
-        # Bearer token? Skip CSRF — JS in attacker.com cannot read the token.
+        # A *signed* bearer token skips CSRF: script on another origin cannot
+        # read it, and forging the header is not enough — the signature has to
+        # verify. A dummy "Authorization: Bearer x" must not skip the check
+        # while the browser still attaches the session cookie.
         auth_header = request.headers.get("authorization") or ""
-        if auth_header.lower().startswith("bearer "):
+        if _signed_bearer(auth_header):
             return await call_next(request)
 
         cookie_val = request.cookies.get(COOKIE_NAME)
