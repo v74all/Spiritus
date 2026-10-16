@@ -81,8 +81,9 @@ async def legacy_search(
     admin: User = Depends(get_current_admin_cookie),
     db: AsyncSession = Depends(get_async_db),
 ):
+    safe = q.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
     result = await db.execute(
-        select(VpnUser).where(VpnUser.name.ilike(f"%{q}%")).limit(50)
+        select(VpnUser).where(VpnUser.name.ilike(f"%{safe}%", escape="\\")).limit(50)
     )
     users = []
     for u in result.scalars().all():
@@ -349,13 +350,24 @@ async def legacy_backup_cleanup(
     admin: User = Depends(get_current_admin_cookie),
 ):
     """Delete backups older than `keep_days` (default 30)."""
-    keep_days = int((body or {}).get("keep_days", 30))
+    try:
+        keep_days = int((body or {}).get("keep_days", 30))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="keep_days must be an integer")
+    if keep_days < 1 or keep_days > 3650:
+        raise HTTPException(status_code=400, detail="keep_days must be between 1 and 3650")
     removed = 0
     if os.path.isdir(_BACKUP_DIR):
         cutoff = time.time() - keep_days * 86400
         for name in os.listdir(_BACKUP_DIR):
+            # Only our own snapshot names. A symlink or a planted file in the
+            # backup directory must not be unlinked from this endpoint.
+            if not _BACKUP_NAME_RE.fullmatch(name):
+                continue
             path = os.path.join(_BACKUP_DIR, name)
             try:
+                if os.path.islink(path):
+                    continue
                 if os.path.isfile(path) and os.path.getmtime(path) < cutoff:
                     os.unlink(path)
                     removed += 1

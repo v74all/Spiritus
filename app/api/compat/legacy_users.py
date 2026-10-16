@@ -39,12 +39,18 @@ async def legacy_create_user(
     admin: User = Depends(get_current_admin_cookie),
     db: AsyncSession = Depends(get_async_db),
 ):
-    if await taken_vpn_user_names(db, [body.name]):
-        return {"ok": False, "error": f"User '{body.name}' already exists"}
+    from ...services.user_names import display_name_error
+
+    user_name = body.name.strip()
+    name_error = display_name_error(user_name)
+    if name_error:
+        return {"ok": False, "error": name_error}
+    if await taken_vpn_user_names(db, [user_name]):
+        return {"ok": False, "error": f"User '{user_name}' already exists"}
     expire_at = _utcnow() + timedelta(days=body.days) if body.days else None
     db_user = VpnUser(
         uuid=str(uuid_lib.uuid4()),
-        name=body.name,
+        name=user_name,
         traffic_limit=int(body.traffic * (1024**3)),
         traffic_used=0,
         expire_at=expire_at,
@@ -262,7 +268,7 @@ async def legacy_user_activity(
 
 class BulkCreateRequest(BaseModel):
     prefix: str = "group"
-    count: int = 1
+    count: int = Field(1, ge=1, le=500)
     traffic: float = 1
     days: int = 30
     numbered: bool = True
@@ -280,8 +286,14 @@ async def legacy_bulk_users(
     admin: User = Depends(get_current_admin_cookie),
     db: AsyncSession = Depends(get_async_db),
 ):
+    from ...services.user_names import display_name_error
+
+    prefix = body.prefix.strip()
+    prefix_error = display_name_error(prefix, label="Prefix")
+    if prefix_error:
+        return {"ok": False, "error": prefix_error}
     if body.numbered:
-        names = [f"{body.prefix}-{str(body.start + i).zfill(body.pad)}" for i in range(body.count)]
+        names = [f"{prefix}-{str(body.start + i).zfill(body.pad)}" for i in range(body.count)]
         taken = await taken_vpn_user_names(db, names)
         if taken:
             return {"ok": False, "error": "Users already exist: " + ", ".join(sorted(taken))}
@@ -290,9 +302,9 @@ async def legacy_bulk_users(
     for i in range(body.count):
         if body.numbered:
             suffix = str(body.start + i).zfill(body.pad)
-            name = f"{body.prefix}-{suffix}"
+            name = f"{prefix}-{suffix}"
         else:
-            name = f"{body.prefix}-{uuid_lib.uuid4().hex[:8]}"
+            name = f"{prefix}-{uuid_lib.uuid4().hex[:8]}"
         u = VpnUser(
             uuid=str(uuid_lib.uuid4()),
             name=name,
@@ -358,6 +370,26 @@ async def legacy_bulk_delete(
     return {"ok": True, "deleted": count, "apply": body.apply}
 
 
+_ZIP_STEM = re.compile(r"[^A-Za-z0-9._-]+")
+
+
+def _download_stem(value: object) -> str:
+    cleaned = _ZIP_STEM.sub("_", str(value or "bulk")).strip("._")[:40]
+    return cleaned or "bulk"
+
+
+def _zip_entry_name(value: object, used: set[str]) -> str:
+    """A flat archive name. Client-supplied names must not be paths."""
+    cleaned = _ZIP_STEM.sub("_", str(value or "user")).strip("._")[:80] or "user"
+    candidate = f"{cleaned}.txt"
+    n = 2
+    while candidate in used:
+        candidate = f"{cleaned}-{n}.txt"
+        n += 1
+    used.add(candidate)
+    return candidate
+
+
 @router.post("/bulk-export-zip")
 async def legacy_bulk_export_zip(
     body: dict[str, Any],
@@ -365,12 +397,13 @@ async def legacy_bulk_export_zip(
 ):
     import zipfile
 
-    prefix = str(body.get("prefix", "bulk"))
+    prefix = _download_stem(body.get("prefix", "bulk"))
     users = body.get("users", []) or []
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        used_names: set[str] = set()
         for u in users:
-            name = u.get("name", "user")
+            name = _zip_entry_name(u.get("name", "user"), used_names)
             text = "\n".join(
                 f"{label}: {u.get(key, '')}"
                 for key, label in [
@@ -385,7 +418,7 @@ async def legacy_bulk_export_zip(
                 ]
                 if u.get(key)
             )
-            zf.writestr(f"{name}.txt", text)
+            zf.writestr(name, text)
     buf.seek(0)
     return StreamingResponse(
         buf,

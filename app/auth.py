@@ -208,6 +208,39 @@ async def revoke_request_token(request: Request) -> str | None:
     return str(jti)
 
 
+async def _write_session_epoch(redis_key: str) -> bool:
+    """Store the instant at which every older token for this key dies.
+
+    Whole seconds only: JWT `iat` is second-granularity (NumericDate), so
+    comparing it against a sub-second float could reject a token minted in
+    the very same second as the invalidation.
+    """
+    try:
+        from .redis_client import get_redis
+        redis = await get_redis()
+        now = int(datetime.now(UTC).timestamp())
+        await redis.setex(redis_key, settings.session_lifetime_hours * 3600, str(now))
+        return True
+    except Exception:
+        logger.warning("session invalidation failed: Redis unavailable")
+        return False
+
+
+async def _session_epoch_blocks(redis_key: str, iat: Any) -> bool:
+    if iat is None:
+        return False
+    try:
+        from .redis_client import get_redis
+        redis = await get_redis()
+        epoch = await redis.get(redis_key)
+        if not epoch:
+            return False
+        return int(iat) < int(float(epoch))
+    except Exception:
+        # Fail-closed for auth, same posture as _is_token_revoked.
+        return not settings.debug
+
+
 async def invalidate_sessions(username: str) -> bool:
     """Invalidate every previously-issued token for this admin at once.
 
@@ -220,38 +253,35 @@ async def invalidate_sessions(username: str) -> bool:
     other "kick everyone out" action, e.g. 2FA reset). Returns False when
     Redis is unreachable and nothing was invalidated.
     """
-    try:
-        from .redis_client import get_redis
-        redis = await get_redis()
-        # Whole seconds only: JWT `iat` is second-granularity (NumericDate),
-        # so comparing it against a sub-second float epoch could reject a
-        # token minted in the very same second as the invalidation (e.g. the
-        # replacement cookie this same request is about to issue).
-        now = int(datetime.now(UTC).timestamp())
-        await redis.setex(
-            f"pwd_epoch:{username}",
-            settings.session_lifetime_hours * 3600,
-            str(now),
-        )
-        return True
-    except Exception:
-        logger.warning("session invalidation failed: Redis unavailable")
+    if not username:
         return False
+    return await _write_session_epoch(f"pwd_epoch:{username}")
+
+
+async def invalidate_agent_sessions(agent_id: int) -> bool:
+    """Kick every panel session for this agent (password reset or disable)."""
+    return await _write_session_epoch(f"pwd_epoch:agent:{int(agent_id)}")
 
 
 async def _tokens_invalidated_since(username: str, iat: Any) -> bool:
-    if not username or iat is None:
+    if not username:
         return False
-    try:
-        from .redis_client import get_redis
-        redis = await get_redis()
-        epoch = await redis.get(f"pwd_epoch:{username}")
-        if not epoch:
-            return False
-        return int(iat) < int(float(epoch))
-    except Exception:
-        # Fail-closed for auth, same posture as _is_token_revoked.
-        return not settings.debug
+    return await _session_epoch_blocks(f"pwd_epoch:{username}", iat)
+
+
+async def agent_sessions_invalidated(agent_id: int, iat: Any) -> bool:
+    return await _session_epoch_blocks(f"pwd_epoch:agent:{int(agent_id)}", iat)
+
+
+_DUMMY_PASSWORD_HASH: str | None = None
+
+
+def dummy_password_hash() -> str:
+    """A real Argon2 hash used so a missing account takes as long as a wrong password."""
+    global _DUMMY_PASSWORD_HASH
+    if _DUMMY_PASSWORD_HASH is None:
+        _DUMMY_PASSWORD_HASH = get_password_hash("spiritus-timing-equalizer")
+    return _DUMMY_PASSWORD_HASH
 
 
 async def _decode_token_to_user(token: str, db: AsyncSession) -> User:

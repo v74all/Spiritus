@@ -505,17 +505,18 @@ function renderUsers() {
   grid.innerHTML = filtered.map(u => {
     const spd = speeds[u.name] || {up:0, down:0};
     const online = isOnline(u.name);
-    const barColor = u.traffic_percent < 60 ? 'var(--green)' : u.traffic_percent < 85 ? 'var(--yellow)' : 'var(--red)';
+    const pct = Math.max(0, Math.min(100, Number(u.traffic_percent) || 0));
+    const barColor = pct < 60 ? 'var(--green)' : pct < 85 ? 'var(--yellow)' : 'var(--red)';
     const daysClass = u.days_left <= 3 ? 'crit' : u.days_left <= 7 ? 'warn' : 'val';
-    const noteHtml = u.note ? `<div class="note-badge" title="${esc(u.note)}" onclick="event.stopPropagation();promptEditNote('${esc(u.name)}','${esc(u.note)}')">${esc(u.note)}</div>` : '';
+    const noteHtml = u.note ? `<div class="note-badge" title="${esc(u.note)}" onclick="event.stopPropagation();promptEditNote('${jsq(u.name)}','${jsq(u.note)}')">${esc(u.note)}</div>` : '';
     const ipCount = u.online_ip_count || 0;
-    const ipHtml = ipCount > 0 ? `<span class="ip-badge" onclick="event.stopPropagation();showUserIPs('${esc(u.name)}')" title="Connected IPs">🌐 ${ipCount} IP${ipCount>1?'s':''}</span>` : '';
-    const speedHtml = `<span style="font-size:10px;color:var(--t3);margin-left:4px;cursor:pointer" title="Speed limit (click to edit): Down ${u.speed_limit_down} KB/s, Up ${u.speed_limit_up} KB/s" onclick="event.stopPropagation();promptSpeed('${esc(u.name)}',${u.speed_limit_down},${u.speed_limit_up})">⚡${u.speed_limit_down}KB/s</span>`;
+    const ipHtml = ipCount > 0 ? `<span class="ip-badge" onclick="event.stopPropagation();showUserIPs('${jsq(u.name)}')" title="Connected IPs">🌐 ${ipCount} IP${ipCount>1?'s':''}</span>` : '';
+    const speedHtml = `<span style="font-size:10px;color:var(--t3);margin-left:4px;cursor:pointer" title="Speed limit (click to edit): Down ${u.speed_limit_down} KB/s, Up ${u.speed_limit_up} KB/s" onclick="event.stopPropagation();promptSpeed('${jsq(u.name)}',${Number(u.speed_limit_down)||0},${Number(u.speed_limit_up)||0})">⚡${Number(u.speed_limit_down)||0}KB/s</span>`;
     return `
-    <div class="card ${u.active?'':'inactive'}" id="card-${u.name}">
+    <div class="card ${u.active?'':'inactive'}" id="card-${esc(u.name)}">
       <div class="card-head">
         <div class="card-name">
-          <span class="online-dot ${online?'on':''}" id="dot-${u.name}"></span>
+          <span class="online-dot ${online?'on':''}" id="dot-${esc(u.name)}"></span>
           <span class="user-name">${esc(u.name)}</span>
           ${speedHtml}
           ${ipHtml}
@@ -524,22 +525,22 @@ function renderUsers() {
       </div>
       ${noteHtml}
       <div class="traffic-section">
-        <div class="progress-track"><div class="progress-fill" style="width:${u.traffic_percent}%;background:${barColor}"></div></div>
-        <div class="traffic-text"><span><b>${fmtTraffic(u.traffic_used_bytes)}</b> / ${fmtTraffic(u.traffic_limit_bytes)}</span><span>${u.traffic_percent}%</span></div>
+        <div class="progress-track"><div class="progress-fill" style="width:${pct}%;background:${barColor}"></div></div>
+        <div class="traffic-text"><span><b>${fmtTraffic(u.traffic_used_bytes)}</b> / ${fmtTraffic(u.traffic_limit_bytes)}</span><span>${pct}%</span></div>
       </div>
-      <div class="info-row"><span>Expires</span><span class="val">${u.expire_at}</span></div>
-      <div class="info-row"><span>Remaining</span><span class="${daysClass}">${u.days_left} days</span></div>
-      <div class="speed-row" id="speed-${u.name}">
+      <div class="info-row"><span>Expires</span><span class="val">${esc(u.expire_at)}</span></div>
+      <div class="info-row"><span>Remaining</span><span class="${daysClass}">${Number(u.days_left)||0} days</span></div>
+      <div class="speed-row" id="speed-${esc(u.name)}">
         <div class="speed-item up"><span>Upload</span><span class="speed-val">${fmtSpeed(spd.up)}</span></div>
         <div class="speed-item down"><span>Download</span><span class="speed-val">${fmtSpeed(spd.down)}</span></div>
       </div>
       <div class="card-actions">
-        <button class="btn btn-outline btn-sm" onclick="showConfig('${esc(u.name)}')">Config</button>
-        <button class="btn btn-outline btn-sm" onclick="showActivity('${esc(u.name)}')">Activity</button>
-        <button class="btn ${u.active?'btn-orange':'btn-green'} btn-sm" onclick="toggleUser('${esc(u.name)}')">${u.active?'Disconnect':'Connect'}</button>
-        <button class="btn btn-outline btn-sm" onclick="showRenew('${esc(u.name)}')">Renew</button>
-        <button class="btn btn-green btn-sm" onclick="showAddTraffic('${esc(u.name)}')" title="Add traffic without reset">+GB</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteUser('${esc(u.name)}')">Delete</button>
+        <button class="btn btn-outline btn-sm" onclick="showConfig('${jsq(u.name)}')">Config</button>
+        <button class="btn btn-outline btn-sm" onclick="showActivity('${jsq(u.name)}')">Activity</button>
+        <button class="btn ${u.active?'btn-orange':'btn-green'} btn-sm" onclick="toggleUser('${jsq(u.name)}')">${u.active?'Disconnect':'Connect'}</button>
+        <button class="btn btn-outline btn-sm" onclick="showRenew('${jsq(u.name)}')">Renew</button>
+        <button class="btn btn-green btn-sm" onclick="showAddTraffic('${jsq(u.name)}')" title="Add traffic without reset">+GB</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteUser('${jsq(u.name)}')">Delete</button>
       </div>
     </div>`;
   }).join('');
@@ -568,9 +569,9 @@ function renderGroups() {
       <div class="info-row"><span>Traffic</span><span class="val">${(g.traffic_gb||0)} GB each</span></div>
       <div class="info-row"><span>Latest expiry</span><span class="val">${(g.latest_expire||'').slice(0,10)}</span></div>
       <div class="card-actions">
-        <button class="btn btn-outline btn-sm" onclick="openGroupExport('${esc(g.id)}')">Export</button>
-        <button class="btn btn-outline btn-sm" onclick="openGroupUsers('${esc(g.id)}')">Open</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteGroup('${esc(g.id)}')">Delete</button>
+        <button class="btn btn-outline btn-sm" onclick="openGroupExport('${jsq(g.id)}')">Export</button>
+        <button class="btn btn-outline btn-sm" onclick="openGroupUsers('${jsq(g.id)}')">Open</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteGroup('${jsq(g.id)}')">Delete</button>
       </div>
     </div>`;
   }).join('');
@@ -787,7 +788,7 @@ function renderBulkTabs() {
   tabsEl.style.display = '';
   tabsEl.innerHTML = _bulkRuns.slice(0, 12).map(r => {
     const active = r.id === _bulkActiveRunId;
-    return `<button class="bulk-tab ${active?'active':''}" onclick="selectBulkRun('${r.id}')">${esc(r.label||'group')}</button>`;
+    return `<button class="bulk-tab ${active?'active':''}" onclick="selectBulkRun('${jsq(r.id)}')">${esc(r.label||'group')}</button>`;
   }).join('');
 }
 
@@ -2555,7 +2556,21 @@ function applyUserPreset(gb, days) {
 }
 function closeModal(id){const modal=document.getElementById(id); if(modal) modal.classList.remove('show')}
 function hideModal(id){closeModal(id)}
-function esc(s){if(!s)return '';return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function esc(s){if(s===0)return '0';if(!s)return '';return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+// Value inside a single-quoted call that csp-events.js will read back from
+// the attribute. That binder only unescapes \', \" and \\ — unicode escapes
+// would be passed through as literal text and the wrong user would be opened.
+function jsq(s){
+  return String(s==null?'':s)
+    .replace(/\\/g,'\\\\')
+    .replace(/'/g,"\\'")
+    .replace(/"/g,'\\"')
+    .replace(/[\r\n\u2028\u2029]/g,' ')
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;');
+}
 
 function fmtTraffic(bytes) {
   if (bytes <= 0) return '0 B';
@@ -2600,16 +2615,20 @@ function renderAgents() {
     return;
   }
   el.innerHTML = _agents.map(a => {
-    const pct = a.traffic_quota_gb > 0 ? Math.min(100, Math.round((a.traffic_used_gb / a.traffic_quota_gb) * 100)) : 0;
+    const allocated = Number(a.traffic_allocated_gb ?? a.traffic_used_gb) || 0;
+    const consumed = Number(a.traffic_used_gb) || 0;
+    const quotaGb = Number(a.traffic_quota_gb) || 0;
+    const pct = quotaGb > 0 ? Math.min(100, Math.round((allocated / quotaGb) * 100)) : 0;
     const barColor = pct < 60 ? 'var(--green)' : pct < 85 ? 'var(--yellow)' : 'var(--red)';
-    const remaining = Math.max(0, a.traffic_quota_gb - a.traffic_used_gb);
+    const remaining = Math.max(0, quotaGb - allocated);
     return `<div class="agent-card">
       <div class="agent-card-head">
         <span class="agent-card-name">${esc(a.name)}</span>
         <span class="badge ${a.active?'badge-active':'badge-inactive'}">${a.active?'Active':'Disabled'}</span>
       </div>
       <div class="agent-info">
-        <span>Quota: <b style="color:var(--t0)">${a.traffic_used_gb} / ${a.traffic_quota_gb} GB</b></span>
+        <span>Sold: <b style="color:var(--t0)">${allocated.toFixed(1)} / ${quotaGb.toFixed(1)} GB</b></span>
+        <span>Used: <b style="color:var(--t0)">${consumed.toFixed(1)} GB</b></span>
         <span>Remaining: <b style="color:var(--t0)">${remaining.toFixed(1)} GB</b></span>
         <span>Users: <b style="color:var(--t0)">${a.user_count}</b></span>
       </div>
@@ -2619,11 +2638,11 @@ function renderAgents() {
         <span style="font-size:11px;color:var(--t3)">Login: /agent</span>
       </div>
       <div class="agent-actions" style="margin-top:10px">
-        <button class="btn btn-outline btn-sm" onclick="showEditAgent(${a.id},'${esc(a.name)}',${a.traffic_quota_gb})">Edit Quota</button>
-        <button class="btn btn-outline btn-sm" onclick="showResetAgentPw(${a.id},'${esc(a.name)}')">Reset Pass</button>
+        <button class="btn btn-outline btn-sm" onclick="showEditAgent(${Number(a.id)||0},'${jsq(a.name)}',${quotaGb})">Edit Quota</button>
+        <button class="btn btn-outline btn-sm" onclick="showResetAgentPw(${a.id},'${jsq(a.name)}')">Reset Pass</button>
         <button class="btn btn-outline btn-sm" onclick="toggleAgentAppLink(${a.id})">📱 App Link</button>
         <button class="btn ${a.active?'btn-orange':'btn-green'} btn-sm" onclick="toggleAgent(${a.id},${a.active?0:1})">${a.active?'Disable':'Enable'}</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteAgent(${a.id},'${esc(a.name)}')">Delete</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteAgent(${a.id},'${jsq(a.name)}')">Delete</button>
       </div>
       <div id="agent-app-qr-${a.id}" style="display:none;margin-top:10px;text-align:center"></div>
     </div>`;
@@ -2674,7 +2693,7 @@ async function doAddAgent() {
   const quota = parseFloat(document.getElementById('agent-add-quota').value);
   const speed = parseInt(document.getElementById('agent-add-speed').value) || 200;
   if (!name) { toast('Enter agent name','error'); return; }
-  if (!pass || pass.length < 6) { toast('Password must be at least 6 chars','error'); return; }
+  if (!pass || pass.length < 12) { toast('Password must be at least 12 characters and include upper, lower, digit, and symbol','error'); return; }
   if (!quota || quota <= 0) { toast('Enter valid quota','error'); return; }
   try {
     const d = await apiCall(API+'/agents', {method:'POST', headers:{'Content-Type':'application/json'},
@@ -2717,7 +2736,7 @@ function showResetAgentPw(id, name) {
 async function doResetAgentPw() {
   if (!_agentPwId) return;
   const pw = document.getElementById('agent-pw-new').value;
-  if (!pw || pw.length < 6) { toast('Password must be at least 6 chars','error'); return; }
+  if (!pw || pw.length < 12) { toast('Password must be at least 12 characters and include upper, lower, digit, and symbol','error'); return; }
   try {
     const d = await apiCall(API+'/agents/'+_agentPwId+'/reset-password', {method:'POST',
       headers:{'Content-Type':'application/json'}, body: JSON.stringify({password: pw})});

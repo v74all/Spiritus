@@ -1881,7 +1881,7 @@
         <div class="form-group"><label>Agent Name</label>
           <input type="text" id="agent-add-name" placeholder="e.g. reseller1"></div>
         <div class="form-group"><label>Password</label>
-          <input type="password" id="agent-add-pass" placeholder="Min 6 chars"></div>
+          <input type="password" id="agent-add-pass" placeholder="12+ chars, mixed case, digit, symbol"></div>
       </div>
       <div class="form-group"><label>Traffic Quota (GB total)</label>
         <input type="number" id="agent-add-quota" value="100" min="1" step="1"></div>
@@ -1919,7 +1919,7 @@
   <div class="modal">
     <h3>Reset Password: <span id="agent-pw-name" style="color:var(--accent)"></span></h3>
     <div class="form-group"><label>New Password</label>
-      <input type="password" id="agent-pw-new" placeholder="Min 6 chars"></div>
+      <input type="password" id="agent-pw-new" placeholder="12+ chars, mixed case, digit, symbol"></div>
     <div class="modal-actions">
       <button class="btn btn-primary" onclick="doResetAgentPw()">Reset</button>
       <button class="btn btn-outline" onclick="closeModal('agent-pw-modal')">Cancel</button>

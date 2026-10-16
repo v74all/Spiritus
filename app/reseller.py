@@ -34,7 +34,7 @@ from .models import (
 )
 from .payments import PLANS, payment_manager
 from .protocol_engine import ClientConfigGenerator
-from .services.user_names import taken_vpn_user_names
+from .services.user_names import display_name_error, taken_vpn_user_names
 from .timeutil import utcnow as _utcnow
 
 logger = logging.getLogger(__name__)
@@ -224,6 +224,9 @@ class ResellerManager:
             if agent_check.scalar_one_or_none() is None:
                 return {"success": False, "error": f"Agent {agent_id} not found"}
 
+        name_error = display_name_error(name)
+        if name_error:
+            return {"success": False, "error": name_error}
         if await taken_vpn_user_names(db, [name]):
             return {"success": False, "error": f"User '{name}' already exists"}
 

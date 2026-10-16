@@ -754,14 +754,14 @@ function copyAppProfile() {
 }
 
 function updateQuotaBar() {
-  const used = agentInfo.traffic_used_gb || 0;
-  const total = agentInfo.traffic_quota_gb || 0;
-  const remaining = agentInfo.traffic_remaining_gb || 0;
-  const pct = total > 0 ? Math.min(Math.round(used / total * 100), 100) : 0;
+  const sold = Number(agentInfo.traffic_allocated_gb ?? agentInfo.traffic_used_gb) || 0;
+  const total = Number(agentInfo.traffic_quota_gb) || 0;
+  const remaining = Number(agentInfo.traffic_remaining_gb) || 0;
+  const pct = total > 0 ? Math.min(Math.round(sold / total * 100), 100) : 0;
   const color = pct < 60 ? 'var(--green)' : pct < 85 ? 'var(--yellow)' : 'var(--red)';
   document.getElementById('quota-fill').style.width = pct + '%';
   document.getElementById('quota-fill').style.background = color;
-  document.getElementById('quota-text').textContent = used.toFixed(1) + ' / ' + total.toFixed(1) + ' GB  (' + remaining.toFixed(1) + ' GB remaining)';
+  document.getElementById('quota-text').textContent = sold.toFixed(1) + ' / ' + total.toFixed(1) + ' GB sold  (' + remaining.toFixed(1) + ' GB remaining)';
 
   // Update hints
   const addHint = document.getElementById('add-quota-hint');
@@ -942,32 +942,33 @@ function renderUsers() {
   grid.innerHTML = filtered.map(u => {
     const spd = speeds[u.name] || {up:0, down:0};
     const online = isOnline(u.name);
-    const barColor = u.traffic_percent < 60 ? 'var(--green)' : u.traffic_percent < 85 ? 'var(--yellow)' : 'var(--red)';
+    const pct = Math.max(0, Math.min(100, Number(u.traffic_percent) || 0));
+    const barColor = pct < 60 ? 'var(--green)' : pct < 85 ? 'var(--yellow)' : 'var(--red)';
     const daysClass = u.days_left <= 3 ? 'crit' : u.days_left <= 7 ? 'warn' : 'val';
     return `
-    <div class="card ${u.active?'':'inactive'}" id="card-${u.name}">
+    <div class="card ${u.active?'':'inactive'}" id="card-${esc(u.name)}">
       <div class="card-head">
         <div class="card-name">
-          <span class="online-dot ${online?'on':''}" id="dot-${u.name}"></span>
+          <span class="online-dot ${online?'on':''}" id="dot-${esc(u.name)}"></span>
           <span class="user-name">${esc(u.name)}</span>
         </div>
         <span class="badge ${u.active?'badge-active':'badge-inactive'}">${u.active?'Active':'Disabled'}</span>
       </div>
       <div class="traffic-section">
-        <div class="progress-track"><div class="progress-fill" style="width:${u.traffic_percent}%;background:${barColor}"></div></div>
-        <div class="traffic-text"><span><b>${fmtTraffic(u.traffic_used_bytes)}</b> / ${fmtTraffic(u.traffic_limit_bytes)}</span><span>${u.traffic_percent}%</span></div>
+        <div class="progress-track"><div class="progress-fill" style="width:${pct}%;background:${barColor}"></div></div>
+        <div class="traffic-text"><span><b>${fmtTraffic(u.traffic_used_bytes)}</b> / ${fmtTraffic(u.traffic_limit_bytes)}</span><span>${pct}%</span></div>
       </div>
-      <div class="info-row"><span>Expires</span><span class="val">${u.expire_at}</span></div>
-      <div class="info-row"><span>Remaining</span><span class="${daysClass}">${u.days_left} days</span></div>
-      <div class="speed-row" id="speed-${u.name}">
+      <div class="info-row"><span>Expires</span><span class="val">${esc(u.expire_at)}</span></div>
+      <div class="info-row"><span>Remaining</span><span class="${daysClass}">${Number(u.days_left)||0} days</span></div>
+      <div class="speed-row" id="speed-${esc(u.name)}">
         <div class="speed-item up"><span>Upload</span><span class="speed-val">${fmtSpeed(spd.up)}</span></div>
         <div class="speed-item down"><span>Download</span><span class="speed-val">${fmtSpeed(spd.down)}</span></div>
       </div>
       <div class="card-actions">
-        <button class="btn btn-outline btn-sm" onclick="showConfig('${esc(u.name)}')">Config</button>
-        <button class="btn ${u.active?'btn-orange':'btn-green'} btn-sm" onclick="toggleUser('${esc(u.name)}')">${u.active?'Disconnect':'Connect'}</button>
-        <button class="btn btn-outline btn-sm" onclick="showRenew('${esc(u.name)}')">Renew</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteUser('${esc(u.name)}')">Delete</button>
+        <button class="btn btn-outline btn-sm" onclick="showConfig('${jsq(u.name)}')">Config</button>
+        <button class="btn ${u.active?'btn-orange':'btn-green'} btn-sm" onclick="toggleUser('${jsq(u.name)}')">${u.active?'Disconnect':'Connect'}</button>
+        <button class="btn btn-outline btn-sm" onclick="showRenew('${jsq(u.name)}')">Renew</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteUser('${jsq(u.name)}')">Delete</button>
       </div>
     </div>`;
   }).join('');
@@ -996,9 +997,9 @@ function renderGroups() {
       <div class="info-row"><span>Traffic</span><span class="val">${(g.traffic_gb||0)} GB each</span></div>
       <div class="info-row"><span>Latest expiry</span><span class="val">${(g.latest_expire||'').slice(0,10)}</span></div>
       <div class="card-actions">
-        <button class="btn btn-outline btn-sm" onclick="openGroupExport('${esc(g.id)}')">Export</button>
-        <button class="btn btn-outline btn-sm" onclick="openGroupUsers('${esc(g.id)}')">Open</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteGroup('${esc(g.id)}')">Delete</button>
+        <button class="btn btn-outline btn-sm" onclick="openGroupExport('${jsq(g.id)}')">Export</button>
+        <button class="btn btn-outline btn-sm" onclick="openGroupUsers('${jsq(g.id)}')">Open</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteGroup('${jsq(g.id)}')">Delete</button>
       </div>
     </div>`;
   }).join('');
@@ -1178,7 +1179,7 @@ function renderBulkTabs() {
   tabsEl.style.display = '';
   tabsEl.innerHTML = _bulkRuns.slice(0, 12).map(r => {
     const active = r.id === _bulkActiveRunId;
-    return `<button class="bulk-tab ${active?'active':''}" onclick="selectBulkRun('${r.id}')">${esc(r.label||'group')}</button>`;
+    return `<button class="bulk-tab ${active?'active':''}" onclick="selectBulkRun('${jsq(r.id)}')">${esc(r.label||'group')}</button>`;
   }).join('');
 }
 
@@ -1612,7 +1613,18 @@ function showModal(id) {
   modal.classList.add('show');
 }
 function closeModal(id) { const modal = document.getElementById(id); if (modal) modal.classList.remove('show'); }
-function esc(s) { if(!s)return ''; return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function esc(s) { if(s===0)return '0'; if(!s)return ''; return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function jsq(s){
+  return String(s==null?'':s)
+    .replace(/\\/g,'\\\\')
+    .replace(/'/g,"\\'")
+    .replace(/"/g,'\\"')
+    .replace(/[\r\n\u2028\u2029]/g,' ')
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;');
+}
 
 function fmtTraffic(bytes) {
   if (bytes <= 0) return '0 B';
