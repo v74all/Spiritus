@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 from fastapi import APIRouter
 
 from ._core import *  # noqa: F403
@@ -12,47 +14,34 @@ router = APIRouter(tags=["compat"])
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _query_xray_stats(reset: bool = False) -> dict:
-    """Query xray stats API and return {username: {up, down}} for all users."""
-    try:
-        xray_api = f"127.0.0.1:{getattr(settings, 'api_port', 10085)}"
-        args = [settings.xray_bin_path, "api", "statsquery",
-                f"--server={xray_api}",
-                "--pattern", "user>>>"]
-        if reset:
-            args.append("--reset")
-        result = subprocess.run(args, capture_output=True, text=True, timeout=5)
-        if result.returncode != 0:
-            return {}
-        data = json.loads(result.stdout)
-        stats: dict = {}
-        for stat in data.get("stat", []):
-            name = stat.get("name", "")
-            value = int(stat.get("value") or 0)
-            # name format: user>>>username>>>traffic>>>uplink|downlink
-            parts = name.split(">>>")
-            if len(parts) == 4 and parts[0] == "user" and parts[2] == "traffic":
-                user = parts[1]
-                direction = parts[3]
-                if user not in stats:
-                    stats[user] = {"up": 0, "down": 0}
-                if direction == "uplink":
-                    stats[user]["up"] = value
-                elif direction == "downlink":
-                    stats[user]["down"] = value
-        return stats
-    except Exception as e:
-        logger.warning("xray stats query failed: %s", e)
-        return {}
+    """{username: {up, down}} from Xray's per-user counters. Blocking: call
+    it from async code via ``asyncio.to_thread``. Only the traffic collector
+    (app/user_runtime.py) reads with reset; everything else must not, or
+    those bytes are never counted."""
+    from ...user_runtime import query_user_stats
+
+    return query_user_stats(reset=reset)
+
+
+# Per-worker previous totals: a user whose counter moved since the last
+# poll is online. The counters are cumulative between collector resets.
+_live_prev: dict[str, int] = {}
+
+
+def _note_activity(stats: dict) -> None:
+    now = time.time()
+    for username, s in stats.items():
+        total = (s.get("up") or 0) + (s.get("down") or 0)
+        if total and total != _live_prev.get(username):
+            _user_last_seen[username] = now
+        _live_prev[username] = total
 
 
 @router.get("/live")
 async def legacy_live(admin: User = Depends(get_current_admin_cookie)):
-    """Realtime traffic counters keyed by username (from xray stats, reset each call)."""
-    stats = _query_xray_stats(reset=True)
-    now = time.time()
-    for username, s in stats.items():
-        if (s.get("up") or 0) + (s.get("down") or 0) > 0:
-            _user_last_seen[username] = now
+    """Per-user traffic counters (cumulative; the page derives speed)."""
+    stats = await asyncio.to_thread(_query_xray_stats, reset=False)
+    _note_activity(stats)
     return stats
 
 
@@ -68,7 +57,10 @@ async def legacy_server_info(
     # The agent panel uses a separate /agent/server-info route, and the
     # internal agent call passes its own User object directly, so neither
     # is affected by tightening the HTTP guard here.
+    from ...standalone_engines import engine_installed
+
     s = await _load_legacy_settings(db)
+    _sb, _mita = engine_installed("sing-box"), engine_installed("mita")
     return {
         # VMess (always-on)
         "vmess_port": s.get("vmess_port", 443),
@@ -135,37 +127,35 @@ async def legacy_server_info(
         "vless_ws_plain_front_port": s.get("vless_ws_plain_front_port", settings.vless_ws_plain_front_port),
         "vless_ws_plain_front_domain": s.get("vless_ws_plain_front_domain", settings.vless_ws_plain_front_domain),
         "vless_ws_plain_front_path": s.get("vless_ws_plain_front_path", settings.vless_ws_plain_front_path),
-        # Hysteria2
-        "hysteria2": _as_bool(s.get("hysteria2_enabled", False)),
-        "hysteria2_enabled": _as_bool(s.get("hysteria2_enabled", False)),
+        # sing-box / mita protocols: "served" only when their engine is
+        # installed (otherwise no link is built either). AmneziaWG and
+        # OpenVPN have no server here yet: never reported as on.
+        "engines": {"sing-box": _sb, "mita": _mita},
+        "hysteria2": _sb and _as_bool(s.get("hysteria2_enabled", False)),
+        "hysteria2_enabled": _sb and _as_bool(s.get("hysteria2_enabled", False)),
         "hysteria2_port": s.get("hysteria2_port", 8443),
-        # TUIC v5
-        "tuic": _as_bool(s.get("tuic_enabled", False)),
-        "tuic_enabled": _as_bool(s.get("tuic_enabled", False)),
+        "tuic": _sb and _as_bool(s.get("tuic_enabled", False)),
+        "tuic_enabled": _sb and _as_bool(s.get("tuic_enabled", False)),
         "tuic_port": s.get("tuic_port", 8444),
-        # AmneziaWG
-        "amneziawg": _as_bool(s.get("amneziawg_enabled", False)),
-        "amneziawg_enabled": _as_bool(s.get("amneziawg_enabled", False)),
+        "amneziawg": False,
+        "amneziawg_enabled": False,
         "amneziawg_port": s.get("amneziawg_port", 51820),
-        # ShadowTLS v3
-        "shadowtls": _as_bool(s.get("shadowtls_enabled", False)),
-        "shadowtls_enabled": _as_bool(s.get("shadowtls_enabled", False)),
+        "shadowtls": _sb and _as_bool(s.get("shadowtls_enabled", False)),
+        "shadowtls_enabled": _sb and _as_bool(s.get("shadowtls_enabled", False)),
         "shadowtls_port": s.get("shadowtls_port", 8445),
-        # Mieru
-        "mieru": _as_bool(s.get("mieru_enabled", False)),
-        "mieru_enabled": _as_bool(s.get("mieru_enabled", False)),
+        "shadowtls_sni": s.get("shadowtls_sni") or s.get("vmess_sni", "www.aparat.com"),
+        "mieru": _mita and _as_bool(s.get("mieru_enabled", False)),
+        "mieru_enabled": _mita and _as_bool(s.get("mieru_enabled", False)),
         "mieru_port": s.get("mieru_port", 8446),
-        # NaiveProxy
-        "naiveproxy": _as_bool(s.get("naiveproxy_enabled", False)),
-        "naiveproxy_enabled": _as_bool(s.get("naiveproxy_enabled", False)),
+        "mieru_transport": s.get("mieru_transport", "TCP"),
+        "naiveproxy": _sb and _as_bool(s.get("naiveproxy_enabled", False)),
+        "naiveproxy_enabled": _sb and _as_bool(s.get("naiveproxy_enabled", False)),
         "naiveproxy_port": s.get("naiveproxy_port", 8447),
-        # WireGuard
-        "wireguard": _as_bool(s.get("wireguard_enabled", False)),
-        "wireguard_enabled": _as_bool(s.get("wireguard_enabled", False)),
+        "wireguard": _sb and _as_bool(s.get("wireguard_enabled", False)),
+        "wireguard_enabled": _sb and _as_bool(s.get("wireguard_enabled", False)),
         "wireguard_port": s.get("wireguard_port", 51821),
-        # OpenVPN
-        "openvpn": _as_bool(s.get("openvpn_enabled", False)),
-        "openvpn_enabled": _as_bool(s.get("openvpn_enabled", False)),
+        "openvpn": False,
+        "openvpn_enabled": False,
         "openvpn_port": s.get("openvpn_port", 1194),
         # CDN
         "cdn": _as_bool(s.get("cdn_enabled", settings.cdn_enabled)),
@@ -188,8 +178,6 @@ async def legacy_server_info(
         "dpi_bug_host_enabled": _as_bool(s.get("dpi_bug_host_enabled", False)),
         "dpi_bug_host_domain": s.get("dpi_bug_host_domain", "chat.deepseek.com"),
         # Tunneling
-        "dpi_dns_tunnel": _as_bool(s.get("dpi_dns_tunnel", False)),
-        "dpi_icmp_tunnel": _as_bool(s.get("dpi_icmp_tunnel", False)),
         # Domain / CDN Fronting
         "dpi_domain_front": _as_bool(s.get("dpi_domain_front", False)),
         "dpi_cdn_front_enabled": _as_bool(s.get("dpi_cdn_front_enabled", False)),
@@ -216,18 +204,13 @@ async def legacy_sync(
     admin: User = Depends(get_current_admin_cookie),
     db: AsyncSession = Depends(get_async_db),
 ):
-    now = _utcnow()
-    result = await db.execute(
-        select(VpnUser).where(VpnUser.expire_at.is_not(None), VpnUser.active == 1)
-    )
-    disabled = 0
-    for u in result.scalars().all():
-        if u.expire_at and u.expire_at < now:
-            u.active = 0
-            disabled += 1
-    if disabled:
-        await db.commit()
-    return {"ok": True, "disabled": disabled}
+    """Count traffic now, apply expiry / quota, and push users to the engines."""
+    from ...user_runtime import collect_traffic, enforce_limits, sync_engines
+
+    await collect_traffic(db)
+    changed = await enforce_limits(db)
+    result = await sync_engines()
+    return {"ok": True, "disabled": changed, "engines": result}
 
 
 @router.get("/system-monitor")
@@ -285,11 +268,7 @@ async def legacy_online_users(
 ):
     """Return users who have had traffic in the last 90 seconds."""
     cutoff = time.time() - 90
-    # Seed last-seen from cumulative xray stats on first call (before any /live poll)
-    if not _user_last_seen:
-        for username, s in _query_xray_stats(reset=False).items():
-            if (s.get("up") or 0) + (s.get("down") or 0) > 0:
-                _user_last_seen[username] = time.time()
+    _note_activity(await asyncio.to_thread(_query_xray_stats, reset=False))
 
     recently_active = [u for u, ts in _user_last_seen.items() if ts >= cutoff]
     if not recently_active:
@@ -301,18 +280,22 @@ async def legacy_online_users(
     users = result.scalars().all()
 
     # Get latest cumulative stats for display (no reset)
-    stats = _query_xray_stats(reset=False)
+    stats = await asyncio.to_thread(_query_xray_stats, reset=False)
 
+    from ...user_runtime import online_ips
+
+    ips = await asyncio.gather(*(asyncio.to_thread(online_ips, u.name) for u in users))
     online = []
-    for u in users:
+    for u, user_ips in zip(users, ips, strict=True):
         s = stats.get(u.name, {})
         online.append({
             "name": u.name,
             "uuid": u.uuid,
-            "upload": s.get("up", 0),
-            "download": s.get("down", 0),
-            "total": (s.get("up") or 0) + (s.get("down") or 0),
+            "upload": int(u.traffic_upload or 0) + s.get("up", 0),
+            "download": int(u.traffic_download or 0) + s.get("down", 0),
+            "total": int(u.traffic_used or 0) + (s.get("up") or 0) + (s.get("down") or 0),
             "last_seen": _user_last_seen.get(u.name, 0),
+            "ips": user_ips,
         })
 
     online.sort(key=lambda x: x["last_seen"], reverse=True)
@@ -325,24 +308,15 @@ async def legacy_traffic_history(
     admin: User = Depends(get_current_admin_cookie),
     db: AsyncSession = Depends(get_async_db),
 ):
-    # No time-series log table exists yet, so we approximate daily traffic
-    # by grouping users' current traffic_used by the date their record was
-    # last updated. This won't reflect intra-day changes but gives a real
-    # picture of which days saw user activity rather than an empty chart.
-    cutoff = _utcnow() - timedelta(days=days)
-    result = await db.execute(
-        select(VpnUser).where(VpnUser.updated_at >= cutoff)
+    """Bytes per day (UTC) for the whole server, from traffic_daily."""
+    from ...models import TrafficDaily
+
+    first = (_utcnow() - timedelta(days=days - 1)).date()
+    rows = await db.execute(
+        select(TrafficDaily.day, func.sum(TrafficDaily.upload + TrafficDaily.download))
+        .where(TrafficDaily.day >= first).group_by(TrafficDaily.day)
     )
-    users = result.scalars().all()
-
-    # Aggregate traffic by date
-    daily: dict[str, int] = {}
-    for u in users:
-        if u.updated_at:
-            day = u.updated_at.strftime("%Y-%m-%d")
-            daily[day] = daily.get(day, 0) + (u.traffic_used or 0)
-
-    # Build a full list for the requested date range (0-fill missing days)
+    daily = {str(day): int(total or 0) for day, total in rows.all()}
     out = []
     for i in range(days - 1, -1, -1):
         d = (_utcnow() - timedelta(days=i)).strftime("%Y-%m-%d")
@@ -356,13 +330,16 @@ async def legacy_top_traffic(
     admin: User = Depends(get_current_admin_cookie),
     db: AsyncSession = Depends(get_async_db),
 ):
-    result = await db.execute(
-        select(VpnUser).order_by(VpnUser.traffic_used.desc()).limit(10)
+    """Top 10 users by bytes moved in the last `days` days."""
+    from ...models import TrafficDaily
+
+    first = (_utcnow() - timedelta(days=days - 1)).date()
+    total = func.sum(TrafficDaily.upload + TrafficDaily.download)
+    rows = await db.execute(
+        select(VpnUser.name, total).join(VpnUser, VpnUser.id == TrafficDaily.user_id)
+        .where(TrafficDaily.day >= first).group_by(VpnUser.name).order_by(total.desc()).limit(10)
     )
-    return [
-        {"username": u.name, "total_bytes": u.traffic_used or 0}
-        for u in result.scalars().all()
-    ]
+    return [{"username": name, "total_bytes": int(t or 0)} for name, t in rows.all()]
 
 
 __all__ = [_n for _n in list(globals()) if not _n.startswith("__")]

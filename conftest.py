@@ -27,6 +27,7 @@ os.environ["DEBUG"] = "false"
 os.environ["HOST"] = "127.0.0.1"
 os.environ["ADMIN_BOOTSTRAP_PASSWORD"] = ""
 os.environ["METRICS_BEARER_TOKEN"] = "m" * 48
+os.environ["USER_RUNTIME_SYNC"] = "false"
 
 # Force the package's submodules to be imported once so that
 # `monkeypatch.setattr("app.api.protocols.X", ...)` can find them

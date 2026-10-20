@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
+from ...user_runtime import ACTIVE, DISABLED, refresh_status, status_name
 from ._core import *  # noqa: F403
 
 router = APIRouter(tags=["compat"])
@@ -20,7 +21,20 @@ async def legacy_list_users(
     await _load_legacy_settings(db)
     result = await db.execute(select(VpnUser).order_by(VpnUser.id.desc()))
     server_ip = _request_config_host(request)
-    return [_user_to_legacy(u, server_ip=server_ip) for u in result.scalars().all()]
+    out = [_user_to_legacy(u, server_ip=server_ip) for u in result.scalars().all()]
+    await _fill_online_ips(out)
+    return out
+
+
+async def _fill_online_ips(users: list[dict]) -> None:
+    """Connected IPs from Xray, asked only for users seen in the last 90 s."""
+    from ...user_runtime import online_ips
+
+    cutoff = time.time() - 90
+    recent = [u for u in users if u.get("active") and _user_last_seen.get(u["name"], 0) >= cutoff]
+    ips = await asyncio.gather(*(asyncio.to_thread(online_ips, u["name"]) for u in recent))
+    for u, found in zip(recent, ips, strict=True):
+        u["online_ips"], u["online_ip_count"] = found, len(found)
 
 
 class LegacyUserCreate(BaseModel):
@@ -98,12 +112,20 @@ async def legacy_toggle_user(
     user = result.scalar_one_or_none()
     if user is None:
         return {"ok": False, "error": "User not found"}
-    user.active = 0 if user.active else 1
+    # Off switches the user off whatever the reason it was on or blocked;
+    # on brings it back unless expiry or the quota still say otherwise.
+    if user.active == DISABLED:
+        user.active = ACTIVE
+        refresh_status(user)
+    else:
+        user.active = DISABLED
     await db.commit()
+    status = status_name(user.active)
     return {
         "ok": True,
-        "message": f"User {name} {'enabled' if user.active else 'disabled'}",
-        "active": bool(user.active),
+        "message": f"User {name} {status}",
+        "active": user.active == ACTIVE,
+        "status": status,
     }
 
 
@@ -124,9 +146,10 @@ async def legacy_renew_user(
     if user is None:
         return {"ok": False, "error": "User not found"}
     user.traffic_limit = int(body.traffic * (1024**3))
-    user.traffic_used = 0
-    user.expire_at = _utcnow() + timedelta(days=body.days)
-    user.active = 1
+    user.traffic_used = user.traffic_upload = user.traffic_download = 0
+    # 0 days = never expires, as when the user is created.
+    user.expire_at = _utcnow() + timedelta(days=body.days) if body.days else None
+    user.active = ACTIVE
     await db.commit()
     return {"ok": True}
 
@@ -147,6 +170,7 @@ async def legacy_add_traffic(
     if user is None:
         return {"ok": False, "error": "User not found"}
     user.traffic_limit = (user.traffic_limit or 0) + int(body.gb * (1024**3))
+    refresh_status(user)  # back on if the quota was what stopped it
     await db.commit()
     return {"ok": True}
 
@@ -203,7 +227,8 @@ async def legacy_reset_traffic(
     user = result.scalar_one_or_none()
     if user is None:
         return {"ok": False, "error": "User not found"}
-    user.traffic_used = 0
+    user.traffic_used = user.traffic_upload = user.traffic_download = 0
+    refresh_status(user)
     await db.commit()
     return {"ok": True}
 

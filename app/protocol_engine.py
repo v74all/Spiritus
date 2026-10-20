@@ -1150,6 +1150,27 @@ def _parse_mbps(value: str) -> int:
     return int(num)
 
 
+def ss2022_key_length(method: str) -> int:
+    """PSK size in bytes for a Shadowsocks-2022 method."""
+    return 16 if "128" in (method or "") else 32
+
+
+def ss2022_user_key(user_uuid: str, method: str) -> str:
+    """Per-user SS-2022 PSK, derived from the user's UUID.
+
+    SS-2022 keys must be base64 of exactly the method's key size, so the
+    raw UUID string cannot be used. The UUID is already the user's secret
+    for every other protocol; a 16-byte UUID is the aes-128 key as-is.
+    """
+    import hashlib
+    import uuid as uuid_lib
+
+    raw = uuid_lib.UUID(user_uuid).bytes
+    if ss2022_key_length(method) == 32:
+        raw = hashlib.sha256(b"spiritus-ss2022:" + raw).digest()
+    return base64.b64encode(raw).decode()
+
+
 # ═══════════════════════════════════════════════════════════════
 #  Client Config Generator (for sharing)
 # ═══════════════════════════════════════════════════════════════
@@ -1172,7 +1193,9 @@ class ClientConfigGenerator:
         path: str = "",
         host: str = "",
         xhttp_mode: str = "",
-        allow_insecure: bool = False,
+        allow_insecure: bool = False,  # ignored: Xray removed allowInsecure (see app/tls_trust.py)
+        pcs: str = "",
+        vcn: str = "",
         ech: dict | None = None,
         label: str = "",
         # DPI evasion parameters
@@ -1204,8 +1227,11 @@ class ClientConfigGenerator:
             params["host"] = host
         if xhttp_mode:
             params["mode"] = xhttp_mode
-        if allow_insecure and security == "tls":
-            params["allowInsecure"] = "1"
+        if security == "tls":
+            # Certificate verification hints (VLESS share-link standard);
+            # replaces allowInsecure, which current Xray refuses.
+            params["pcs"] = pcs
+            params["vcn"] = vcn
         if ech and ech.get("enabled"):
             params["ech"] = "1"
             params["ech_config"] = base64.b64encode(
@@ -1220,7 +1246,8 @@ class ClientConfigGenerator:
             params["noiseDelay"] = noise_delay
         if tcp_keepalive:
             params["keepAlive"] = "1"
-        if mux_enabled:
+        # Xray cannot mux a Vision-flow connection, nor Mux.Cool over XHTTP.
+        if mux_enabled and not flow and network != "xhttp":
             params["mux"] = "1"
             params["mconcurrency"] = str(mux_concurrency)
         if bug_host:
@@ -1240,7 +1267,7 @@ class ClientConfigGenerator:
         security: str = "tls",
         sni: str = "",
         path: str = "",
-        allow_insecure: bool = False,
+        allow_insecure: bool = False,  # ignored: Xray removed allowInsecure (see app/tls_trust.py)
         label: str = "",
         # DPI evasion parameters
         fragment: bool = False,
@@ -1254,6 +1281,9 @@ class ClientConfigGenerator:
         mux_concurrency: int = 8,
         bug_host: str = "",
         extra_host_header: str = "",
+        tls_sni: str = "",
+        pcs: str = "",
+        vcn: str = "",
     ) -> str:
         """Generate VMess share URL (vmess://base64...)."""
         tag = f"V7LTHRONYX-{label}" if label else "V7LTHRONYX"
@@ -1270,8 +1300,16 @@ class ClientConfigGenerator:
             "path": path,
             "tls": security,
         }
-        if allow_insecure and security == "tls":
-            vmess_obj["allowInsecure"] = "1"
+        if security == "tls":
+            # The JSON link has no standard pinning field: tls_sni lets an IP
+            # certificate verify normally; pcs/vcn are passed for clients
+            # that read them.
+            if tls_sni:
+                vmess_obj["sni"] = tls_sni
+            if pcs:
+                vmess_obj["pcs"] = pcs
+            if vcn:
+                vmess_obj["vcn"] = vcn
         # DPI evasion: sockopt and MUX
         if fragment or noise_packet or tcp_keepalive:
             sockopt_fields = {}
@@ -1306,7 +1344,7 @@ class ClientConfigGenerator:
         sni: str = "",
         network: str = "tcp",
         path: str = "",
-        allow_insecure: bool = False,
+        allow_insecure: bool = False,  # ignored: Xray removed allowInsecure (see app/tls_trust.py)
         label: str = "",
         # DPI evasion parameters
         fragment: bool = False,
@@ -1319,6 +1357,8 @@ class ClientConfigGenerator:
         mux_enabled: bool = False,
         mux_concurrency: int = 8,
         bug_host: str = "",
+        pcs: str = "",
+        vcn: str = "",
     ) -> str:
         """Generate Trojan share URL (trojan://...)."""
         params = {
@@ -1328,8 +1368,8 @@ class ClientConfigGenerator:
         }
         if path:
             params["path"] = path
-        if allow_insecure:
-            params["allowInsecure"] = "1"
+        params["pcs"] = pcs
+        params["vcn"] = vcn
         # DPI evasion query params
         if fragment:
             params["fragment"] = f"{fragment_packets},{fragment_length},{fragment_interval}"
@@ -1358,11 +1398,17 @@ class ClientConfigGenerator:
         insecure: int = 0,
         label: str = "",
         port_hop: str = "",
+        pin_sha256: str = "",
     ) -> str:
-        """Generate Hysteria2 share URL. ``port_hop`` is a range like ``20000-30000``."""
+        """Generate Hysteria2 share URL. ``port_hop`` is a range like ``20000-30000``.
+
+        ``pin_sha256`` pins a self-signed certificate; prefer it to
+        ``insecure``, which Xray-based clients now reject.
+        """
         params = {
             "sni": sni,
-            "insecure": str(insecure),
+            "insecure": "1" if insecure else "",
+            "pinSHA256": pin_sha256,
         }
         if port_hop:
             params["mport"] = port_hop

@@ -104,7 +104,34 @@
     'toggleUser',
     'verifyIranianTarget',
     'verifyNetworkTarget',
-    'withBusy'
+    'withBusy',
+    'switchOperationTab',
+    'loadNodesView',
+    'loadSentinelView',
+    'loadRoutingView',
+    'loadFinancialsView',
+    'loadMissionView',
+    'loadWarroomView',
+    'loadProtocolsView',
+    'loadCarriersView',
+    'addEdgeNode',
+    'deleteEdgeNode',
+    'checkEdgeNodes',
+    'createProbe',
+    'deleteProbe',
+    'copyProbeCommand',
+    'setAutomation',
+    'runAutomationNow',
+    'sendTestAlert',
+    'panicFlush',
+    'toggleEmergencyCloak',
+    'verifySecurityAudit',
+    'copySnippet',
+    'appendFlag',
+    'filterProtocols',
+    'switchPreview',
+    'switchTheme',
+    'cycleTheme'
   ]);
 
   function splitTopLevel(value, separator) {
@@ -257,7 +284,7 @@
   function bindTree(root) {
     if (!root || !root.querySelectorAll) return;
     if (root.nodeType === 1) bindElement(root);
-    var selector = EVENT_ATTRS.map(function (attr) { return '[' + attr + ']'; }).join(',');
+    var selector = EVENT_ATTRS.map(function (attr) { return '[' + attr + ']'; }).concat(['[style]']).join(',');
     root.querySelectorAll(selector).forEach(bindElement);
   }
 

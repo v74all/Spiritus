@@ -20,10 +20,13 @@ from typing import Any
 SOCKET_PATH = Path(os.environ.get("PRIVILEGED_HELPER_SOCKET", "/run/v7lthronyx/helper.sock"))
 PANEL_USER = os.environ.get("PANEL_USER", "vpnpanel")
 PANEL_GROUP = os.environ.get("PANEL_GROUP", "vpnpanel")
-MAX_REQUEST = 1_048_576
+# A full Xray config carries every user on every inbound (~1.5 KB per user).
+MAX_REQUEST = 32 * 1024 * 1024
 
 SERVICES = {"xray", "sing-box", "mita", "fail2ban"}
 EGRESS_BLOCKED_PORTS = (23, 25, 139, 445, 465, 587, 3389)
+# The mita .deb installs /usr/bin/mita; a manual install may use /usr/local/bin.
+MITA = next((p for p in ("/usr/bin/mita", "/usr/local/bin/mita") if os.path.exists(p)), "/usr/bin/mita")
 CONFIG_TARGETS = {
     "xray": Path("/usr/local/etc/xray/config.json"),
     "sing-box": Path("/usr/local/etc/sing-box/config.json"),
@@ -142,7 +145,32 @@ def _dispatch(operation: str, payload: dict[str, Any]) -> dict[str, Any]:
     if operation == "config.install":
         return _atomic_config(str(payload.get("target", "")), str(payload.get("content", "")))
     if operation == "mieru.apply":
-        return _run(["/usr/local/bin/mita", "apply", "config", str(CONFIG_TARGETS["mieru"])])
+        # `replace`, not `apply`: apply merges, so removed users stayed.
+        # `reload` keeps live sessions; it fails when mita is not started.
+        replaced = _run([MITA, "replace", "config", str(CONFIG_TARGETS["mieru"])])
+        if not replaced["ok"]:
+            return replaced
+        reloaded = _run([MITA, "reload"])
+        return reloaded if reloaded["ok"] else _run([MITA, "start"])
+    if operation == "mieru.stop":
+        return _run([MITA, "stop"])
+    # Per-user traffic (see app/traffic_kernel.py): counting, speed limits,
+    # Mieru byte counts, Hysteria2 port hopping. All input is validated there.
+    if operation == "traffic.accounting.read":
+        from .traffic_kernel import read_accounting
+        return read_accounting()
+    if operation == "traffic.shaping.apply":
+        from .traffic_kernel import apply_shaping
+        return apply_shaping(payload.get("users", []))
+    if operation == "traffic.mieru.read":
+        from .traffic_kernel import mieru_traffic
+        return mieru_traffic(MITA)
+    if operation == "hysteria2.port_hop":
+        from .traffic_kernel import hysteria2_port_hop
+        target = payload.get("target")
+        if not isinstance(target, int):
+            return {"ok": False, "message": "invalid target port"}
+        return hysteria2_port_hop(str(payload.get("ports", "")), target)
     if operation == "wireguard.remove_peer":
         import re
         interface = str(payload.get("interface", ""))
@@ -213,13 +241,19 @@ async def _handle(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) ->
     await writer.wait_closed()
 
 
+async def start_server(path: Path) -> asyncio.AbstractServer:
+    # Requests are one JSON line. The stream's default line limit (64 KiB)
+    # would refuse an Xray config past ~35 users, so match MAX_REQUEST.
+    return await asyncio.start_unix_server(_handle, path=str(path), limit=MAX_REQUEST + 1)
+
+
 async def main() -> None:
     if os.geteuid() != 0:
         raise SystemExit("privileged helper must run as root")
     SOCKET_PATH.parent.mkdir(parents=True, exist_ok=True)
     if SOCKET_PATH.exists():
         SOCKET_PATH.unlink()
-    server = await asyncio.start_unix_server(_handle, path=str(SOCKET_PATH))
+    server = await start_server(SOCKET_PATH)
     os.chown(SOCKET_PATH, 0, grp.getgrnam(PANEL_GROUP).gr_gid)
     # Group-only socket (panel group); SO_PEERCRED additionally checks each caller.
     os.chmod(SOCKET_PATH, 0o660)  # nosec B103

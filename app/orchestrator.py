@@ -209,20 +209,34 @@ class XrayBackend:
         ]
 
     @staticmethod
-    def _client_entry(protocol: str, user: VpnUser) -> dict[str, Any] | None:
+    def _client_entry(inbound: dict[str, Any], user: VpnUser) -> dict[str, Any] | None:
         """Build the settings.clients entry for `user` for a given
-        inbound protocol. Returns None for protocols that don't take
-        a per-user credential here."""
+        inbound. Returns None for protocols that don't take a per-user
+        credential here."""
+        from .protocol_engine import ss2022_user_key
+
+        protocol = inbound.get("protocol", "")
+        settings = inbound.get("settings") or {}
         email = user.name or user.uuid
         if protocol == "vmess":
             return {"id": user.uuid, "alterId": 0, "email": email}
         if protocol == "vless":
-            return {"id": user.uuid, "email": email}
+            entry = {"id": user.uuid, "email": email}
+            # Match the inbound's existing clients: Xray rejects a flow
+            # mismatch in either direction. An empty Vision inbound has
+            # nothing to copy from, so fall back to its tag.
+            flow = next((c.get("flow") for c in settings.get("clients") or [] if c.get("flow")), None)
+            if not flow and inbound.get("tag") in ("in-vless-reality", "in-vless-vision"):
+                flow = "xtls-rprx-vision"
+            if flow:
+                entry["flow"] = flow
+            return entry
         if protocol == "trojan":
             return {"password": user.uuid, "email": email}
         if protocol == "shadowsocks":
             # SS-2022 multi-user: per-user PSK lives in clients[].
-            return {"password": user.uuid, "email": email}
+            method = settings.get("method") or "2022-blake3-aes-128-gcm"
+            return {"password": ss2022_user_key(user.uuid, method), "email": email}
         return None
 
     async def add_user(self, user: VpnUser, protocol_config: ProtocolConfig) -> bool:
@@ -240,7 +254,7 @@ class XrayBackend:
 
         adu_inbounds: list[dict[str, Any]] = []
         for ib in inbounds:
-            entry = self._client_entry(ib.get("protocol", ""), user)
+            entry = self._client_entry(ib, user)
             if entry is None:
                 continue
             clone = json.loads(json.dumps(ib))  # deep copy

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
+from ...protocol_engine import ss2022_key_length, ss2022_user_key
 from ._core import *  # noqa: F403
 
 router = APIRouter(tags=["compat"])
@@ -230,28 +231,11 @@ def _get_active_trojan_clients() -> list:
         return []
 
 
-async def _fetch_clients_async() -> tuple:
-    """Async-safe user fetch for use inside a running event loop."""
-    try:
-        from ...database import async_engine
-        async with async_engine.connect() as conn:
-            result = await conn.execute(
-                select(VpnUser.uuid, VpnUser.name).where(VpnUser.active == 1)
-            )
-            rows = result.all()
-        vmess   = [{"id": r.uuid, "alterId": 0, "email": r.name} for r in rows]
-        vless   = [{"id": r.uuid, "email": r.name} for r in rows]
-        trojan  = [{"password": r.uuid, "email": r.name} for r in rows]
-        return vmess, vless, trojan
-    except Exception as e:
-        logger.warning("_fetch_clients_async failed: %s", e)
-        return [], [], []
-
-
 def _generate_xray_server_config(
     vmess_clients: list | None = None,
     vless_clients: list | None = None,
     trojan_clients: list | None = None,
+    limits: tuple[list, list] | None = None,
 ) -> dict:
     """Generate the server-side Xray config with inbounds for all enabled protocols.
 
@@ -268,8 +252,9 @@ def _generate_xray_server_config(
     # IPv6 dual-stack: "::" accepts both v4+v6 on Linux (IPV6_V6ONLY=false)
     listen_addr = "::" if _as_bool(s.get("ipv6_enabled")) else "0.0.0.0"
 
-    cert_file = settings.tls_cert_file
-    key_file = settings.tls_key_file
+    from ...tls_trust import tls_files
+
+    cert_file, key_file = tls_files()
 
     # Xray runs as 'nobody' by default. If the cert/key files exist but are not
     # world-readable, xray crashes with "permission denied". We copy them to the
@@ -315,6 +300,10 @@ def _generate_xray_server_config(
         vless_clients = _get_active_vless_clients()
     if trojan_clients is None:
         trojan_clients = _get_active_trojan_clients()
+    # The VLESS-Reality and Vision links ask for the Vision flow, and Xray
+    # refuses a flow the account was not given (and the reverse), so only
+    # those two inbounds list their clients with it.
+    vision_clients = [{**c, "flow": "xtls-rprx-vision"} for c in vless_clients]
 
     # VMess WS+TLS (always-on when TLS is available; skipped otherwise)
     if _tls_ready:
@@ -344,7 +333,7 @@ def _generate_xray_server_config(
             "port": int(s.get("vless_port") or 2053),
             "listen": listen_addr,
             "protocol": "vless",
-            "settings": {"clients": vless_clients, "decryption": "none"},
+            "settings": {"clients": vision_clients, "decryption": "none"},
             "streamSettings": {
                 "network": "tcp",
                 "security": "reality",
@@ -407,7 +396,7 @@ def _generate_xray_server_config(
             "port": int(s.get("vless_vision_port") or 2058),
             "listen": listen_addr,
             "protocol": "vless",
-            "settings": {"clients": vless_clients, "decryption": "none"},
+            "settings": {"clients": vision_clients, "decryption": "none"},
             "streamSettings": {
                 "network": "tcp",
                 "security": "reality",
@@ -552,33 +541,33 @@ def _generate_xray_server_config(
             "sniffing": {"enabled": True, "destOverride": ["http", "tls"]},
         })
 
-    # ShadowSocks 2022
-    if _as_bool(s.get("ss2022_enabled")) and s.get("ss2022_server_key") and _tls_ready:
+    # ShadowSocks 2022, multi-user: clients send "<server key>:<user key>".
+    # Plain SS-2022 (no TLS layer), which is what an ss:// link describes.
+    if _as_bool(s.get("ss2022_enabled")) and s.get("ss2022_server_key"):
+        ss_method = s.get("ss2022_method") or "2022-blake3-aes-128-gcm"
         inbounds.append({
             "tag": "in-ss2022",
             "port": int(s.get("ss2022_port") or 2056),
             "listen": listen_addr,
             "protocol": "shadowsocks",
             "settings": {
-                "method": s.get("ss2022_method") or "2022-blake3-aes-128-gcm",
+                "method": ss_method,
                 "password": s.get("ss2022_server_key"),
-            },
-            "streamSettings": {
-                "network": "tcp",
-                "security": "tls",
-                "tlsSettings": {
-                    "serverName": sni,
-                    "certificates": [{"certificateFile": cert_file, "keyFile": key_file}],
-                },
+                "clients": [
+                    {"password": ss2022_user_key(c["id"], ss_method), "email": c.get("email", "")}
+                    for c in vless_clients
+                ],
+                "network": "tcp,udp",
             },
             "sniffing": {"enabled": True, "destOverride": ["http", "tls"]},
         })
 
     # ── Google Apps Script Relay HTTP Proxy (emergency — always on) ──
+    # No auth, so loopback only: on a public address it is an open proxy.
     inbounds.append({
         "tag": "in-http-relay",
         "port": 8080,
-        "listen": listen_addr,
+        "listen": "127.0.0.1",
         "protocol": "http",
         "settings": {"auth": "noauth"},
         "sniffing": {"enabled": True, "destOverride": ["http"]},
@@ -605,14 +594,34 @@ def _generate_xray_server_config(
             "sniffing": {"enabled": True, "destOverride": ["http", "tls"]},
         })
 
+    # The panel reads per-user traffic with `xray api statsquery` on this
+    # loopback API; without it nothing is ever counted.
     return {
         "log": {"loglevel": "warning"},
+        "api": {
+            "tag": "api",
+            "listen": f"127.0.0.1:{getattr(settings, 'api_port', 10085) or 10085}",
+            "services": ["HandlerService", "StatsService", "LoggerService"],
+        },
+        "stats": {},
+        "policy": {
+            "levels": {"0": {"statsUserUplink": True, "statsUserDownlink": True, "statsUserOnline": True}},
+            "system": {
+                "statsInboundUplink": True,
+                "statsInboundDownlink": True,
+                "statsOutboundUplink": True,
+                "statsOutboundDownlink": True,
+            },
+        },
         "inbounds": inbounds,
+        # Users with a speed limit leave through their own marked outbound
+        # (app/traffic_control.py); everyone else through "direct".
         "outbounds": [
             {"tag": "direct", "protocol": "freedom"},
             {"tag": "block", "protocol": "blackhole"},
+            *(limits[0] if limits else []),
         ],
-        "routing": {"domainStrategy": "AsIs", "rules": []},
+        "routing": {"domainStrategy": "AsIs", "rules": list(limits[1]) if limits else []},
     }
 
 
@@ -631,22 +640,32 @@ def _schedule_xray_sync():
         pass
 
 
-async def _sync_xray_config_async():
+async def _sync_xray_config_async(delay: float = 0.5):
     """Generate and write the Xray server config (async, runs in main event loop)."""
     try:
-        await asyncio.sleep(0.5)  # Small delay to let settings settle
+        await asyncio.sleep(delay)  # Small delay to let settings settle
 
-        # Fetch users via async-safe path — avoids the thread+new-loop approach
-        # that conflicts with asyncpg's connection pool during startup.
-        vmess_clients, vless_clients, trojan_clients = await _fetch_clients_async()
+        from ...database import AsyncSessionLocal
+        from ...user_runtime import _desired_xray_config
 
-        config = _generate_xray_server_config(vmess_clients, vless_clients, trojan_clients)
+        async with AsyncSessionLocal() as _db:
+            config, n_users = await _desired_xray_config(_db)
+        vmess_clients = [None] * n_users
         installed = await helper_request(
             "config.install",
             {"target": "xray", "content": json.dumps(config, indent=2)},
         )
         if not installed.ok:
             raise RuntimeError(installed.message or "config install failed")
+        # A restart zeroes Xray's counters: bank the bytes not yet counted.
+        try:
+            from ...database import AsyncSessionLocal
+            from ...user_runtime import collect_traffic
+
+            async with AsyncSessionLocal() as _db:
+                await collect_traffic(_db)
+        except Exception as exc:
+            logger.warning("Traffic collection before Xray restart failed: %s", exc)
         restarted = await helper_request("service.restart", {"service": "xray"}, timeout=35)
         if not restarted.ok:
             raise RuntimeError(restarted.message or "Xray restart failed")
@@ -654,6 +673,17 @@ async def _sync_xray_config_async():
                     len(config.get("inbounds", [])), len(vmess_clients))
     except Exception as e:
         logger.warning(f"Async Xray sync failed: {e}")
+    # sing-box / mita follow the same settings (Hysteria2, TUIC, ShadowTLS,
+    # Naive, Mieru); each is reloaded only when its config changed.
+    try:
+        from ...database import AsyncSessionLocal
+        from ...standalone_engines import apply_standalone_engines
+
+        async with AsyncSessionLocal() as _db:
+            status = await apply_standalone_engines(_db)
+        logger.info("Standalone engines: %s", status)
+    except Exception as e:
+        logger.warning("Standalone engine sync failed: %s", e)
 
 
 def _sync_xray_config_now():
@@ -687,15 +717,11 @@ async def legacy_save_settings(
     return {"ok": True, "rebuild": True}
 
 
-@router.post("/settings/regenerate-reality")
-async def legacy_regenerate_reality(
-    admin: User = Depends(get_current_admin_cookie),
-    db: AsyncSession = Depends(get_async_db),
-):
-    import secrets
+def generate_reality_keypair() -> tuple[str, str]:
+    """(private, public) X25519 keys in Xray's base64url form.
 
-    private_key = ""
-    public_key = ""
+    Uses `xray x25519` when the binary is there, else `cryptography`.
+    """
     try:
         result = subprocess.run(
             [settings.xray_bin_path, "x25519"],
@@ -703,32 +729,87 @@ async def legacy_regenerate_reality(
             text=True,
             timeout=5,
         )
+        private_key = public_key = ""
         for line in result.stdout.strip().splitlines():
             if line.startswith("PrivateKey:"):
                 private_key = line.split(":", 1)[1].strip()
             elif line.startswith("PublicKey:"):
                 public_key = line.split(":", 1)[1].strip()
+        if private_key and public_key:
+            return private_key, public_key
     except Exception:
-        private_key = ""
-        public_key = ""
+        pass
 
-    if not private_key or not public_key:
-        from cryptography.hazmat.primitives import serialization
-        from cryptography.hazmat.primitives.asymmetric import x25519
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import x25519
 
-        key = x25519.X25519PrivateKey.generate()
-        private_raw = key.private_bytes(
-            encoding=serialization.Encoding.Raw,
-            format=serialization.PrivateFormat.Raw,
-            encryption_algorithm=serialization.NoEncryption(),
-        )
-        public_raw = key.public_key().public_bytes(
-            encoding=serialization.Encoding.Raw,
-            format=serialization.PublicFormat.Raw,
-        )
-        private_key = base64.urlsafe_b64encode(private_raw).decode().rstrip("=")
-        public_key = base64.urlsafe_b64encode(public_raw).decode().rstrip("=")
+    key = x25519.X25519PrivateKey.generate()
+    private_raw = key.private_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PrivateFormat.Raw,
+        encryption_algorithm=serialization.NoEncryption(),
+    )
+    public_raw = key.public_key().public_bytes(
+        encoding=serialization.Encoding.Raw,
+        format=serialization.PublicFormat.Raw,
+    )
+    return (
+        base64.urlsafe_b64encode(private_raw).decode().rstrip("="),
+        base64.urlsafe_b64encode(public_raw).decode().rstrip("="),
+    )
 
+
+async def ensure_reality_keys(db: AsyncSession) -> bool:
+    """Give a fresh install REALITY keys. Returns True when it made them.
+
+    REALITY needs no certificate or domain, so it is what works on a
+    server reached by IP alone; without keys every VLESS-REALITY link
+    (Reality, Vision, XHTTP, Reverse) is left out of subscriptions.
+    Never touches keys that already exist.
+    """
+    import secrets
+
+    s = await _load_legacy_settings(db)
+    if s.get("reality_private_key") or settings.reality_private_key:
+        return False
+    private_key, public_key = generate_reality_keypair()
+    update = {"reality_private_key": private_key, "reality_public_key": public_key}
+    if not s.get("reality_short_id"):
+        update["reality_short_id"] = secrets.token_hex(4)
+    await _save_legacy_settings(db, update)
+    logger.info("Generated REALITY keys for this install")
+    return True
+
+
+async def ensure_ss2022_key(db: AsyncSession) -> bool:
+    """Replace an SS-2022 server key that is not base64 of the method's key
+    size. Older installs stored 32 hex chars, which Xray happened to accept
+    but every spec-following client (sing-box, mihomo...) refuses."""
+    import binascii
+    import secrets
+
+    s = await _load_legacy_settings(db)
+    key = s.get("ss2022_server_key") or ""
+    method = s.get("ss2022_method") or "2022-blake3-aes-128-gcm"
+    try:
+        if not key or len(base64.b64decode(key, validate=True)) == ss2022_key_length(method):
+            return False
+    except (binascii.Error, ValueError):
+        pass
+    new_key = base64.b64encode(secrets.token_bytes(ss2022_key_length(method))).decode()
+    await _save_legacy_settings(db, {"ss2022_server_key": new_key})
+    logger.info("Replaced an invalid SS-2022 server key")
+    return True
+
+
+@router.post("/settings/regenerate-reality")
+async def legacy_regenerate_reality(
+    admin: User = Depends(get_current_admin_cookie),
+    db: AsyncSession = Depends(get_async_db),
+):
+    import secrets
+
+    private_key, public_key = generate_reality_keypair()
     short_id = secrets.token_hex(4)
     await _save_legacy_settings(
         db,
@@ -749,7 +830,8 @@ async def legacy_generate_ss2022_key(
     import base64
     import secrets
 
-    key = base64.b64encode(secrets.token_bytes(16)).decode()
+    method = (await _load_legacy_settings(db)).get("ss2022_method") or "2022-blake3-aes-128-gcm"
+    key = base64.b64encode(secrets.token_bytes(ss2022_key_length(method))).decode()
     await _save_legacy_settings(db, {"ss2022_server_key": key})
     return {"ok": True, "ss2022_server_key": key}
 

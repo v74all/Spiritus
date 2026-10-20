@@ -3,243 +3,76 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>{{ 'پنل نماینده' if dir == 'rtl' else 'VIP Agent Panel' }}</title>
+<link rel="icon" type="image/png" href="{{ url_for('static', filename='img/logo-96.png') }}">
+<title>{{ 'پنل نماینده' if dir == 'rtl' else 'Agent Panel' }} | SPIRITUS</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Azeret+Mono:wght@400;500;600;700&family=Fira+Sans:wght@300;400;500;600;700;800&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/panel.css') }}">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/panel.css') }}?v={{ asset_v }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/ui.css') }}?v={{ asset_v }}">
 <style nonce="{{ csp_nonce }}">
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:var(--font-body);background:var(--bg0);color:var(--t1);min-height:100vh;overflow-x:hidden}
-::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:var(--bg1)}::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:3px}
-input,button,textarea,select{font-family:inherit;font-size:inherit}
+/* Agent-panel pieces on top of the shared shell (ui.css). */
+.ap-brand-btn { all: unset; cursor: pointer; font-family: var(--f-head); font-weight: 700; font-size: 15px; letter-spacing: .03em; color: var(--on-s); }
+.ap-brand-btn:hover { color: var(--primary); }
+.ap-brand-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.form-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.ap-hint { margin-bottom: 10px; font: 500 11.5px var(--f-label); color: var(--outline); }
+.ap-note { margin-bottom: 14px; padding: 12px; border-radius: var(--r); background: var(--s-lowest); font-size: 12.5px; line-height: 1.6; color: var(--on-s-var); }
+.ap-note b { color: var(--on-s); }
+.ap-toggle-row { display: flex; gap: 10px; align-items: center; }
+.ap-output { width: 100%; padding: 12px; font: 11px/1.5 var(--f-label); resize: vertical; word-break: break-all; }
+.ap-btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.ap-results { margin-top: 16px; padding-top: 16px; border-top: 1px solid color-mix(in srgb, var(--outline-var) 40%, transparent); }
+.ap-results .settings-title { margin-bottom: 10px; }
+.modal-actions .btn { flex: 1; justify-content: center; }
+#groups-grid[hidden], #users-toolbar[hidden], #users-grid[hidden] { display: none; }
 
-#login-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;
-  background:radial-gradient(ellipse at 50% 0%,#0d1a2e 0%,var(--bg0) 70%)}
-.login-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);
-  padding:48px 40px;width:380px;text-align:center;box-shadow:var(--shadow)}
-.login-logo{font-family:var(--font-display);font-size:42px;font-weight:700;letter-spacing:3px;
-  background:linear-gradient(135deg,var(--accent),var(--purple));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent;
-  margin-bottom:8px}
-.login-sub{color:var(--t2);margin-bottom:32px;font-size:14px}
-.login-input{width:100%;padding:14px 18px;background:var(--bg1);border:1px solid var(--border);
-  border-radius:var(--radius-sm);color:var(--t0);font-size:15px;margin-bottom:16px;
-  text-align:center;letter-spacing:2px;transition:border .2s}
-.login-input:focus{outline:none;border-color:var(--accent)}
-.login-btn{width:100%;padding:14px;background:var(--accent2);color:var(--bg0);border:none;
-  border-radius:var(--radius-sm);font-size:15px;font-weight:600;cursor:pointer;transition:all .2s}
-.login-btn:hover{background:var(--accent);transform:translateY(-1px)}
-.login-error{color:var(--red);margin-top:12px;font-size:13px;min-height:20px}
+.ap-scroll { max-height: calc(100vh - 40px); overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.config-center { text-align: center; }
+.qr-box { display: inline-block; margin: 0 auto 16px; padding: 14px; border-radius: var(--r-lg); background: #fff; }
+.qr-box svg { display: block; }
+.vmess-box label { font: 500 11px var(--f-label); color: var(--outline); }
+.vmess-box textarea { width: 100%; margin-top: 6px; padding: 10px 12px; font: 11px/1.5 var(--f-label); color: var(--primary); resize: none; direction: ltr; text-align: left; word-break: break-all; }
+.vmess-box .btn { width: 100%; justify-content: center; margin-top: 8px; }
+.config-grid { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin-top: 14px; padding: 14px; border-radius: var(--r); background: var(--s-lowest); font-size: 12px; }
+.config-grid .ck { color: var(--outline); font-family: var(--f-label); }
+.config-grid .cv { color: var(--on-s); direction: ltr; text-align: left; word-break: break-all; }
+.ap-sub-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 14px; padding: 10px 12px; border-radius: var(--r); background: var(--s-lowest); }
+.ap-sub-row > span { font: 500 11px var(--f-label); color: var(--outline); }
+.ap-sub-row input { flex: 1; min-width: 140px; padding: 8px 10px; font: 11px var(--f-label); color: var(--tertiary); }
+.ap-app-card { display: flex; align-items: center; gap: 14px; margin-top: 10px; padding: 12px 14px; border-radius: var(--r-lg); background: var(--s-container); color: var(--on-s); text-decoration: none; }
+.ap-app-card:hover { background: var(--s-high); }
+.ap-app-card > .material-symbols-outlined { font-size: 26px; color: var(--primary); }
+.ap-app-title { font: 700 14px var(--f-head); }
+.ap-app-sub { margin-top: 2px; font-size: 11.5px; color: var(--on-s-var); }
+.ap-app-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.ap-modal-close { width: 100%; justify-content: center; margin-top: 16px; }
 
-#panel{display:none}
-.top-bar{display:flex;align-items:center;justify-content:space-between;padding:16px 28px;
-  background:var(--bg1);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100;
-  backdrop-filter:blur(12px)}
-.brand{display:flex;align-items:center;gap:12px;flex:0 0 auto}
-.brand-logo{font-family:var(--font-display);font-size:22px;font-weight:700;letter-spacing:2px;
-  background:linear-gradient(135deg,var(--accent),var(--purple));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent}
-.brand-text{color:var(--t2);font-size:13px;font-weight:400}
-.header-actions{display:flex;flex:1 1 auto;gap:10px;align-items:center;justify-content:flex-end;min-width:0;flex-wrap:wrap;overflow:visible;padding:3px 0}
+.bulk-modal-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+.bulk-modal-head h3 { margin: 0; }
+.bulk-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0 12px; }
+.bulk-tabs[hidden] { display: none; }
+.bulk-tab { padding: 6px 10px; border: 0; border-radius: var(--r); background: var(--s-container); color: var(--on-s-var); font: 600 11px var(--f-label); cursor: pointer; }
+.bulk-tab.active { background: var(--s-high); color: var(--primary); }
+.bulk-qr-section { margin-top: 16px; padding-top: 16px; border-top: 1px solid color-mix(in srgb, var(--outline-var) 40%, transparent); }
+.bulk-qr-wrap { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; max-height: 420px; overflow-y: auto; padding: 4px 0; }
+.bulk-qr-wrap[hidden] { display: none; }
+.bulk-qr-card { padding: 12px; border-radius: var(--r); background: var(--s-container); }
+.bulk-qr-title { margin-bottom: 10px; font: 700 13px var(--f-head); color: var(--on-s); }
+.bulk-qr-title small { margin-inline-start: 6px; font: 600 11px var(--f-label); color: var(--outline); }
+.bulk-qr-row { display: flex; flex-wrap: wrap; gap: 12px; }
+.bulk-qr-item { text-align: center; }
+.bulk-qr-lbl { display: block; margin-bottom: 6px; font: 600 10px var(--f-label); color: var(--outline); }
+.bulk-qr-item svg { display: block; margin: 0 auto; padding: 6px; border-radius: var(--r); background: #fff; }
 
-.btn{padding:10px 20px;border:none;border-radius:var(--radius-sm);font-size:13px;font-weight:500;
-  cursor:pointer;transition:all .2s;display:inline-flex;align-items:center;gap:6px}
-.btn-primary{background:var(--accent2);color:var(--bg0)}.btn-primary:hover{background:var(--accent);transform:translateY(-1px)}
-.btn-outline{background:transparent;border:1px solid var(--border2);color:var(--t1)}
-.btn-outline:hover{border-color:var(--accent);color:var(--accent)}
-.btn-ghost{background:transparent;border:none;color:var(--t2);padding:10px 14px}.btn-ghost:hover{color:var(--t0)}
-.btn-danger{background:var(--red-bg);color:var(--red);border:1px solid transparent}
-.btn-danger:hover{border-color:var(--red);background:rgba(248,81,73,.2)}
-.btn-sm{padding:7px 14px;font-size:12px}
-.btn-green{background:var(--green-bg);color:var(--green);border:1px solid transparent}
-.btn-green:hover{border-color:var(--green)}
-.btn-orange{background:rgba(240,136,62,.12);color:var(--orange);border:1px solid transparent}
-.btn-orange:hover{border-color:var(--orange)}
-
-.stats-bar{display:flex;gap:0;padding:0 28px;background:var(--bg1);border-bottom:1px solid var(--border)}
-.stat-item{flex:1;padding:18px 20px;text-align:center;border-right:1px solid var(--border)}
-.stat-item:last-child{border-right:none}
-.stat-value{display:block;font-size:26px;font-weight:700;color:var(--t0)}
-.stat-label{font-size:12px;color:var(--t3);margin-top:2px}
-
-.proto-bar{display:flex;gap:6px;padding:10px 28px;background:var(--bg1);border-bottom:1px solid var(--border);flex-wrap:wrap;align-items:center}
-.proto-badge{padding:4px 12px;border-radius:16px;font-size:11px;font-weight:600;display:inline-flex;align-items:center;gap:4px}
-.proto-vmess{background:rgba(88,166,255,.12);color:var(--accent)}
-.proto-vless{background:rgba(188,140,255,.12);color:var(--purple)}
-.proto-cdn{background:rgba(240,136,62,.12);color:var(--orange)}
-
-/* Quota bar */
-.quota-bar{display:flex;align-items:center;gap:14px;padding:10px 28px;background:var(--bg1);border-bottom:1px solid var(--border)}
-.quota-label{font-size:13px;color:var(--t2);font-weight:500;white-space:nowrap}
-.quota-track{flex:1;height:10px;background:var(--bg4);border-radius:5px;overflow:hidden}
-.quota-fill{height:100%;border-radius:5px;transition:width .8s ease,background .5s}
-.quota-text{font-size:13px;color:var(--t1);font-weight:600;white-space:nowrap}
-
-.container{padding:24px 28px}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
-
-.card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);
-  padding:20px;transition:all .25s;position:relative;overflow:hidden}
-.card:hover{border-color:var(--border2);transform:translateY(-2px);box-shadow:0 12px 40px rgba(0,0,0,.3)}
-.card.inactive{opacity:.55}
-.card-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
-.card-name{display:flex;align-items:center;gap:10px}
-.online-dot{width:10px;height:10px;border-radius:50%;background:var(--t3);transition:background .3s}
-.online-dot.on{background:var(--green);box-shadow:0 0 8px var(--green);animation:pulse 2s infinite}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
-.user-name{font-size:17px;font-weight:700;color:var(--t0)}
-.badge{padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600}
-.badge-active{background:var(--green-bg);color:var(--green)}
-.badge-inactive{background:var(--red-bg);color:var(--red)}
-
-.traffic-section{margin-bottom:14px}
-.progress-track{height:8px;background:var(--bg4);border-radius:4px;overflow:hidden;margin-bottom:8px}
-.progress-fill{height:100%;border-radius:4px;transition:width .8s ease,background .5s}
-.traffic-text{display:flex;justify-content:space-between;font-size:13px;color:var(--t2)}
-.traffic-text b{color:var(--t0)}
-
-.info-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;font-size:13px;color:var(--t2)}
-.info-row .val{color:var(--t1);font-weight:500}
-.info-row .warn{color:var(--yellow)}
-.info-row .crit{color:var(--red)}
-
-.speed-row{display:flex;gap:16px;margin:12px 0;padding:10px 14px;background:var(--bg3);border-radius:var(--radius-sm)}
-.speed-item{flex:1;text-align:center;font-size:12px;color:var(--t2)}
-.speed-val{display:block;font-size:15px;font-weight:600;color:var(--t0);margin-top:2px}
-.speed-item.up .speed-val{color:var(--green)}
-.speed-item.down .speed-val{color:var(--accent)}
-
-.card-actions{display:flex;gap:8px;margin-top:14px;padding-top:14px;border-top:1px solid var(--border)}
-.card-actions .btn{flex:1;justify-content:center}
-
-.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);
-  backdrop-filter:blur(4px);z-index:200;align-items:center;justify-content:center;padding:20px}
-.modal-overlay.show{display:flex}
-.modal{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);
-  padding:32px;width:100%;max-width:440px;box-shadow:var(--shadow);animation:modalIn .2s ease}
-.modal-lg{max-width:560px}
-.modal-xl{max-width:700px}
-@keyframes modalIn{from{opacity:0;transform:scale(.95) translateY(10px)}to{opacity:1;transform:scale(1) translateY(0)}}
-.modal h3{font-size:18px;color:var(--t0);margin-bottom:24px;font-weight:700}
-.form-group{margin-bottom:18px}
-.form-group label{display:block;font-size:13px;color:var(--t2);margin-bottom:6px;font-weight:500}
-.form-group input,.form-group select{width:100%;padding:12px 16px;background:var(--bg1);border:1px solid var(--border);
-  border-radius:var(--radius-sm);color:var(--t0);font-size:14px;transition:border .2s}
-.form-group input:focus,.form-group select:focus{outline:none;border-color:var(--accent)}
-.modal-actions{display:flex;gap:10px;margin-top:24px}
-.modal-actions .btn{flex:1;justify-content:center;padding:12px}
-
-.config-tabs{display:flex;gap:0;border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;margin-bottom:20px}
-.config-tab{flex:1;padding:10px;text-align:center;font-size:12px;font-weight:600;cursor:pointer;
-  background:transparent;border:none;color:var(--t2);transition:all .2s}
-.config-tab.active{color:#fff}
-.config-tab.tab-vmess.active{background:var(--accent2)}
-.config-tab.tab-vless.active{background:#7c3aed}
-.config-tab.tab-cdn.active{background:var(--orange)}
-.qr-box{background:#fff;border-radius:12px;padding:16px;display:inline-block;margin:0 auto 20px}
-.qr-box svg{display:block}
-.config-center{text-align:center}
-.vmess-box{margin-top:16px}
-.vmess-box textarea{width:100%;padding:12px;background:var(--bg1);border:1px solid var(--border);
-  border-radius:var(--radius-sm);color:var(--accent);font-size:11px;font-family:var(--font-mono);
-  resize:none;direction:ltr;text-align:left;word-break:break-all}
-.config-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:16px;
-  padding:14px;background:var(--bg3);border-radius:var(--radius-sm);font-size:12px}
-.config-grid .ck{color:var(--t3)}.config-grid .cv{color:var(--t1);direction:ltr;text-align:left}
-
-.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);
-  padding:14px 28px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius-sm);
-  color:var(--t0);font-size:14px;font-weight:500;z-index:999;transition:transform .3s ease;
-  box-shadow:0 8px 24px rgba(0,0,0,.4)}
-.toast.show{transform:translateX(-50%) translateY(0)}
-.toast.error{border-color:var(--red);color:var(--red)}
-
-.filter-bar{display:flex;align-items:center;gap:10px;padding:14px 28px;background:var(--bg1);
-  border-bottom:1px solid var(--border);overflow-x:auto;-webkit-overflow-scrolling:touch}
-.filter-bar::-webkit-scrollbar{display:none}
-.filter-pills{display:flex;gap:6px;flex-shrink:0}
-.filter-pill{padding:7px 16px;border-radius:20px;font-size:12px;font-weight:500;cursor:pointer;
-  border:1px solid var(--border);background:transparent;color:var(--t2);transition:all .2s;
-  white-space:nowrap;user-select:none}
-.filter-pill:hover{border-color:var(--border2);color:var(--t1)}
-.filter-pill.active{background:var(--accent2);border-color:var(--accent2);color:#fff}
-.filter-pill .pill-count{display:inline-block;min-width:18px;height:18px;line-height:18px;
-  text-align:center;border-radius:9px;font-size:10px;font-weight:700;margin-left:6px;
-  background:rgba(255,255,255,.15)}
-.filter-pill.active .pill-count{background:rgba(255,255,255,.25)}
-.filter-search{flex:1;min-width:140px;max-width:260px;margin-left:auto;padding:8px 14px;
-  background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-sm);
-  color:var(--t0);font-size:13px;transition:border .2s}
-.filter-search:focus{outline:none;border-color:var(--accent)}
-.filter-search::placeholder{color:var(--t3)}
-
-.bulk-modal-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px}
-.bulk-zip-top{flex-shrink:0;white-space:nowrap}
-.bulk-qr-section{margin-top:16px;padding-top:16px;border-top:1px solid var(--border)}
-.bulk-qr-wrap{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;max-height:420px;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:4px 0}
-.bulk-qr-card{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px}
-.bulk-qr-title{font-size:13px;font-weight:700;color:var(--t0);margin-bottom:10px}
-.bulk-qr-title small{font-weight:600;color:var(--t3);margin-left:6px}
-.bulk-qr-row{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;justify-content:flex-start}
-.bulk-qr-item{text-align:center}
-.bulk-qr-lbl{display:block;font-size:10px;color:var(--t3);margin-bottom:6px;font-weight:600}
-.bulk-qr-item svg{display:block;margin:0 auto;border-radius:8px;background:#fff;padding:6px}
-.bulk-tabs{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0 12px}
-.bulk-tab{padding:6px 10px;border-radius:12px;font-size:11px;font-weight:700;cursor:pointer;
-  border:1px solid var(--border);background:transparent;color:var(--t2);transition:all .2s;user-select:none}
-.bulk-tab:hover{border-color:var(--border2);color:var(--t1)}
-.bulk-tab.active{background:var(--accent2);border-color:var(--accent2);color:#fff}
-.bulk-tab small{opacity:.8;font-weight:600}
-
-.settings-section{margin-bottom:24px}
-.settings-title{font-size:13px;font-weight:600;color:var(--t2);margin-bottom:12px;text-transform:uppercase;letter-spacing:1px}
-.settings-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border)}
-.settings-row:last-child{border-bottom:none}
-.settings-label{font-size:14px;color:var(--t1)}
-.settings-desc{font-size:11px;color:var(--t3);margin-top:2px}
-.toggle{position:relative;width:44px;height:24px;cursor:pointer}
-.toggle input{opacity:0;width:0;height:0}
-.toggle-slider{position:absolute;inset:0;background:var(--bg4);border-radius:12px;transition:.3s}
-.toggle-slider::before{content:'';position:absolute;height:18px;width:18px;left:3px;bottom:3px;
-  background:var(--t2);border-radius:50%;transition:.3s}
-.toggle input:checked+.toggle-slider{background:var(--green)}
-.toggle input:checked+.toggle-slider::before{transform:translateX(20px);background:#fff}
-
-.empty{text-align:center;padding:80px 20px;color:var(--t3)}
-.empty-icon{font-size:48px;margin-bottom:12px}
-.empty-text{font-size:15px}
-
-@media(max-width:768px){
-  .top-bar{flex-direction:column;gap:12px;padding:14px 16px}
-  .brand{width:100%;justify-content:center}
-  .header-actions{width:100%;justify-content:center;padding-bottom:6px}
-  .stats-bar{flex-wrap:wrap}.stat-item{min-width:50%;border-bottom:1px solid var(--border)}
-  .proto-bar{padding:8px 16px}
-  .quota-bar{flex-wrap:wrap;padding:8px 16px}
-  .filter-bar{padding:10px 16px;gap:8px}
-  .filter-search{min-width:100px;max-width:180px}
-  .container{padding:16px}
-  .grid{grid-template-columns:1fr}
-  .modal-overlay{padding:10px;align-items:flex-start;padding-top:20px}
-  .modal{padding:20px 16px;margin:0;max-height:calc(100vh - 40px);overflow-y:auto;-webkit-overflow-scrolling:touch}
-  .modal-lg,.modal-xl{max-width:100%}
-  .modal h3{font-size:16px;margin-bottom:16px}
-  .qr-box{padding:10px;margin-bottom:14px}
-  .qr-box svg{max-width:180px;max-height:180px;width:100%;height:auto}
-  .vmess-box textarea{font-size:10px;padding:10px}
-  .config-grid{grid-template-columns:auto 1fr;gap:6px 10px;padding:10px;font-size:11px}
-  .config-grid .cv{word-break:break-all;overflow-wrap:break-word}
-  .modal-actions{flex-direction:column;gap:8px}
-  .modal-actions .btn{width:100%}
-  .card-actions{flex-wrap:wrap}
-  .card-actions .btn{min-width:calc(50% - 4px)}
-}
-.brand-logo{cursor:pointer;transition:opacity .2s}.brand-logo:hover{opacity:.8}
-.brand-edit-input{width:100%;padding:14px 18px;background:var(--bg1);border:1px solid var(--border);
-  border-radius:var(--radius-sm);color:var(--t0);font-size:22px;font-weight:800;text-align:center;
-  letter-spacing:3px;transition:border .2s}
-.brand-edit-input:focus{outline:none;border-color:var(--accent)}
-.brand-preview{text-align:center;margin:16px 0;font-size:36px;font-weight:800;letter-spacing:4px;
-  background:linear-gradient(135deg,var(--accent),var(--purple));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent}
+.brand-edit-input { width: 100%; padding: 12px 14px; font: 800 20px var(--f-head); letter-spacing: .08em; text-align: center; }
+.brand-preview { margin: 12px 0 16px; text-align: center; font: 800 34px var(--f-head); letter-spacing: .1em; color: var(--primary); }
+.ap-center { text-align: center; }
+.ap-app-qr { display: inline-block; min-width: 120px; min-height: 120px; margin-bottom: 12px; padding: 12px; border-radius: var(--r-lg); background: #fff; color: #333; }
+.ap-app-uri { margin-bottom: 16px; font: 11px var(--f-label); color: var(--outline); word-break: break-all; }
+.ap-lead { margin-bottom: 16px; font-size: 13px; color: var(--on-s-var); }
+@media (max-width: 720px) { .form-row-2 { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
@@ -247,326 +80,376 @@ input,button,textarea,select{font-family:inherit;font-size:inherit}
 <!-- ── Login ── -->
 <div id="login-screen">
   <div class="login-card">
-    <div class="login-logo" id="login-logo">👑 VIP</div>
-    <div class="login-sub">Agent Panel</div>
-    <input type="text" id="login-user" class="login-input" placeholder="Username" autocomplete="username"
-           style="letter-spacing:normal">
-    <input type="password" id="login-pass" class="login-input" placeholder="Password"
-           onkeydown="if(event.key==='Enter')doLogin()">
-    <button type="button" class="login-btn" id="login-submit" onclick="doLogin()">Sign In</button>
-    <div class="login-error" id="login-error"></div>
-  </div>
-</div>
-
-<!-- ── Panel ── -->
-<div id="panel">
-  <header class="top-bar">
-    <div class="brand">
-      <span class="brand-logo" id="panel-logo" onclick="showModal('brand-modal')" title="Click to customize brand">👑 VIP</span>
-      <span class="brand-text">Agent Panel — <span id="agent-name-top" style="color:var(--accent)"></span></span>
-    </div>
-    <div class="header-actions">
-      <button class="btn btn-primary btn-sm header-primary" onclick="showModal('add-modal')">Add User</button>
-      <button class="btn btn-outline btn-sm" onclick="showModal('bulk-modal')">Bulk</button>
-      <button class="btn btn-outline btn-sm" onclick="openAppModal()" title="Login link for the mobile app">📱 App</button>
-      <button class="btn btn-outline btn-sm" onclick="forceSync()">Sync</button>
-      <button class="btn btn-outline btn-sm header-sep" id="btn-groups" onclick="switchMainView('groups')">Groups</button>
-      <button class="btn btn-outline btn-sm header-sep" id="btn-users" onclick="switchMainView('users')" style="display:none">Users</button>
-      <button class="btn btn-ghost btn-sm header-sep dir-toggle" onclick="toggleDirection()" title="Toggle RTL/LTR">{{ 'RTL' if dir == 'ltr' else 'LTR' }}</button>
-      <button class="btn btn-ghost btn-sm" onclick="doLogout()">Logout</button>
-    </div>
-  </header>
-
-  <!-- SERVER MIGRATION NOTICE -->
-  <div id="migration-banner" style="
-    background: linear-gradient(135deg, #1a0a00 0%, #2d1600 50%, #1a0a00 100%);
-    border: 1px solid #f59e0b;
-    border-left: 4px solid #f59e0b;
-    margin: 0;
-    padding: 16px 28px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16px;
-    animation: bannerPulse 2s ease-in-out infinite;
-  ">
-    <div style="display:flex;align-items:center;gap:12px;flex:1">
-      <span style="font-size:28px">&#9888;&#65039;</span>
-      <div>
-        <div style="color:#fbbf24;font-weight:700;font-size:15px;margin-bottom:4px" lang="fa">
-          &#8252;&#65039; &#1575;&#1591;&#1604;&#1575;&#1593;&#1740;&#1607; &#1605;&#1607;&#1605; &mdash; &#1587;&#1585;&#1608;&#1585; &#1578;&#1594;&#1740;&#1740;&#1585; &#1705;&#1585;&#1583;&#1607; &#1575;&#1587;&#1578;
-        </div>
-        <div style="color:#fcd34d;font-size:13px;line-height:1.7" lang="fa">
-          &#1604;&#1591;&#1601;&#1575;&#1611; &#1576;&#1607; &#1578;&#1605;&#1575;&#1605; &#1705;&#1575;&#1585;&#1576;&#1585;&#1575;&#1606; &#1582;&#1608;&#1583; &#1575;&#1591;&#1604;&#1575;&#1593; &#1583;&#1607;&#1740;&#1583; &#1705;&#1607; &#1581;&#1578;&#1605;&#1575;&#1611; <b style="color:#fff">Subscription Update</b> &#1585;&#1575; &#1575;&#1606;&#1580;&#1575;&#1605; &#1583;&#1607;&#1606;&#1583;.<br>
-          &#1587;&#1585;&#1608;&#1585; &#1605;&#1575; &#1578;&#1594;&#1740;&#1740;&#1585; &#1705;&#1585;&#1583;&#1607; &#1608; &#1576;&#1583;&#1608;&#1606; &#1570;&#1662;&#1583;&#1740;&#1578; &#1587;&#1575;&#1576;&#8204;&#1575;&#1587;&#1705;&#1585;&#1740;&#1662;&#1588;&#1606;&#1548; &#1575;&#1578;&#1589;&#1575;&#1604; &#1705;&#1575;&#1585;&#1576;&#1585;&#1575;&#1606; &#1602;&#1591;&#1593; &#1582;&#1608;&#1575;&#1607;&#1583; &#1588;&#1583;.
+    <aside class="login-rail">
+      <div class="login-brand">
+        <div class="login-mark"><img src="{{ url_for('static', filename='img/logo-96.png') }}" alt=""></div>
+        <div>
+          <div class="login-logo" id="login-logo">VPN</div>
+          <div class="login-sub">Agent Panel</div>
         </div>
       </div>
-    </div>
-    <button onclick="this.parentElement.style.display='none'" style="
-      background:none;border:1px solid #92400e;color:#fbbf24;border-radius:8px;
-      padding:6px 14px;cursor:pointer;font-size:12px;white-space:nowrap;
-    ">&#1576;&#1587;&#1578;&#1606; &#10005;</button>
-  </div>
-  <style nonce="{{ csp_nonce }}">
-    @keyframes bannerPulse {
-      0%,100%{border-color:#f59e0b}
-      50%{border-color:#fbbf24;box-shadow:0 0 20px rgba(245,158,11,0.15)}
-    }
-  </style>
-  <!-- /SERVER MIGRATION NOTICE -->
+      <div class="login-rail-label">Your workspace</div>
+      <ul class="login-scope">
+        <li><span class="material-symbols-outlined">group</span>Your users &amp; subscriptions</li>
+        <li><span class="material-symbols-outlined">qr_code_2</span>Configs, QR codes &amp; links</li>
+        <li><span class="material-symbols-outlined">layers</span>Bulk groups &amp; exports</li>
+        <li><span class="material-symbols-outlined">data_usage</span>Your traffic quota</li>
+      </ul>
+      <div class="login-rail-foot">
+        <div class="login-rail-row"><span>ROLE</span><span class="status-pill info">Agent</span></div>
+        <div class="login-rail-meta">HttpOnly · SameSite=Strict</div>
+      </div>
+    </aside>
 
-  <!-- Quota Bar -->
-  <div class="quota-bar">
-    <span class="quota-label">Quota:</span>
-    <div class="quota-track"><div class="quota-fill" id="quota-fill" style="width:0%;background:var(--green)"></div></div>
-    <span class="quota-text" id="quota-text">— / — GB</span>
-  </div>
-
-  <div class="stats-bar">
-    <div class="stat-item"><span class="stat-value" id="s-total">—</span><span class="stat-label">Total Users</span></div>
-    <div class="stat-item"><span class="stat-value" id="s-active">—</span><span class="stat-label">Active</span></div>
-    <div class="stat-item"><span class="stat-value" id="s-online">—</span><span class="stat-label">Online</span></div>
-    <div class="stat-item"><span class="stat-value" id="s-traffic">—</span><span class="stat-label">Total Traffic</span></div>
-  </div>
-
-  <div class="proto-bar" id="proto-bar">
-    <span class="proto-badge proto-vmess">VMess:443</span>
-    <span class="proto-badge proto-vless" id="pb-vless" style="display:none">VLESS/Reality</span>
-    <span class="proto-badge proto-cdn" id="pb-cdn" style="display:none">CDN</span>
-  </div>
-
-  <div class="filter-bar">
-    <div class="filter-pills" id="filter-pills">
-      <button class="filter-pill active" data-filter="all">All<span class="pill-count" id="fc-all">0</span></button>
-      <button class="filter-pill" data-filter="online">Online<span class="pill-count" id="fc-online">0</span></button>
-      <button class="filter-pill" data-filter="offline">Offline<span class="pill-count" id="fc-offline">0</span></button>
-      <button class="filter-pill" data-filter="active">Active<span class="pill-count" id="fc-active">0</span></button>
-      <button class="filter-pill" data-filter="disabled">Disabled<span class="pill-count" id="fc-disabled">0</span></button>
-      <button class="filter-pill" data-filter="expiring">Expiring<span class="pill-count" id="fc-expiring">0</span></button>
-    </div>
-    <input type="text" class="filter-search" id="filter-search" placeholder="Search user..." oninput="applyFilter()">
-  </div>
-
-  <div class="container">
-    <div id="users-grid" class="grid"></div>
-    <div id="groups-grid" class="grid" style="display:none"></div>
+    <section class="login-pane">
+      <div class="login-topbar">
+        <span class="login-crumb"><span class="login-dot"></span>AUTH / AGENT-LOGIN</span>
+        <button type="button" class="btn btn-sm btn-outline" onclick="cycleTheme()" title="Switch theme (Obsidian / CyberOps / Midnight)">
+          <span class="material-symbols-outlined">palette</span><span data-theme-label>Theme</span>
+        </button>
+      </div>
+      <div class="login-form">
+        <h1 class="login-title">Agent sign-in</h1>
+        <p class="login-lead">ورود به پنل نماینده</p>
+        <div class="login-field">
+          <label class="login-label" for="login-user">Agent name</label>
+          <div class="login-input-wrap">
+            <span class="material-symbols-outlined">person</span>
+            <input type="text" id="login-user" class="login-input" autocomplete="username" autocapitalize="off" spellcheck="false">
+          </div>
+        </div>
+        <div class="login-field">
+          <label class="login-label" for="login-pass">Password</label>
+          <div class="login-input-wrap">
+            <span class="material-symbols-outlined">key</span>
+            <input type="password" id="login-pass" class="login-input" placeholder="••••••••" autocomplete="current-password"
+                   onkeydown="if(event.key==='Enter')doLogin()">
+          </div>
+        </div>
+        <button type="button" class="login-btn" id="login-submit" onclick="doLogin()">Sign In</button>
+        <div class="login-error" id="login-error" role="alert" aria-live="polite"></div>
+      </div>
+      <div class="login-links">
+        <a href="/landing" class="login-link"><span class="material-symbols-outlined">public</span>Website / وبسایت معرفی</a>
+        <a href="/" class="login-link"><span class="material-symbols-outlined">admin_panel_settings</span>Admin panel</a>
+      </div>
+    </section>
   </div>
 </div>
 
-<!-- ── Add Modal ── -->
+<div id="nav-overlay" onclick="closeDrawer()"></div>
+
+<!-- ── Panel ── -->
+<div id="panel" class="ui-app">
+  <aside class="ui-sidebar" id="nav-drawer" aria-label="Navigation">
+    <div class="ui-brand">
+      <img src="{{ url_for('static', filename='img/logo-96.png') }}" alt="">
+      <div class="ui-minw0">
+        <button type="button" class="ap-brand-btn" id="panel-logo" onclick="showModal('brand-modal')" title="Customize your brand name">VPN</button>
+        <div class="ui-brand-sub">Agent Panel</div>
+      </div>
+    </div>
+
+    <div class="ui-nav-label">Workspace</div>
+    <nav class="ui-nav">
+      <button type="button" class="ui-nav-item active" data-view="users" onclick="switchMainView('users')"><span class="material-symbols-outlined">group</span>Users / کاربران</button>
+      <button type="button" class="ui-nav-item" data-view="groups" id="btn-groups" onclick="switchMainView('groups')"><span class="material-symbols-outlined">layers</span>Groups / گروه‌ها</button>
+    </nav>
+
+    <div class="ui-nav-label">Links</div>
+    <nav class="ui-nav">
+      <a class="ui-nav-item" href="/landing"><span class="material-symbols-outlined">public</span>Website</a>
+    </nav>
+
+    <div class="ui-telemetry">
+      <div class="ui-telemetry-head"><span>Traffic quota</span><span class="ui-pulse is-ok"></span></div>
+      <div class="ui-tm-row"><span>Sold:</span><span id="tm-used">—</span></div>
+      <div class="ui-tm-row"><span>Remaining:</span><span id="tm-remaining" class="ui-tm-ok">—</span></div>
+      <progress class="ops-progress ops-progress-online ui-quota-progress" id="quota-fill" max="100" value="0"></progress>
+      <div class="ui-tm-row"><span id="quota-text">— / — GB</span></div>
+    </div>
+  </aside>
+
+  <div class="ui-main">
+    <header class="ui-topbar">
+      <div class="ui-topbar-left">
+        <button type="button" class="ui-icon-btn ui-menu-btn" onclick="toggleDrawer()" aria-label="Open navigation"><span class="material-symbols-outlined">menu</span></button>
+        <span class="ui-crumb"><span class="material-symbols-outlined">support_agent</span>Agent / <strong id="agent-name-top">—</strong></span>
+        <span class="ui-chip ui-hide-sm"><span class="ops-dot is-ok"></span><span id="proto-count">—</span></span>
+      </div>
+      <div class="ui-topbar-right">
+        <button type="button" class="ui-icon-btn" onclick="forceSync()" title="Apply your users to the VPN server"><span class="material-symbols-outlined">sync</span></button>
+        <button type="button" class="ui-icon-btn" onclick="openAppModal()" title="Login link for the mobile app"><span class="material-symbols-outlined">smartphone</span></button>
+        <button type="button" class="ui-icon-btn dir-toggle" onclick="toggleDirection()" title="Switch to {{ 'LTR' if dir == 'rtl' else 'RTL' }}"><span class="material-symbols-outlined">format_textdirection_r_to_l</span></button>
+        <button type="button" id="agent-theme-btn" class="ui-icon-btn" onclick="cycleTheme()" title="Switch theme (Obsidian / CyberOps / Midnight)"><span class="material-symbols-outlined">palette</span><span id="theme-label" class="ui-hide-md">Theme</span></button>
+        <div class="ui-user">
+          <span class="ui-avatar" id="agent-initial">A</span>
+          <div class="ui-user-meta"><span id="agent-name-meta">Agent</span><span class="ui-user-role">Agent session</span></div>
+          <button type="button" class="ui-icon-btn" onclick="doLogout()" title="Sign out"><span class="material-symbols-outlined">logout</span></button>
+        </div>
+      </div>
+    </header>
+
+    <main class="ui-content">
+      <div class="ui-page-head">
+        <div class="ui-page-titles">
+          <div class="ui-eyebrow" id="view-eyebrow">Your workspace</div>
+          <h1 class="ui-title" id="view-title">Users &amp; Subscriptions</h1>
+          <p class="ui-subtitle" id="view-subtitle">Every account you sell: quota, expiry, live speed and its config.</p>
+        </div>
+        <div class="ui-actions">
+          <button type="button" class="btn btn-outline btn-sm" onclick="showModal('bulk-modal')"><span class="material-symbols-outlined">library_add</span>Bulk create</button>
+          <button type="button" class="btn btn-primary btn-sm" onclick="showModal('add-modal')"><span class="material-symbols-outlined">person_add</span>Add user</button>
+        </div>
+      </div>
+
+      <div class="ui-kpis">
+        <div class="ui-kpi">
+          <div class="ui-kpi-head"><span class="ui-kpi-label">Total users</span><span class="ui-kpi-icon material-symbols-outlined">group</span></div>
+          <div class="ui-kpi-value" id="s-total">—</div>
+          <div class="ui-kpi-foot">Active: <strong id="s-active">—</strong></div>
+        </div>
+        <div class="ui-kpi">
+          <div class="ui-kpi-head"><span class="ui-kpi-label">Online now</span><span class="ui-kpi-icon material-symbols-outlined">wifi</span></div>
+          <div class="ui-kpi-value" id="s-online">—</div>
+          <div class="ui-kpi-foot">Sending traffic right now</div>
+        </div>
+        <div class="ui-kpi">
+          <div class="ui-kpi-head"><span class="ui-kpi-label">Traffic used</span><span class="ui-kpi-icon material-symbols-outlined">swap_vert</span></div>
+          <div class="ui-kpi-value" id="s-traffic">—</div>
+          <div class="ui-kpi-foot">Across all your users</div>
+        </div>
+        <div class="ui-kpi">
+          <div class="ui-kpi-head"><span class="ui-kpi-label">Quota remaining</span><span class="ui-kpi-icon material-symbols-outlined">data_usage</span></div>
+          <div class="ui-kpi-value" id="kpi-quota-remaining">—</div>
+          <div class="ui-kpi-foot" id="kpi-quota-foot">of — GB</div>
+        </div>
+      </div>
+
+      <section class="ui-card">
+        <div class="ui-card-head">
+          <div class="ui-card-title"><span class="material-symbols-outlined">lan</span>Protocols on this server</div>
+          <span class="ui-card-meta">Every user gets a config for each</span>
+        </div>
+        <div class="proto-bar" id="proto-bar"><span class="proto-badge">VMess:443</span></div>
+      </section>
+
+      <div class="ui-toolbar" id="users-toolbar">
+        <label class="ui-search"><span class="material-symbols-outlined">search</span>
+          <input type="text" id="filter-search" placeholder="Filter by name..." oninput="applyFilter()" aria-label="Filter users"></label>
+        <div class="filter-pills" id="filter-pills">
+          <button type="button" class="filter-pill active" data-filter="all">All<span class="pill-count" id="fc-all">0</span></button>
+          <button type="button" class="filter-pill" data-filter="online">Online<span class="pill-count" id="fc-online">0</span></button>
+          <button type="button" class="filter-pill" data-filter="offline">Offline<span class="pill-count" id="fc-offline">0</span></button>
+          <button type="button" class="filter-pill" data-filter="active">Active<span class="pill-count" id="fc-active">0</span></button>
+          <button type="button" class="filter-pill" data-filter="disabled">Disabled<span class="pill-count" id="fc-disabled">0</span></button>
+          <button type="button" class="filter-pill" data-filter="expiring">Expiring<span class="pill-count" id="fc-expiring">0</span></button>
+        </div>
+      </div>
+
+      <div id="users-grid"></div>
+      <div id="groups-grid" class="ui-groups" hidden></div>
+    </main>
+
+    <footer class="ui-footer">
+      <span>© Spiritus · Agent panel</span>
+      <span class="ui-footer-meta"><span class="material-symbols-outlined">lock</span>Your users only</span>
+    </footer>
+  </div>
+</div>
+
+<!-- ── Add user ── -->
 <div id="add-modal" class="modal-overlay" onclick="if(event.target===this)closeModal(this.id)">
   <div class="modal">
-    <h3>New User</h3>
-    <div class="form-group"><label>Username</label>
+    <h3>New user</h3>
+    <div class="form-group"><label for="add-name">Username</label>
       <input type="text" id="add-name" placeholder="e.g. ali"></div>
-    <div class="form-group"><label>Traffic (GB)</label>
-      <input type="number" id="add-traffic" value="10" min="0.1" step="0.1"></div>
-    <div class="form-group"><label>Duration (days)</label>
-      <input type="number" id="add-days" value="30" min="1"></div>
-    <div class="form-group" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-      <div><label>Speed Down (KB/s)</label>
-        <input type="number" id="add-speed-down" value="200" min="0"></div>
-      <div><label>Speed Up (KB/s)</label>
-        <input type="number" id="add-speed-up" value="200" min="0"></div>
+    <div class="form-row-2">
+      <div class="form-group"><label for="add-traffic">Traffic (GB)</label>
+        <input type="number" id="add-traffic" value="10" min="0.1" step="0.1"></div>
+      <div class="form-group"><label for="add-days">Duration (days)</label>
+        <input type="number" id="add-days" value="30" min="1"></div>
     </div>
-    <div id="add-quota-hint" style="font-size:12px;color:var(--t2);margin-bottom:10px"></div>
+    <div class="form-row-2">
+      <div class="form-group"><label for="add-speed-down">Speed down (KB/s)</label>
+        <input type="number" id="add-speed-down" value="0" min="0"></div>
+      <div class="form-group"><label for="add-speed-up">Speed up (KB/s)</label>
+        <input type="number" id="add-speed-up" value="0" min="0"></div>
+    </div>
+    <div class="ap-hint" id="add-quota-hint"></div>
     <div class="modal-actions">
-      <button class="btn btn-primary" onclick="doAddUser()">Create User</button>
-      <button class="btn btn-outline" onclick="closeModal('add-modal')">Cancel</button>
+      <button type="button" class="btn btn-primary" onclick="doAddUser()">Create user</button>
+      <button type="button" class="btn btn-outline" onclick="closeModal('add-modal')">Cancel</button>
     </div>
   </div>
 </div>
 
-<!-- ── Bulk Modal ── -->
+<!-- ── Bulk create ── -->
 <div id="bulk-modal" class="modal-overlay" onclick="if(event.target===this)closeModal(this.id)">
-  <div class="modal modal-xl" style="max-height:calc(100vh - 40px);overflow-y:auto;-webkit-overflow-scrolling:touch">
+  <div class="modal modal-xl ap-scroll">
     <div class="bulk-modal-head">
-      <h3 style="margin:0">Bulk Configs (Group)</h3>
-      <button type="button" class="btn btn-green btn-sm bulk-zip-top" onclick="downloadBulkZip()" title="One .txt per user + ALL-CONFIGS.txt">Download ZIP</button>
+      <h3>Bulk configs (group)</h3>
+      <button type="button" class="btn btn-green btn-sm" onclick="downloadBulkZip()" title="One .txt per user + ALL-CONFIGS.txt"><span class="material-symbols-outlined">folder_zip</span>Download ZIP</button>
     </div>
-    <div style="padding:12px;background:var(--bg3);border-radius:var(--radius-sm);font-size:12px;color:var(--t2);line-height:1.6;margin-bottom:14px">
-      Default mode creates users <b style="color:var(--t1)">without applying to server</b>, so existing connected configs won't drop.
-      You can apply later via <b style="color:var(--t1)">Sync</b>.
+    <div class="ap-note">
+      By default users are created <b>without applying them to the server</b>, so connected users don't drop.
+      Apply later with <b>Sync</b>.
     </div>
-    <div id="bulk-quota-hint" style="font-size:12px;color:var(--t2);margin-bottom:10px"></div>
-    <div class="form-group"><label>Prefix (group name)</label>
-      <input type="text" id="bulk-prefix" value="group" placeholder="e.g. 1gig"></div>
-    <div class="form-group"><label>Count</label>
-      <input type="number" id="bulk-count" value="10" min="1" max="500"></div>
-    <div class="form-group"><label>Traffic per user (GB)</label>
-      <input type="number" id="bulk-traffic" value="1" min="0.1" step="0.1"></div>
-    <div class="form-group"><label>Duration (days)</label>
-      <input type="number" id="bulk-days" value="30" min="1"></div>
-    <div class="form-group" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-      <div>
-        <label>Numbering</label>
+    <div class="ap-hint" id="bulk-quota-hint"></div>
+    <div class="form-row-2">
+      <div class="form-group"><label for="bulk-prefix">Prefix (group name)</label>
+        <input type="text" id="bulk-prefix" value="group" placeholder="e.g. 1gig"></div>
+      <div class="form-group"><label for="bulk-count">Count</label>
+        <input type="number" id="bulk-count" value="10" min="1" max="500"></div>
+    </div>
+    <div class="form-row-2">
+      <div class="form-group"><label for="bulk-traffic">Traffic per user (GB)</label>
+        <input type="number" id="bulk-traffic" value="1" min="0.1" step="0.1"></div>
+      <div class="form-group"><label for="bulk-days">Duration (days)</label>
+        <input type="number" id="bulk-days" value="30" min="1"></div>
+    </div>
+    <div class="form-row-2">
+      <div class="form-group"><label for="bulk-numbered">Numbering</label>
         <select id="bulk-numbered">
           <option value="1" selected>Numbered (001, 002, 003...)</option>
           <option value="0">Random suffix</option>
-        </select>
-      </div>
+        </select></div>
+      <div class="form-group"><label for="bulk-start">Start number</label>
+        <input type="number" id="bulk-start" value="1" min="1"></div>
+    </div>
+    <div class="form-row-2">
+      <div class="form-group"><label for="bulk-pad">Pad digits</label>
+        <input type="number" id="bulk-pad" value="3" min="2" max="6"></div>
+      <div class="form-group"><label>Example</label><div class="ap-hint">prefix-1g-001</div></div>
+    </div>
+    <div class="form-group ap-toggle-row">
+      <label class="toggle"><input type="checkbox" id="bulk-apply" aria-label="Apply to server now"><span class="toggle-slider"></span></label>
       <div>
-        <label>Start number</label>
-        <input type="number" id="bulk-start" value="1" min="1">
+        <div class="settings-label">Apply to server now</div>
+        <div class="settings-desc">May reload the server config. Leave off to avoid any disruption.</div>
       </div>
     </div>
-    <div class="form-group" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-      <div>
-        <label>Pad digits</label>
-        <input type="number" id="bulk-pad" value="3" min="2" max="6">
-      </div>
-      <div style="padding-top:22px;color:var(--t3);font-size:11px;line-height:1.4">
-        Example: <b style="color:var(--t1)">prefix-1g-001</b>
-      </div>
-    </div>
-    <div class="form-group" style="display:flex;gap:10px;align-items:center">
-      <label class="toggle" style="margin:0"><input type="checkbox" id="bulk-apply"><span class="toggle-slider"></span></label>
-      <div>
-        <div class="settings-label" style="font-size:13px">Apply to server now</div>
-        <div class="settings-desc">May reload server config. Leave OFF to avoid any disruption.</div>
-      </div>
-    </div>
-
     <div class="modal-actions">
-      <button class="btn btn-primary" onclick="doBulkCreate()">Create Bulk</button>
-      <button class="btn btn-danger" onclick="deleteBulkGroup()">Delete This Group</button>
-      <button class="btn btn-outline" onclick="closeModal('bulk-modal')">Close</button>
+      <button type="button" class="btn btn-primary" onclick="doBulkCreate()">Create bulk</button>
+      <button type="button" class="btn btn-danger" onclick="deleteBulkGroup()">Delete this group</button>
+      <button type="button" class="btn btn-outline" onclick="closeModal('bulk-modal')">Close</button>
     </div>
 
-    <div style="margin-top:14px;border-top:1px solid var(--border);padding-top:14px">
+    <div class="ap-results">
       <div class="settings-title">Results</div>
-      <div id="bulk-tabs" class="bulk-tabs" style="display:none"></div>
-      <textarea id="bulk-output" rows="10" readonly style="width:100%;padding:12px;background:var(--bg1);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--t1);font-size:11px;font-family:var(--font-mono);resize:vertical;word-break:break-all" class="code-ltr"></textarea>
+      <div id="bulk-tabs" class="bulk-tabs" hidden></div>
+      <textarea id="bulk-output" class="ap-output code-ltr" rows="10" readonly aria-label="Bulk results"></textarea>
       <div class="bulk-qr-section">
         <div class="settings-title">QR codes (all in this group)</div>
-        <div id="bulk-qr-wrap" class="bulk-qr-wrap" style="display:none"></div>
+        <div id="bulk-qr-wrap" class="bulk-qr-wrap" hidden></div>
       </div>
-      <div style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap">
-        <button class="btn btn-primary btn-sm" onclick="downloadBulkZip()">Download ZIP</button>
-        <button class="btn btn-outline btn-sm" onclick="copyBulkOutput()">Copy</button>
-        <button class="btn btn-outline btn-sm" onclick="downloadBulkCSV()">Download CSV</button>
-        <button class="btn btn-outline btn-sm" onclick="openBulkInNewTab()">Open Tab</button>
+      <div class="ap-btn-row">
+        <button type="button" class="btn btn-primary btn-sm" onclick="downloadBulkZip()">Download ZIP</button>
+        <button type="button" class="btn btn-outline btn-sm" onclick="copyBulkOutput()">Copy</button>
+        <button type="button" class="btn btn-outline btn-sm" onclick="downloadBulkCSV()">Download CSV</button>
+        <button type="button" class="btn btn-outline btn-sm" onclick="openBulkInNewTab()">Open tab</button>
       </div>
     </div>
   </div>
 </div>
 
-<!-- ── Renew Modal ── -->
+<!-- ── Renew ── -->
 <div id="renew-modal" class="modal-overlay" onclick="if(event.target===this)closeModal(this.id)">
   <div class="modal">
-    <h3>Renew: <span id="renew-name" style="color:var(--accent)"></span></h3>
-    <div class="form-group"><label>New Traffic (GB)</label>
-      <input type="number" id="renew-traffic" value="10" min="0.1" step="0.1"></div>
-    <div class="form-group"><label>Duration (days)</label>
-      <input type="number" id="renew-days" value="30" min="1"></div>
-    <div id="renew-quota-hint" style="font-size:12px;color:var(--t2);margin-bottom:10px"></div>
+    <h3>Renew: <span id="renew-name" class="tactical-accent"></span></h3>
+    <div class="form-row-2">
+      <div class="form-group"><label for="renew-traffic">New traffic (GB)</label>
+        <input type="number" id="renew-traffic" value="10" min="0.1" step="0.1"></div>
+      <div class="form-group"><label for="renew-days">Duration (days)</label>
+        <input type="number" id="renew-days" value="30" min="1"></div>
+    </div>
+    <div class="ap-hint" id="renew-quota-hint"></div>
     <div class="modal-actions">
-      <button class="btn btn-primary" onclick="doRenewUser()">Renew</button>
-      <button class="btn btn-outline" onclick="closeModal('renew-modal')">Cancel</button>
+      <button type="button" class="btn btn-primary" onclick="doRenewUser()">Renew</button>
+      <button type="button" class="btn btn-outline" onclick="closeModal('renew-modal')">Cancel</button>
     </div>
   </div>
 </div>
 
-<!-- ── Config Modal ── -->
+<!-- ── Config & QR ── -->
 <div id="config-modal" class="modal-overlay" onclick="if(event.target===this)closeModal(this.id)">
-  <div class="modal modal-lg" style="max-height:calc(100vh - 40px);overflow-y:auto;-webkit-overflow-scrolling:touch">
-    <h3>Config: <span id="config-name" style="color:var(--accent)"></span></h3>
-    <div class="config-tabs" id="config-tabs" style="flex-wrap:wrap;gap:4px">
-      <button class="config-tab tab-vmess active" onclick="switchConfigTab('vmess')">VMess</button>
-      <button class="config-tab tab-vless" onclick="switchConfigTab('vless')" id="ct-vless" style="display:none">VLESS</button>
-      <button class="config-tab tab-cdn" onclick="switchConfigTab('cdn')" id="ct-cdn" style="display:none">CDN</button>
-      <button class="config-tab tab-trojan" onclick="switchConfigTab('trojan')" id="ct-trojan" style="display:none">Trojan</button>
-      <button class="config-tab tab-grpc" onclick="switchConfigTab('grpc')" id="ct-grpc" style="display:none">gRPC</button>
-      <button class="config-tab tab-httpupgrade" onclick="switchConfigTab('httpupgrade')" id="ct-httpupgrade" style="display:none">HU</button>
-      <button class="config-tab tab-ss2022" onclick="switchConfigTab('ss2022')" id="ct-ss2022" style="display:none">SS2022</button>
-      <button class="config-tab tab-vless_ws" onclick="switchConfigTab('vless_ws')" id="ct-vless_ws" style="display:none">VLESS-WS</button>
+  <div class="modal modal-lg ap-scroll">
+    <h3>Config: <span id="config-name" class="tactical-accent"></span></h3>
+    <div class="config-tabs" id="config-tabs">
+      <button type="button" class="config-tab tab-vmess active" onclick="switchConfigTab('vmess')">VMess</button>
+      <button type="button" class="config-tab tab-vless" onclick="switchConfigTab('vless')" id="ct-vless">VLESS</button>
+      <button type="button" class="config-tab tab-cdn" onclick="switchConfigTab('cdn')" id="ct-cdn">CDN</button>
+      <button type="button" class="config-tab tab-trojan" onclick="switchConfigTab('trojan')" id="ct-trojan">Trojan</button>
+      <button type="button" class="config-tab tab-grpc" onclick="switchConfigTab('grpc')" id="ct-grpc">gRPC</button>
+      <button type="button" class="config-tab tab-httpupgrade" onclick="switchConfigTab('httpupgrade')" id="ct-httpupgrade">HU</button>
+      <button type="button" class="config-tab tab-ss2022" onclick="switchConfigTab('ss2022')" id="ct-ss2022">SS2022</button>
+      <button type="button" class="config-tab tab-vless_ws" onclick="switchConfigTab('vless_ws')" id="ct-vless_ws">VLESS-WS</button>
     </div>
-    <div class="config-center">
-      <div class="qr-box" id="config-qr"></div>
-    </div>
+    <div class="config-center"><div class="qr-box" id="config-qr"></div></div>
     <div class="vmess-box">
-      <label style="font-size:12px;color:var(--t3)" id="config-link-label">VMess Link</label>
-      <textarea id="config-vmess" rows="3" readonly style="word-break:break-all;overflow-wrap:break-word"></textarea>
-      <button class="btn btn-primary btn-sm" onclick="copyConfigLink()" style="width:100%;margin-top:8px">Copy Link</button>
+      <label for="config-vmess" id="config-link-label">VMess link</label>
+      <textarea id="config-vmess" rows="3" readonly></textarea>
+      <button type="button" class="btn btn-primary btn-sm" onclick="copyConfigLink()"><span class="material-symbols-outlined">content_copy</span>Copy link</button>
     </div>
     <div class="config-grid" id="config-info"></div>
-    <div style="margin-top:14px;padding:12px;background:var(--bg3);border-radius:var(--radius-sm);display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-      <span style="font-size:12px;color:var(--t3);flex-shrink:0">📄 Sub Page:</span>
-      <input type="text" id="config-sub-url" readonly style="flex:1;min-width:120px;padding:8px 10px;background:var(--bg1);border:1px solid var(--border);border-radius:8px;color:var(--green);font-size:11px;font-family:var(--font-mono)">
-      <button class="btn btn-primary btn-sm" onclick="copySubUrl()" style="flex-shrink:0">Copy</button>
-      <a id="config-sub-open" href="#" target="_blank" class="btn btn-outline btn-sm" style="flex-shrink:0;text-decoration:none">Open</a>
+    <div class="ap-sub-row">
+      <span>Subscription page</span>
+      <input type="text" id="config-sub-url" readonly aria-label="Subscription page link">
+      <button type="button" class="btn btn-primary btn-sm" onclick="copySubUrl()">Copy</button>
+      <a id="config-sub-open" href="#" target="_blank" rel="noopener" class="btn btn-outline btn-sm">Open</a>
     </div>
-    <!-- Dedicated App Download — Android -->
-    <a href="/download/app" style="display:flex;align-items:center;gap:14px;margin-top:14px;padding:14px 16px;background:linear-gradient(135deg,rgba(88,166,255,.08),rgba(188,140,255,.08));border:1px solid var(--accent);border-radius:var(--radius-sm);text-decoration:none;color:var(--t1);transition:all .2s" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 20px rgba(0,0,0,.3)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
-      <span style="font-size:30px">🚀</span>
-      <div style="flex:1">
-        <div style="font-size:14px;font-weight:700;color:var(--t0);display:flex;align-items:center;gap:8px">
-          اپلیکیشن اختصاصی
-          <span style="padding:2px 8px;border-radius:10px;font-size:9px;font-weight:700;background:var(--green-bg);color:var(--green)">پیشنهادی</span>
-        </div>
-        <div style="font-size:11px;color:var(--t2);margin-top:3px" lang="fa">سرعت بالاتر • کیفیت بهتر • اتصال پایدار</div>
-        <div style="margin-top:5px;display:flex;gap:6px;flex-wrap:wrap">
-          <span style="padding:2px 8px;border-radius:8px;font-size:9px;font-weight:600;background:rgba(88,166,255,.12);color:var(--accent)">Android</span>
-          <span style="padding:2px 8px;border-radius:8px;font-size:9px;font-weight:600;background:rgba(63,185,80,.12);color:var(--green)">Fragment + MUX</span>
-        </div>
+    <a href="/download/app" class="ap-app-card">
+      <span class="material-symbols-outlined">android</span>
+      <div class="ui-minw0" lang="fa" dir="rtl">
+        <div class="ap-app-title">اپلیکیشن اختصاصی <span class="status-pill online">پیشنهادی</span></div>
+        <div class="ap-app-sub">سرعت بالاتر • کیفیت بهتر • اتصال پایدار</div>
+        <div class="ap-app-tags"><span class="ui-tag accent">Android</span><span class="ui-tag">Fragment + MUX</span></div>
       </div>
-      <span style="color:var(--accent);font-size:20px;flex-shrink:0">⬇</span>
+      <span class="material-symbols-outlined">download</span>
     </a>
-    <!-- Dedicated App Download — Windows -->
-    <a href="/download/app-windows" style="display:flex;align-items:center;gap:14px;margin-top:8px;padding:14px 16px;background:linear-gradient(135deg,rgba(188,140,255,.08),rgba(88,166,255,.08));border:1px solid var(--purple);border-radius:var(--radius-sm);text-decoration:none;color:var(--t1);transition:all .2s" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 4px 20px rgba(0,0,0,.3)'" onmouseout="this.style.transform='';this.style.boxShadow=''">
-      <span style="font-size:30px">💻</span>
-      <div style="flex:1">
-        <div style="font-size:14px;font-weight:700;color:var(--t0);display:flex;align-items:center;gap:8px">
-          نسخه ویندوز
-          <span style="padding:2px 8px;border-radius:10px;font-size:9px;font-weight:700;background:rgba(188,140,255,.12);color:var(--purple)">جدید</span>
-        </div>
-        <div style="font-size:11px;color:var(--t2);margin-top:3px" lang="fa">سرعت بالاتر • MUX • پروکسی سیستم خودکار</div>
-        <div style="margin-top:5px;display:flex;gap:6px;flex-wrap:wrap">
-          <span style="padding:2px 8px;border-radius:8px;font-size:9px;font-weight:600;background:rgba(188,140,255,.12);color:var(--purple)">Windows</span>
-          <span style="padding:2px 8px;border-radius:8px;font-size:9px;font-weight:600;background:rgba(63,185,80,.12);color:var(--green)">Fragment + MUX</span>
-        </div>
+    <a href="/download/app-windows" class="ap-app-card">
+      <span class="material-symbols-outlined">desktop_windows</span>
+      <div class="ui-minw0" lang="fa" dir="rtl">
+        <div class="ap-app-title">نسخهٔ ویندوز <span class="status-pill info">جدید</span></div>
+        <div class="ap-app-sub">سرعت بالاتر • MUX • پروکسی سیستم خودکار</div>
+        <div class="ap-app-tags"><span class="ui-tag accent">Windows</span><span class="ui-tag">Fragment + MUX</span></div>
       </div>
-      <span style="color:var(--purple);font-size:20px;flex-shrink:0">⬇</span>
+      <span class="material-symbols-outlined">download</span>
     </a>
-    <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
-      <button class="btn btn-outline" onclick="closeModal('config-modal')" style="width:100%;justify-content:center;padding:12px">Close</button>
-    </div>
+    <button type="button" class="btn btn-outline ap-modal-close" onclick="closeModal('config-modal')">Close</button>
   </div>
 </div>
 
 <!-- ── Toast ── -->
-<div id="toast" class="toast"></div>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-<!-- ── Brand Edit Modal ── -->
+<!-- ── Brand name ── -->
 <div id="brand-modal" class="modal-overlay" onclick="if(event.target===this)closeModal(this.id)">
-  <div class="modal" style="text-align:center">
-    <h3>Customize Brand Name</h3>
-    <p style="font-size:13px;color:var(--t2);margin-bottom:20px">This name appears on your panel header and login page.</p>
+  <div class="modal ap-center">
+    <h3>Customize brand name</h3>
+    <p class="ap-lead">This name appears in your panel and on its sign-in page.</p>
     <div class="brand-preview" id="brand-preview">VPN</div>
     <div class="form-group">
-      <input type="text" id="brand-input" class="brand-edit-input" placeholder="Your brand name" maxlength="40"
-             oninput="document.getElementById('brand-preview').textContent=this.value||'VPN'">
+      <input type="text" id="brand-input" class="brand-edit-input" placeholder="Your brand name" maxlength="40" aria-label="Brand name">
     </div>
-    <p style="font-size:11px;color:var(--t3);margin-bottom:16px">Leave empty to use default (VPN). Max 40 characters.</p>
+    <p class="ap-hint">Leave empty to use the default (VPN). Up to 40 characters.</p>
     <div class="modal-actions">
-      <button class="btn btn-primary" onclick="saveBrand()">Save</button>
-      <button class="btn btn-outline" onclick="closeModal('brand-modal')">Cancel</button>
+      <button type="button" class="btn btn-primary" onclick="saveBrand()">Save</button>
+      <button type="button" class="btn btn-outline" onclick="closeModal('brand-modal')">Cancel</button>
     </div>
   </div>
 </div>
 
+<!-- ── Mobile app login ── -->
 <div id="app-modal" class="modal-overlay" onclick="if(event.target===this)closeModal(this.id)">
-  <div class="modal" style="text-align:center">
-    <h3>📱 Mobile App Login</h3>
-    <p style="font-size:13px;color:var(--t2);margin-bottom:16px">
-      Scan with the Spiritus app (or open the link on your phone) — the panel
-      address and your agent account are filled in automatically.
-    </p>
-    <div id="app-modal-qr" style="background:#fff;border-radius:12px;padding:12px;display:inline-block;margin-bottom:12px;min-width:120px;min-height:120px"></div>
-    <div id="app-modal-uri" style="font-size:11px;color:var(--t3);word-break:break-all;margin-bottom:16px"></div>
+  <div class="modal ap-center">
+    <h3>Mobile app login</h3>
+    <p class="ap-lead">Scan with the Spiritus app (or open the link on your phone): the panel address and your agent account are filled in automatically.</p>
+    <div id="app-modal-qr" class="ap-app-qr"></div>
+    <div id="app-modal-uri" class="ap-app-uri"></div>
     <div class="modal-actions">
-      <button class="btn btn-primary" onclick="copyAppProfile()">Copy link</button>
-      <button class="btn btn-outline" onclick="closeModal('app-modal')">Close</button>
+      <button type="button" class="btn btn-primary" onclick="copyAppProfile()">Copy link</button>
+      <button type="button" class="btn btn-outline" onclick="closeModal('app-modal')">Close</button>
     </div>
   </div>
 </div>
@@ -689,7 +572,7 @@ async function fetchMe() {
     const r = await fetch(API+'/me', {credentials: 'same-origin'});
     if (r.status === 401) { location.reload(); return; }
     agentInfo = await r.json();
-    document.getElementById('agent-name-top').textContent = agentInfo.name || '';
+    setAgentName(agentInfo.name);
     applyBrand(agentInfo.brand_name || '');
     updateQuotaBar();
   } catch(e) {}
@@ -754,20 +637,25 @@ function copyAppProfile() {
 }
 
 function updateQuotaBar() {
+  // The quota counts traffic sold to users (their package sizes), not
+  // what they have used so far.
   const sold = Number(agentInfo.traffic_allocated_gb ?? agentInfo.traffic_used_gb) || 0;
   const total = Number(agentInfo.traffic_quota_gb) || 0;
   const remaining = Number(agentInfo.traffic_remaining_gb) || 0;
   const pct = total > 0 ? Math.min(Math.round(sold / total * 100), 100) : 0;
-  const color = pct < 60 ? 'var(--green)' : pct < 85 ? 'var(--yellow)' : 'var(--red)';
-  document.getElementById('quota-fill').style.width = pct + '%';
-  document.getElementById('quota-fill').style.background = color;
-  document.getElementById('quota-text').textContent = sold.toFixed(1) + ' / ' + total.toFixed(1) + ' GB sold  (' + remaining.toFixed(1) + ' GB remaining)';
-
-  // Update hints
-  const addHint = document.getElementById('add-quota-hint');
-  if (addHint) addHint.textContent = 'Remaining quota: ' + (agentInfo.traffic_remaining_gb||0).toFixed(1) + ' GB';
-  const bulkHint = document.getElementById('bulk-quota-hint');
-  if (bulkHint) bulkHint.textContent = 'Remaining quota: ' + (agentInfo.traffic_remaining_gb||0).toFixed(1) + ' GB';
+  const bar = document.getElementById('quota-fill');
+  if (bar) {
+    bar.value = pct;
+    bar.className = 'ops-progress ops-progress-' + quotaClass(pct) + ' ui-quota-progress';
+  }
+  setText('quota-text', sold.toFixed(1) + ' / ' + total.toFixed(1) + ' GB sold (' + pct + '%)');
+  setText('tm-used', sold.toFixed(1) + ' GB');
+  setText('tm-remaining', remaining.toFixed(1) + ' GB');
+  setText('kpi-quota-remaining', remaining.toFixed(1) + ' GB');
+  setText('kpi-quota-foot', 'of ' + total.toFixed(1) + ' GB · ' + pct + '% sold');
+  const hint = 'Remaining quota: ' + remaining.toFixed(1) + ' GB';
+  setText('add-quota-hint', hint);
+  setText('bulk-quota-hint', hint);
 }
 
 async function fetchUsers() {
@@ -840,35 +728,38 @@ function startPolling() {
 }
 
 function switchMainView(view) {
-  mainView = view;
-  const ug = document.getElementById('users-grid');
-  const gg = document.getElementById('groups-grid');
-  const btnG = document.getElementById('btn-groups');
-  const btnU = document.getElementById('btn-users');
-  if (view === 'groups') {
-    ug.style.display = 'none'; gg.style.display = '';
-    btnG.style.display = 'none'; btnU.style.display = '';
-    document.querySelector('.filter-bar').style.display = 'none';
-    renderGroups(); fetchGroups();
-  } else {
-    ug.style.display = ''; gg.style.display = 'none';
-    btnG.style.display = ''; btnU.style.display = 'none';
-    document.querySelector('.filter-bar').style.display = '';
-    renderUsers();
-  }
+  mainView = view === 'groups' ? 'groups' : 'users';
+  const groupsOn = mainView === 'groups';
+  document.querySelectorAll('.ui-nav-item[data-view]').forEach(b => {
+    b.classList.toggle('active', b.getAttribute('data-view') === mainView);
+  });
+  document.getElementById('users-grid').hidden = groupsOn;
+  document.getElementById('users-toolbar').hidden = groupsOn;
+  document.getElementById('groups-grid').hidden = !groupsOn;
+  setText('view-title', groupsOn ? 'Groups' : 'Users & Subscriptions');
+  setText('view-subtitle', groupsOn
+    ? 'Users you created together, grouped by name prefix. Export or open a whole group at once.'
+    : 'Every account you sell: quota, expiry, live speed and its config.');
+  closeDrawer();
+  if (groupsOn) { renderGroups(); fetchGroups(); } else { renderUsers(); }
 }
 
+// [server-info flag, label, port key]
+const PROTO_BADGES = [
+  ['vless', 'VLESS/Reality', 'vless_port'], ['vless_xhttp', 'XHTTP', 'vless_xhttp_port'],
+  ['vless_vision', 'Vision', 'vless_vision_port'], ['trojan', 'Trojan', 'trojan_port'],
+  ['grpc', 'gRPC', 'grpc_port'], ['httpupgrade', 'HU', 'httpupgrade_port'],
+  ['ss2022', 'SS2022', 'ss2022_port'], ['vless_ws', 'VLESS-WS', 'vless_ws_port'],
+  ['hysteria2', 'Hy2', 'hysteria2_port'], ['tuic', 'TUIC', 'tuic_port']
+];
 function updateProtoBar() {
-  const vl = document.getElementById('pb-vless');
-  const cd = document.getElementById('pb-cdn');
-  if (serverInfo.vless) {
-    vl.style.display = '';
-    vl.textContent = 'VLESS/Reality:' + (serverInfo.vless_port || 2053);
-  } else { vl.style.display = 'none'; }
-  if (serverInfo.cdn) {
-    cd.style.display = '';
-    cd.textContent = 'CDN:' + (serverInfo.cdn_domain || '');
-  } else { cd.style.display = 'none'; }
+  const badges = ['<span class="proto-badge">VMess:' + esc(String(serverInfo.vmess_port || 443)) + '</span>'];
+  PROTO_BADGES.forEach(([flag, label, portKey]) => {
+    if (serverInfo[flag]) badges.push('<span class="proto-badge">' + esc(label) + ':' + esc(String(serverInfo[portKey] || '')) + '</span>');
+  });
+  if (serverInfo.cdn) badges.push('<span class="proto-badge proto-opt">CDN:' + esc(serverInfo.cdn_domain || '') + '</span>');
+  document.getElementById('proto-bar').innerHTML = badges.join('');
+  setText('proto-count', badges.length + ' protocols');
 }
 
 /* ── Filtering ── */
@@ -927,79 +818,91 @@ document.addEventListener('click', e => {
 });
 
 /* ── Rendering ── */
+
+// active / disabled / expired / limited (quota used): only "active" is served.
+const STATUS_PILL = {
+  active: ['online', 'Active'], disabled: ['muted', 'Disabled'],
+  expired: ['warning', 'Expired'], limited: ['danger', 'Quota used'],
+};
+function statusPill(u) {
+  const [cls, text] = STATUS_PILL[u.status] || (u.active ? STATUS_PILL.active : STATUS_PILL.disabled);
+  return `<span class="status-pill ${cls}">${text}</span>`;
+}
+
 function renderUsers() {
   const grid = document.getElementById('users-grid');
   const filtered = getFilteredUsers();
   updateFilterCounts();
   if (!users.length) {
-    grid.innerHTML = '<div class="empty"><div class="empty-icon">📡</div><div class="empty-text">No users created yet</div></div>';
+    grid.innerHTML = '<div class="empty-guide tactical-empty">No users yet. Press <b>Add user</b> or <b>Bulk create</b> to make your first ones.</div>';
     return;
   }
   if (!filtered.length) {
-    grid.innerHTML = '<div class="empty"><div class="empty-icon">🔍</div><div class="empty-text">No users match this filter</div></div>';
+    grid.innerHTML = '<div class="empty-guide tactical-empty">No users match this filter.</div>';
     return;
   }
-  grid.innerHTML = filtered.map(u => {
-    const spd = speeds[u.name] || {up:0, down:0};
-    const online = isOnline(u.name);
-    const pct = Math.max(0, Math.min(100, Number(u.traffic_percent) || 0));
-    const barColor = pct < 60 ? 'var(--green)' : pct < 85 ? 'var(--yellow)' : 'var(--red)';
-    const daysClass = u.days_left <= 3 ? 'crit' : u.days_left <= 7 ? 'warn' : 'val';
-    return `
-    <div class="card ${u.active?'':'inactive'}" id="card-${esc(u.name)}">
-      <div class="card-head">
-        <div class="card-name">
-          <span class="online-dot ${online?'on':''}" id="dot-${esc(u.name)}"></span>
-          <span class="user-name">${esc(u.name)}</span>
-        </div>
-        <span class="badge ${u.active?'badge-active':'badge-inactive'}">${u.active?'Active':'Disabled'}</span>
-      </div>
-      <div class="traffic-section">
-        <div class="progress-track"><div class="progress-fill" style="width:${pct}%;background:${barColor}"></div></div>
-        <div class="traffic-text"><span><b>${fmtTraffic(u.traffic_used_bytes)}</b> / ${fmtTraffic(u.traffic_limit_bytes)}</span><span>${pct}%</span></div>
-      </div>
-      <div class="info-row"><span>Expires</span><span class="val">${esc(u.expire_at)}</span></div>
-      <div class="info-row"><span>Remaining</span><span class="${daysClass}">${Number(u.days_left)||0} days</span></div>
-      <div class="speed-row" id="speed-${esc(u.name)}">
-        <div class="speed-item up"><span>Upload</span><span class="speed-val">${fmtSpeed(spd.up)}</span></div>
-        <div class="speed-item down"><span>Download</span><span class="speed-val">${fmtSpeed(spd.down)}</span></div>
-      </div>
-      <div class="card-actions">
-        <button class="btn btn-outline btn-sm" onclick="showConfig('${jsq(u.name)}')">Config</button>
-        <button class="btn ${u.active?'btn-orange':'btn-green'} btn-sm" onclick="toggleUser('${jsq(u.name)}')">${u.active?'Disconnect':'Connect'}</button>
-        <button class="btn btn-outline btn-sm" onclick="showRenew('${jsq(u.name)}')">Renew</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteUser('${jsq(u.name)}')">Delete</button>
-      </div>
-    </div>`;
-  }).join('');
+  grid.innerHTML = '<div class="tactical-table-wrapper"><table class="tactical-table ui-users-table"><thead><tr>' +
+    '<th>User</th><th>Bandwidth quota</th><th>Validity</th><th>Live speed</th><th>Status</th><th class="ui-th-end">Actions</th>' +
+    '</tr></thead><tbody>' + filtered.map(userRow).join('') + '</tbody></table></div>';
+}
+
+function userRow(u) {
+  const spd = speeds[u.name] || {up: 0, down: 0};
+  const online = isOnline(u.name);
+  const n = esc(u.name);
+  const pct = Math.max(0, Math.min(100, Number(u.traffic_percent) || 0));
+  const days = Number(u.days_left);
+  const daysPill = days <= 0 ? ['danger', 'Expired'] : days <= 3 ? ['danger', days + ' days left']
+    : days <= 7 ? ['warning', days + ' days left'] : ['muted', days + ' days left'];
+  const ipCount = u.online_ip_count || 0;
+  const initials = esc(String(u.name).replace(/[^\p{L}\p{N}]/gu, '').slice(0, 2) || '?');
+  return `<tr id="card-${n}" class="${u.active ? '' : 'is-inactive'}">
+    <td><div class="ui-user-cell">
+      <span class="ui-avatar${u.active ? '' : ' is-off'}">${initials}</span>
+      <div><div class="ui-user-name"><span class="online-dot ${online ? 'on' : ''}" id="dot-${n}"></span>${n}</div>
+      <div class="ui-user-sub">${ipCount > 0 ? ipCount + ' IP' + (ipCount > 1 ? 's' : '') + ' connected' : 'Not connected'}</div></div>
+    </div></td>
+    <td><div class="ui-quota">
+      <div class="ui-quota-top"><span>${fmtTraffic(u.traffic_used_bytes)}</span><span>/ ${fmtTraffic(u.traffic_limit_bytes)}</span></div>
+      <progress class="ops-progress ops-progress-${quotaClass(pct)} ui-quota-progress" max="100" value="${pct}"></progress>
+      <div class="ui-quota-foot">${pct}% consumed</div>
+    </div></td>
+    <td><div class="tactical-mono">${esc(u.expire_at || '—')}</div><div class="ui-days"><span class="status-pill ${daysPill[0]}">${daysPill[1]}</span></div></td>
+    <td><div class="ui-speed" id="speed-${n}">${speedCell(spd)}</div></td>
+    <td>${statusPill(u)}</td>
+    <td><div class="ui-row-actions">
+      <button type="button" class="ui-icon-btn" title="Config &amp; QR" aria-label="Config and QR" onclick="showConfig('${jsq(u.name)}')"><span class="material-symbols-outlined">qr_code_2</span></button>
+      <button type="button" class="ui-icon-btn" title="Renew" aria-label="Renew" onclick="showRenew('${jsq(u.name)}')"><span class="material-symbols-outlined">event_repeat</span></button>
+      <button type="button" class="ui-icon-btn${u.active ? '' : ' is-ok'}" title="${u.active ? 'Disconnect' : 'Connect'}" aria-label="${u.active ? 'Disconnect' : 'Connect'}" onclick="toggleUser('${jsq(u.name)}')"><span class="material-symbols-outlined">${u.active ? 'pause_circle' : 'play_circle'}</span></button>
+      <button type="button" class="ui-icon-btn is-danger" title="Delete" aria-label="Delete" onclick="deleteUser('${jsq(u.name)}')"><span class="material-symbols-outlined">delete</span></button>
+    </div></td>
+  </tr>`;
 }
 
 function renderGroups() {
   const grid = document.getElementById('groups-grid');
   if (!groups || !groups.length) {
-    grid.innerHTML = '<div class="empty"><div class="empty-icon">🧩</div><div class="empty-text">No groups yet</div></div>';
+    grid.innerHTML = '<div class="empty-guide tactical-empty">No groups yet. Users made with <b>Bulk create</b> show up here by prefix.</div>';
     return;
   }
   grid.innerHTML = groups.map(g => {
-    const pctActive = g.count ? Math.round((g.active / g.count) * 100) : 0;
-    return `
-    <div class="card">
-      <div class="card-head">
-        <div class="card-name">
-          <span class="online-dot ${g.active>0?'on':''}"></span>
-          <span class="user-name">${esc(g.id)}</span>
-        </div>
-        <span class="badge ${g.active>0?'badge-active':'badge-inactive'}">${g.active>0?'Active':'Disabled'}</span>
+    const pct = g.count ? Math.round((g.active / g.count) * 100) : 0;
+    const gid = esc(g.id);
+    return `<div class="ui-group">
+      <div class="ui-group-head">
+        <span class="ui-group-icon material-symbols-outlined">workspaces</span>
+        <div class="ui-minw0"><div class="ui-group-name">${gid}</div>
+          <div class="ops-cell-sub">${esc(String(g.traffic_gb || 0))} GB each · latest expiry ${esc((g.latest_expire || '').slice(0, 10) || '—')}</div></div>
       </div>
-      <div class="info-row"><span>Total</span><span class="val">${g.count}</span></div>
-      <div class="info-row"><span>Active</span><span class="val">${g.active} (${pctActive}%)</span></div>
-      <div class="info-row"><span>Disabled</span><span class="val">${g.disabled}</span></div>
-      <div class="info-row"><span>Traffic</span><span class="val">${(g.traffic_gb||0)} GB each</span></div>
-      <div class="info-row"><span>Latest expiry</span><span class="val">${(g.latest_expire||'').slice(0,10)}</span></div>
-      <div class="card-actions">
-        <button class="btn btn-outline btn-sm" onclick="openGroupExport('${jsq(g.id)}')">Export</button>
-        <button class="btn btn-outline btn-sm" onclick="openGroupUsers('${jsq(g.id)}')">Open</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteGroup('${jsq(g.id)}')">Delete</button>
+      <div class="ui-group-stats">
+        <div><span>Users</span><strong>${Number(g.count) || 0}</strong></div>
+        <div><span>Active</span><strong>${Number(g.active) || 0} <small class="tactical-muted">(${pct}%)</small></strong></div>
+      </div>
+      <progress class="ops-progress ops-progress-online" max="100" value="${pct}"></progress>
+      <div class="ui-group-actions">
+        <button type="button" class="btn btn-outline btn-sm" onclick="openGroupExport('${jsq(g.id)}')"><span class="material-symbols-outlined">ios_share</span>Export</button>
+        <button type="button" class="btn btn-outline btn-sm" onclick="openGroupUsers('${jsq(g.id)}')"><span class="material-symbols-outlined">open_in_new</span>Open</button>
+        <button type="button" class="btn btn-danger btn-sm" title="Delete group" aria-label="Delete group" onclick="deleteGroup('${jsq(g.id)}')"><span class="material-symbols-outlined">delete</span></button>
       </div>
     </div>`;
   }).join('');
@@ -1035,7 +938,7 @@ function openGroupExport(groupId) {
 }
 
 async function deleteGroup(groupId) {
-  if (!confirm(`Delete group "${groupId}" from database?`)) return;
+  if (!await uiConfirm(`Delete group "${groupId}" from database?`)) return;
   try {
     const r = await fetch(API+'/bulk-delete', {
       method:'POST', headers:{'Content-Type':'application/json'},
@@ -1051,18 +954,37 @@ async function deleteGroup(groupId) {
 function renderSpeeds() {
   let onlineCount = 0;
   for (const u of users) {
-    const spd = speeds[u.name] || {up:0, down:0};
+    const spd = speeds[u.name] || {up: 0, down: 0};
     const online = isOnline(u.name);
     if (online) onlineCount++;
-    const el = document.getElementById('speed-'+u.name);
-    if (el) el.innerHTML = `
-      <div class="speed-item up"><span>Upload</span><span class="speed-val">${fmtSpeed(spd.up)}</span></div>
-      <div class="speed-item down"><span>Download</span><span class="speed-val">${fmtSpeed(spd.down)}</span></div>`;
-    const dot = document.getElementById('dot-'+u.name);
-    if (dot) dot.className = 'online-dot'+(online?' on':'');
+    const el = document.getElementById('speed-' + u.name);
+    if (el) el.innerHTML = speedCell(spd);
+    const dot = document.getElementById('dot-' + u.name);
+    if (dot) dot.className = 'online-dot' + (online ? ' on' : '');
   }
-  document.getElementById('s-online').textContent = onlineCount;
+  setText('s-online', onlineCount);
   updateFilterCounts();
+}
+
+function speedCell(spd) {
+  return '<span class="up">↑ ' + fmtSpeed(spd.up) + '</span><span class="down">↓ ' + fmtSpeed(spd.down) + '</span>';
+}
+function quotaClass(pct) { return pct < 60 ? 'online' : (pct < 85 ? 'warning' : 'danger'); }
+function setText(id, value) { const el = document.getElementById(id); if (el) el.textContent = value; }
+
+function setAgentName(name) {
+  setText('agent-name-top', name || '—');
+  setText('agent-name-meta', name || 'Agent');
+  setText('agent-initial', (String(name || 'A').replace(/[^\p{L}\p{N}]/gu, '').slice(0, 1) || 'A').toUpperCase());
+}
+
+function toggleDrawer() {
+  document.getElementById('nav-drawer').classList.toggle('open');
+  document.getElementById('nav-overlay').classList.toggle('open');
+}
+function closeDrawer() {
+  document.getElementById('nav-drawer').classList.remove('open');
+  document.getElementById('nav-overlay').classList.remove('open');
 }
 
 function updateStats() {
@@ -1080,8 +1002,10 @@ async function doAddUser() {
   const name = document.getElementById('add-name').value.trim();
   const traffic = parseFloat(document.getElementById('add-traffic').value);
   const days = parseInt(document.getElementById('add-days').value);
-  const speed_limit_down = parseInt(document.getElementById('add-speed-down').value) || 200;
-  const speed_limit_up = parseInt(document.getElementById('add-speed-up').value) || 200;
+  // 0 = unlimited; `|| 200` used to turn an entered 0 back into 200.
+  const speedOf = (id) => Math.max(0, parseInt(document.getElementById(id).value) || 0);
+  const speed_limit_down = speedOf('add-speed-down');
+  const speed_limit_up = speedOf('add-speed-up');
   if (!name) {toast('Please enter a username','error'); return;}
   if (traffic > (agentInfo.traffic_remaining_gb || 0)) {
     toast('Exceeds remaining quota (' + (agentInfo.traffic_remaining_gb||0).toFixed(1) + ' GB)','error'); return;
@@ -1117,7 +1041,7 @@ async function doBulkCreate() {
     toast('Exceeds remaining quota: need ' + totalNeeded.toFixed(1) + ' GB, have ' + (agentInfo.traffic_remaining_gb||0).toFixed(1) + ' GB','error');
     return;
   }
-  if (apply && !confirm('Apply to server now? This may reload config.')) return;
+  if (apply && !await uiConfirm('Apply to server now? This may reload config.')) return;
 
   const outEl = document.getElementById('bulk-output');
   outEl.value = 'Creating...';
@@ -1175,8 +1099,8 @@ function formatBulkText({prefix, created, traffic, days, numbered, start, pad, n
 
 function renderBulkTabs() {
   const tabsEl = document.getElementById('bulk-tabs');
-  if (!_bulkRuns.length) { tabsEl.style.display='none'; tabsEl.innerHTML=''; return; }
-  tabsEl.style.display = '';
+  if (!_bulkRuns.length) { tabsEl.hidden = true; tabsEl.innerHTML = ''; return; }
+  tabsEl.hidden = false;
   tabsEl.innerHTML = _bulkRuns.slice(0, 12).map(r => {
     const active = r.id === _bulkActiveRunId;
     return `<button class="bulk-tab ${active?'active':''}" onclick="selectBulkRun('${jsq(r.id)}')">${esc(r.label||'group')}</button>`;
@@ -1204,12 +1128,12 @@ function setBulkOutputForActive() {
 function renderBulkQrGrid(users) {
   const wrap = document.getElementById('bulk-qr-wrap');
   if (!wrap) return;
-  if (!users || !users.length) { wrap.innerHTML = ''; wrap.style.display = 'none'; return; }
+  if (!users || !users.length) { wrap.innerHTML = ''; wrap.hidden = true; return; }
   if (typeof qrcode !== 'function') {
-    wrap.innerHTML = '<div style="color:var(--t3);font-size:12px">QR library not loaded.</div>';
-    wrap.style.display = 'block'; return;
+    wrap.innerHTML = '<div class="ap-hint">QR library not loaded.</div>';
+    wrap.hidden = false; return;
   }
-  wrap.style.display = 'grid';
+  wrap.hidden = false;
   wrap.innerHTML = users.map((u, i) => {
     const addQr = (label, link) => {
       if (!link) return '';
@@ -1364,7 +1288,7 @@ async function deleteBulkGroup() {
   if (!run || !run.users || !run.users.length) return toast('No group selected','error');
   const applyNow = document.getElementById('bulk-apply').checked;
   const prefix = run.meta?.prefix || 'group';
-  if (!confirm(`Delete this group? (${run.users.length} users)`)) return;
+  if (!await uiConfirm(`Delete this group? (${run.users.length} users)`)) return;
   try {
     const r = await fetch(API+'/bulk-delete', {
       method:'POST', headers:{'Content-Type':'application/json'},
@@ -1383,7 +1307,7 @@ async function deleteBulkGroup() {
 async function toggleUser(name) {
   const u = users.find(x=>x.name===name);
   const action = u && u.active ? 'disconnect' : 'reconnect';
-  if (!confirm(`${action === 'disconnect' ? 'Disconnect' : 'Reconnect'} "${name}"?`)) return;
+  if (!await uiConfirm(`${action === 'disconnect' ? 'Disconnect' : 'Reconnect'} "${name}"?`)) return;
   const r = await fetch(API+'/users/'+encodeURIComponent(name)+'/toggle', {method:'POST'});
   const d = await r.json();
   if (d.ok) { toast(d.message); fetchUsers(); }
@@ -1391,7 +1315,7 @@ async function toggleUser(name) {
 }
 
 async function deleteUser(name) {
-  if (!confirm('Are you sure you want to delete "'+name+'"?')) return;
+  if (!await uiConfirm('Are you sure you want to delete "'+name+'"?')) return;
   const r = await fetch(API+'/users/'+encodeURIComponent(name), {method:'DELETE'});
   const d = await r.json();
   if (d.ok) { toast(name+' deleted'); fetchUsers(); fetchMe(); }
@@ -1656,15 +1580,39 @@ function toast(msg, type) {
       document.getElementById('login-screen').style.display='none';
       document.getElementById('panel').style.display='block';
       agentInfo = await r.json();
-      document.getElementById('agent-name-top').textContent = agentInfo.name || '';
+      setAgentName(agentInfo.name);
       applyBrand(agentInfo.brand_name || '');
       updateQuotaBar();
       startPolling();
     }
   } catch(e){}
+  document.getElementById('brand-input').addEventListener('input', function () {
+    document.getElementById('brand-preview').textContent = this.value || 'VPN';
+  });
   document.getElementById('login-user').focus();
 })();
+
+const THEME_NAMES = { obsidian: 'Obsidian', cyberops: 'CyberOps', midnight: 'Midnight' };
+function switchTheme(theme) {
+  if (!THEME_NAMES[theme]) theme = 'obsidian';
+  document.documentElement.setAttribute('data-theme', theme);
+  try { localStorage.setItem('spiritus_theme', theme); } catch (e) {}
+  document.querySelectorAll('#theme-label, [data-theme-label]').forEach(el => { el.textContent = THEME_NAMES[theme]; });
+}
+
+function cycleTheme() {
+  const current = document.documentElement.getAttribute('data-theme') || 'obsidian';
+  const next = current === 'obsidian' ? 'cyberops' : (current === 'cyberops' ? 'midnight' : 'obsidian');
+  switchTheme(next);
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+  let saved = 'obsidian';
+  try { saved = localStorage.getItem('spiritus_theme') || 'obsidian'; } catch (e) {}
+  switchTheme(saved);
+});
 </script>
+<script src="{{ url_for('static', filename='js/ui-sheets.js') }}?v={{ asset_v }}"></script>
 <script src="{{ url_for('static', filename='js/csp-events.js') }}"></script>
 </body>
 </html>

@@ -7,6 +7,7 @@ Background tasks:
 - Auto-backup
 - Xray config reload
 - Anomaly detection
+- Ops automation (alerts, edge-node checks, automatic Emergency Cloak)
 """
 
 import logging
@@ -69,50 +70,27 @@ celery_app.conf.update(
             "task": "app.celery_tasks.dpi_reality_key_rotation_check",
             "schedule": 86400.0,  # Every 24 hours
         },
+        "ops-monitor": {
+            "task": "app.celery_tasks.ops_monitor",
+            "schedule": 60.0,  # Every minute
+            "options": {"expires": 55},  # drop a run that waited past the next one
+        },
     },
 )
 
 @celery_app.task(name="app.celery_tasks.monitor_traffic")
 def monitor_traffic():
-    """Monitor user traffic from Xray API and update DB.
+    """Count per-user traffic from the local Xray and apply quota / expiry.
 
-    Queries the Xray gRPC API for per-user traffic stats and
-    persists them to the vpn_users table.
+    Same cycle the panel runs in-process (app/user_runtime.py). Stats are
+    read with reset, so the two runners split the bytes, never double them.
     """
     import asyncio
 
-    async def _sync():
-        from sqlalchemy import select
-
-        from .database import AsyncSessionLocal
-        from .models import Agent, AgentStatus, VpnUser
-        from .orchestrator import orchestrator
-
-        async with AsyncSessionLocal() as db:
-            agents = (await db.execute(
-                select(Agent).where(Agent.status == AgentStatus.online)
-            )).scalars().all()
-            users = (await db.execute(
-                select(VpnUser).where(VpnUser.active == 1)
-            )).scalars().all()
-            updated = 0
-            for user in users:
-                for agent in agents:
-                    try:
-                        traffic = await orchestrator.get_user_traffic(user, agent)
-                    except Exception:
-                        continue
-                    if traffic and (traffic.get("upload") or traffic.get("download")):
-                        user.traffic_upload = (user.traffic_upload or 0) + traffic["upload"]
-                        user.traffic_download = (user.traffic_download or 0) + traffic["download"]
-                        user.traffic_used = user.traffic_upload + user.traffic_download
-                        updated += 1
-                        break
-            await db.commit()
-            return {"updated": updated, "total_users": len(users)}
+    from .user_runtime import run_cycle
 
     try:
-        result = asyncio.run(_sync())
+        result = asyncio.run(run_cycle())
         logger.info(f"Traffic sync complete: {result}")
         return {"status": "ok", **result}
     except Exception as e:
@@ -121,52 +99,16 @@ def monitor_traffic():
 
 @celery_app.task(name="app.celery_tasks.check_expirations")
 def check_expirations():
-    """Check for expired users and deactivate them.
-
-    Queries the DB for users whose expire_at < now() and sets
-    their active status to -1 (expired). Also removes them
-    from Xray backend.
-    """
+    """Expire users past their date and stop serving them (see monitor_traffic)."""
     import asyncio
 
-    async def _expire():
-        from sqlalchemy import and_, select
-
-        from .database import AsyncSessionLocal
-        from .models import Agent, VpnUser
-        from .orchestrator import orchestrator
-        from .timeutil import utcnow as _utcnow
-
-        async with AsyncSessionLocal() as db:
-            agents = (await db.execute(select(Agent))).scalars().all()
-            expired_users = (await db.execute(
-                select(VpnUser).where(
-                    and_(
-                        VpnUser.active == 1,
-                        VpnUser.expire_at.is_not(None),
-                        VpnUser.expire_at < _utcnow(),
-                    )
-                )
-            )).scalars().all()
-            count = 0
-            for user in expired_users:
-                user.active = -1  # Mark as expired
-                for agent in agents:
-                    try:
-                        await orchestrator.remove_user_from_agent(user, agent)
-                    except Exception as e:
-                        logger.warning(
-                            f"Failed to remove expired user {user.name} from agent {agent.name}: {e}"
-                        )
-                count += 1
-            await db.commit()
-            return {"expired_count": count}
+    from .user_runtime import run_cycle
 
     try:
-        result = asyncio.run(_expire())
-        if result["expired_count"] > 0:
-            logger.info(f"Expired {result['expired_count']} users")
-        return {"status": "ok", **result}
+        result = asyncio.run(run_cycle())
+        if result["status_changes"]:
+            logger.info(f"User status changes: {result['status_changes']}")
+        return {"status": "ok", "expired_count": result["status_changes"], **result}
     except Exception as e:
         logger.error(f"Expiration check failed: {e}")
         return {"status": "error", "message": str(e)}
@@ -382,3 +324,37 @@ def dpi_reality_key_rotation_check():
         "expiring_soon": len(expiring),
         "expiring_keys": expiring,
     }
+
+
+@celery_app.task(name="app.celery_tasks.ops_monitor")
+def ops_monitor():
+    """Ops automation tick: edge-node checks, Telegram alerts, auto Emergency Cloak.
+
+    See app/ops_automation.py. Uses its own NullPool engine: each task runs
+    in a fresh event loop (asyncio.run), and pooled asyncpg connections
+    cannot be reused across loops.
+    """
+    import asyncio
+
+    async def _run():
+        from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+        from sqlalchemy.pool import NullPool
+
+        from .database import async_engine
+        from .ops_automation import run_monitor
+
+        engine = create_async_engine(async_engine.url, poolclass=NullPool)
+        try:
+            async with async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)() as db:
+                return await run_monitor(db)
+        finally:
+            await engine.dispose()
+
+    try:
+        result = asyncio.run(_run())
+        if result.get("events"):
+            logger.info("Ops monitor: %s", result)
+        return {"status": "ok", **result}
+    except Exception as e:
+        logger.error(f"Ops monitor failed: {e}")
+        return {"status": "error", "message": str(e)}

@@ -3,214 +3,689 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>V7LTHRONYX | VPN Panel</title>
+<link rel="icon" type="image/png" href="{{ url_for('static', filename='img/logo-96.png') }}">
+<title>SPIRITUS | Censor-Hardened Tactical Core</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Azeret+Mono:wght@400;500;600;700&family=Fira+Sans:wght@300;400;500;600;700;800&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/panel.css') }}">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/panel.css') }}?v={{ asset_v }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/ui.css') }}?v={{ asset_v }}">
 </head>
 <body>
 
-<!-- ── Login ── -->
 <div id="login-screen">
   <div class="login-card">
-    <div class="login-logo">SPIRITUS</div>
-    <div class="login-sub">Digital Bastion</div>
-    <input type="password" id="login-pass" class="login-input" placeholder="Access Key"
-           onkeydown="if(event.key==='Enter')doLogin()">
-    <input type="text" id="login-totp" class="login-input" placeholder="2FA code" inputmode="numeric"
-           autocomplete="one-time-code" maxlength="8" style="display:none"
-           onkeydown="if(event.key==='Enter')doLogin()">
-    <button type="button" class="login-btn" id="login-submit" onclick="doLogin()">Authenticate</button>
-    <div class="login-error" id="login-error"></div>
-    <a href="/agent" style="display:inline-block;margin-top:18px;color:var(--t3);font-size:13px;text-decoration:none;transition:color .2s" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--t3)'">Agent Panel →</a>
+    <aside class="login-rail">
+      <div class="login-brand">
+        <div class="login-mark">S</div>
+        <div>
+          <div class="login-logo">SPIRITUS // OPS</div>
+          <div class="login-sub">Censor-Hardened Core</div>
+        </div>
+      </div>
+      <div class="login-rail-label">Control Plane</div>
+      <ul class="login-scope">
+        <li><span class="material-symbols-outlined">group</span>Users &amp; subscriptions</li>
+        <li><span class="material-symbols-outlined">alt_route</span>Protocols &amp; DPI evasion</li>
+        <li><span class="material-symbols-outlined">manage_accounts</span>Agents &amp; resellers</li>
+        <li><span class="material-symbols-outlined">monitoring</span>Server monitoring</li>
+      </ul>
+      <div class="login-rail-foot">
+        <div class="login-rail-row">
+          <span>SESSION</span>
+          <span class="status-pill online" id="login-transport">HTTPS</span>
+        </div>
+        <div class="login-rail-meta">HttpOnly · SameSite=Strict · TOTP 2FA</div>
+      </div>
+    </aside>
+
+    <section class="login-pane">
+      <div class="login-topbar">
+        <span class="login-crumb"><span class="login-dot"></span>AUTH / OPERATOR-LOGIN</span>
+        <button type="button" class="btn btn-sm btn-outline" onclick="cycleTheme()" title="Switch Theme (Obsidian / CyberOps / Midnight)">
+          <span class="material-symbols-outlined">palette</span><span data-theme-label>Theme</span>
+        </button>
+      </div>
+
+      <div class="login-form">
+        <h1 class="login-title">Operator sign-in</h1>
+        <p class="login-lead">ورود به پنل مدیریت</p>
+
+        <div class="login-field">
+          <label class="login-label" for="login-user">Username</label>
+          <div class="login-input-wrap">
+            <span class="material-symbols-outlined">person</span>
+            <input type="text" id="login-user" class="login-input" value="admin"
+                   autocomplete="username" autocapitalize="off" spellcheck="false">
+          </div>
+        </div>
+        <div class="login-field">
+          <label class="login-label" for="login-pass">Password / Access Key</label>
+          <div class="login-input-wrap">
+            <span class="material-symbols-outlined">key</span>
+            <input type="password" id="login-pass" class="login-input" placeholder="••••••••••••"
+                   autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
+          </div>
+        </div>
+        <div class="login-field" id="login-totp-field" hidden>
+          <label class="login-label" for="login-totp">2FA code</label>
+          <div class="login-input-wrap">
+            <span class="material-symbols-outlined">pin</span>
+            <input type="text" id="login-totp" class="login-input login-input-code" placeholder="123456"
+                   inputmode="numeric" autocomplete="one-time-code" maxlength="8"
+                   onkeydown="if(event.key==='Enter')doLogin()">
+          </div>
+        </div>
+
+        <button type="button" class="login-btn" id="login-submit" onclick="doLogin()">Authenticate</button>
+        <div class="login-error" id="login-error" role="alert" aria-live="polite"></div>
+      </div>
+
+      <div class="login-links">
+        <a href="/landing" class="login-link"><span class="material-symbols-outlined">public</span>Website / وبسایت معرفی</a>
+        <a href="/agent" class="login-link"><span class="material-symbols-outlined">support_agent</span>Agent Panel</a>
+      </div>
+    </section>
   </div>
 </div>
 
-<!-- ── Panel ── -->
-<div id="panel">
-  <header class="top-bar">
-    <div class="brand">
-      <span class="brand-logo">SPIRITUS</span>
-      <span class="brand-text">Digital Bastion</span>
-    </div>
-    <button class="nav-toggle" id="nav-toggle" onclick="toggleDrawer()" aria-label="Open navigation">
-      <span class="nav-toggle-line"></span>
-      <span class="nav-toggle-line"></span>
-      <span class="nav-toggle-line"></span>
-    </button>
-  </header>
+<div id="nav-overlay" onclick="closeDrawer()"></div>
 
-  <!-- ── Nav Overlay ── -->
-  <div id="nav-overlay" class="nav-overlay" onclick="closeDrawer()"></div>
-
-  <!-- ── Nav Drawer ── -->
-  <nav id="nav-drawer" class="nav-drawer" aria-label="Navigation">
-    <div class="nav-drawer-head">
-      <span class="nav-drawer-title">Navigation</span>
-      <button class="nav-close" onclick="closeDrawer()" aria-label="Close navigation">&#x2715;</button>
-    </div>
-    <div class="nav-drawer-body">
-
-      <div class="nav-section">
-        <div class="nav-section-label">Help / راهنما</div>
-        <button class="nav-btn" onclick="showModal('help-modal');closeDrawer()" title="Step-by-step guide, explanations and tips">
-          <span class="nav-btn-icon">?</span>Getting Started <span class="nav-fa">/ راهنمای شروع</span>
-        </button>
+<div id="panel" class="ui-app">
+  <aside class="ui-sidebar" id="nav-drawer" aria-label="Navigation">
+    <div class="ui-brand">
+      <img src="{{ url_for('static', filename='img/logo-96.png') }}" alt="">
+      <div>
+        <div class="ui-brand-name">SPIRITUS</div>
+        <div class="ui-brand-sub">Censor-Hardened Core</div>
       </div>
-
-      <div class="nav-section">
-        <div class="nav-section-label">Quick Actions</div>
-        <button class="nav-btn nav-btn-primary" onclick="showModal('add-modal');closeDrawer()" title="Create a VPN account with a traffic limit and an expiry date">
-          <span class="nav-btn-icon">+</span>Add User <span class="nav-fa">/ افزودن کاربر</span>
-        </button>
-        <button class="nav-btn" onclick="showModal('bulk-modal');closeDrawer()" title="Create many accounts at once, e.g. 50 users for a reseller">
-          <span class="nav-btn-icon">&#x229E;</span>Bulk Create <span class="nav-fa">/ ساخت گروهی</span>
-        </button>
-        <button class="nav-btn" onclick="forceSync();closeDrawer()" title="Apply the current users and settings to the VPN server">
-          <span class="nav-btn-icon">&#x21BA;</span>Sync <span class="nav-fa">/ همگام‌سازی</span>
-        </button>
-      </div>
-
-      <div class="nav-section">
-        <div class="nav-section-label">Views</div>
-        <button class="nav-btn" id="btn-groups" onclick="switchMainView('groups');closeDrawer()" title="Users grouped by their name prefix">
-          <span class="nav-btn-icon">&#x25AB;</span>Groups <span class="nav-fa">/ گروه‌ها</span>
-        </button>
-        <button class="nav-btn" id="btn-users" onclick="switchMainView('users');closeDrawer()" style="display:none" title="Show the full user list">
-          <span class="nav-btn-icon">&#x25AA;</span>Users <span class="nav-fa">/ کاربران</span>
-        </button>
-        <button class="nav-btn" onclick="showModal('agents-modal');closeDrawer()" title="Sub-admins (agents) who get their own user quota">
-          <span class="nav-btn-icon">&#x25C8;</span>Agents <span class="nav-fa">/ نمایندگان</span>
-        </button>
-      </div>
-
-      <div class="nav-section">
-        <div class="nav-section-label">Monitor</div>
-        <button class="nav-btn" onclick="showModal('sysmon-modal');closeDrawer()" title="CPU, memory, disk and network usage of this server">
-          <span class="nav-btn-icon">&#x25C9;</span>System Monitor <span class="nav-fa">/ وضعیت سرور</span>
-        </button>
-        <button class="nav-btn" onclick="showModal('online-modal');closeDrawer()" title="Who is connected right now">
-          <span class="nav-btn-icon">&#x25CE;</span>Online Users <span class="nav-fa">/ کاربران آنلاین</span>
-        </button>
-      </div>
-
-      <div class="nav-section">
-        <div class="nav-section-label">Analytics</div>
-        <button class="nav-btn" onclick="showModal('search-modal');closeDrawer()" title="Find users by name, note or UUID">
-          <span class="nav-btn-icon">&#x2315;</span>Search <span class="nav-fa">/ جستجو</span>
-        </button>
-        <button class="nav-btn" onclick="showModal('report-modal');closeDrawer()" title="Summary of users, traffic and expiring accounts">
-          <span class="nav-btn-icon">&#x2261;</span>Report <span class="nav-fa">/ گزارش</span>
-        </button>
-        <button class="nav-btn" onclick="showModal('analytics-modal');closeDrawer()" title="Traffic charts and top users">
-          <span class="nav-btn-icon">&#x25B2;</span>Analytics <span class="nav-fa">/ آمار</span>
-        </button>
-      </div>
-
-      <div class="nav-section">
-        <div class="nav-section-label">Data</div>
-        <button class="nav-btn" onclick="showModal('backup-modal');closeDrawer()" title="Create or restore a backup of users and settings">
-          <span class="nav-btn-icon">&#x229D;</span>Backup <span class="nav-fa">/ پشتیبان‌گیری</span>
-        </button>
-        <button class="nav-btn" onclick="doExportCSV();closeDrawer()" title="Download all users as a spreadsheet">
-          <span class="nav-btn-icon">&#x229F;</span>Export CSV <span class="nav-fa">/ خروجی CSV</span>
-        </button>
-        <button class="nav-btn" onclick="doExportJSON();closeDrawer()" title="Download all users as JSON">
-          <span class="nav-btn-icon">{ }</span>Export JSON <span class="nav-fa">/ خروجی JSON</span>
-        </button>
-      </div>
-
-
-      <div class="nav-section">
-        <div class="nav-section-label">System</div>
-        <button class="nav-btn dir-toggle" onclick="toggleDirection();closeDrawer()">
-          <span class="nav-btn-icon">&#x21C4;</span>Toggle {{ 'RTL' if dir == 'ltr' else 'LTR' }}
-        </button>
-        <button class="nav-btn" onclick="showModal('settings-modal');closeDrawer()" title="Protocols, domains, DPI evasion, Telegram and security settings">
-          <span class="nav-btn-icon">&#x2699;</span>Settings <span class="nav-fa">/ تنظیمات</span>
-        </button>
-        <button class="nav-btn nav-btn-logout" onclick="doLogout()" title="Sign out of the panel">
-          <span class="nav-btn-icon">&#x23FB;</span>Logout <span class="nav-fa">/ خروج</span>
-        </button>
-      </div>
-
-    </div>
-  </nav>
-
-  <!-- System Monitor Bar -->
-  <div class="sysmon-bar" id="sysmon-bar">
-    <div class="sysmon-item"><div class="gauge gauge-ok" id="sm-cpu-gauge">—</div><div class="sysmon-lbl">CPU</div></div>
-    <div class="sysmon-item"><div class="gauge gauge-ok" id="sm-ram-gauge">—</div><div class="sysmon-lbl">RAM</div></div>
-    <div class="sysmon-item"><div class="gauge gauge-ok" id="sm-disk-gauge">—</div><div class="sysmon-lbl">Disk</div></div>
-    <div class="sysmon-item"><div class="sysmon-val" id="sm-uptime">—</div><div class="sysmon-lbl">Uptime</div></div>
-    <div class="sysmon-item"><div class="sysmon-val" id="sm-xray">—</div><div class="sysmon-lbl">Xray</div></div>
-    <div class="sysmon-item"><div class="sysmon-val" id="sm-net">—</div><div class="sysmon-lbl">Network I/O</div></div>
-  </div>
-
-  <div class="stats-bar">
-    <div class="stat-item"><span class="stat-value" id="s-total">—</span><span class="stat-label">Total Users</span></div>
-    <div class="stat-item"><span class="stat-value" id="s-active">—</span><span class="stat-label">Active</span></div>
-    <div class="stat-item"><span class="stat-value" id="s-online">—</span><span class="stat-label">Online</span></div>
-    <div class="stat-item"><span class="stat-value" id="s-traffic">—</span><span class="stat-label">Total Traffic</span></div>
-  </div>
-
-  <div class="proto-bar" id="proto-bar" style="flex-wrap:wrap;gap:4px">
-    <span class="proto-badge proto-vmess" id="pb-vmess">VMess:443</span>
-    <span class="proto-badge proto-vless" id="pb-vless" style="display:none">VLESS/Reality</span>
-    <span class="proto-badge proto-cdn" id="pb-cdn" style="display:none">CDN</span>
-    <span class="proto-badge" id="pb-trojan" style="display:none;background:#e74c3c22;color:#e74c3c">Trojan</span>
-    <span class="proto-badge" id="pb-grpc" style="display:none;background:#2ecc7122;color:#2ecc71">gRPC</span>
-    <span class="proto-badge" id="pb-httpupgrade" style="display:none;background:#3498db22;color:#3498db">HU</span>
-    <span class="proto-badge" id="pb-ss2022" style="display:none;background:#e67e2222;color:#e67e22">SS2022</span>
-    <span class="proto-badge" id="pb-vless-ws" style="display:none;background:#1abc9c22;color:#1abc9c">VLESS-WS</span>
-    <span class="proto-badge" id="pb-vless-xhttp" style="display:none;background:#e056fd22;color:#e056fd">XHTTP</span>
-    <span class="proto-badge" id="pb-vless-vision" style="display:none;background:#6c5ce722;color:#6c5ce7">Vision</span>
-    <span class="proto-badge" id="pb-vless-reverse" style="display:none;background:#fd79a822;color:#fd79a8">Reverse</span>
-    <span class="proto-badge" id="pb-trojan-cdn" style="display:none;background:#e74c3c22;color:#e74c3c">Trojan-CDN</span>
-    <span class="proto-badge" id="pb-hysteria2" style="display:none;background:#00cec922;color:#00cec9">Hy2</span>
-    <span class="proto-badge" id="pb-tuic" style="display:none;background:#0984e322;color:#0984e3">TUIC</span>
-    <span class="proto-badge" id="pb-amneziawg" style="display:none;background:#00b89422;color:#00b894">AWG</span>
-    <span class="proto-badge" id="pb-shadowtls" style="display:none;background:#636e7222;color:#b2bec3">STLS</span>
-    <span class="proto-badge" id="pb-mieru" style="display:none;background:#a29bfe22;color:#a29bfe">Mieru</span>
-    <span class="proto-badge" id="pb-naiveproxy" style="display:none;background:#ffeaa722;color:#fdcb6e">Naive</span>
-    <span class="proto-badge" id="pb-wireguard" style="display:none;background:#55efc422;color:#00b894">WG</span>
-    <span class="proto-badge" id="pb-openvpn" style="display:none;background:#fab1a022;color:#e17055">OVPN</span>
-    <span class="proto-badge" id="pb-fragment" style="display:none;background:#f39c1222;color:#f39c12">Fragment</span>
-    <span class="proto-badge" id="pb-mux" style="display:none;background:#9b59b622;color:#9b59b6">MUX</span>
-    <span class="proto-badge" id="pb-host-spoof" style="display:none;background:#e056fd22;color:#e056fd">Host Spoof</span>
-    <span class="proto-badge" id="pb-dpi-tunnel" style="display:none;background:#00cec922;color:#00cec9">Tunnel</span>
-    <span class="proto-badge" id="pb-dpi-front" style="display:none;background:#e1705522;color:#e17055">Front</span>
-    <span class="proto-badge proto-ks" id="pb-ks">Kill Switch: ON</span>
-  </div>
-
-  <div class="filter-bar">
-    <div class="filter-pills" id="filter-pills">
-      <button class="filter-pill active" data-filter="all">All<span class="pill-count" id="fc-all">0</span></button>
-      <button class="filter-pill" data-filter="online">Online<span class="pill-count" id="fc-online">0</span></button>
-      <button class="filter-pill" data-filter="offline">Offline<span class="pill-count" id="fc-offline">0</span></button>
-      <button class="filter-pill" data-filter="active">Active<span class="pill-count" id="fc-active">0</span></button>
-      <button class="filter-pill" data-filter="disabled">Disabled<span class="pill-count" id="fc-disabled">0</span></button>
-      <button class="filter-pill" data-filter="expiring">Expiring<span class="pill-count" id="fc-expiring">0</span></button>
-    </div>
-    <input type="text" class="filter-search" id="filter-search" placeholder="Search user..." oninput="applyFilter()">
-  </div>
-
-  <div class="container">
-    <div id="users-grid" class="grid"></div>
-    <div id="groups-grid" class="grid" style="display:none"></div>
-  </div>
-</div>
-
-<!-- ── Help Modal ── -->
-<div id="help-modal" class="modal-overlay" onclick="if(event.target===this)closeModal(this.id)">
-  <div class="modal modal-xl help-modal" style="max-height:calc(100vh - 40px);overflow-y:auto;-webkit-overflow-scrolling:touch">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-      <h3 style="margin:0">Getting Started / راهنمای شروع</h3>
-      <button class="btn btn-outline btn-sm" onclick="closeModal('help-modal')">✕</button>
     </div>
 
-    <section class="help-section">
+    <div class="ui-nav-label">Navigation Topology</div>
+    <nav class="ui-nav">
+      <button type="button" class="ui-nav-item" data-tab="mission" onclick="switchOperationTab('mission')"><span class="material-symbols-outlined">terminal</span>Mission Control</button>
+      <button type="button" class="ui-nav-item active" data-tab="tenants" onclick="switchOperationTab('tenants')"><span class="material-symbols-outlined">corporate_fare</span>Users &amp; Subscriptions</button>
+      <button type="button" class="ui-nav-item" data-tab="protocols" onclick="switchOperationTab('protocols')"><span class="material-symbols-outlined">lan</span>Protocol Engine &amp; DPI</button>
+      <button type="button" class="ui-nav-item" data-tab="warroom" onclick="switchOperationTab('warroom')"><span class="material-symbols-outlined">crisis_alert</span>Cyber War-Room</button>
+      <button type="button" class="ui-nav-item" data-tab="nodes" onclick="switchOperationTab('nodes')"><span class="material-symbols-outlined">hub</span>Edge Nodes</button>
+      <button type="button" class="ui-nav-item" data-tab="routing" onclick="switchOperationTab('routing')"><span class="material-symbols-outlined">alt_route</span>Carrier Steering</button>
+      <button type="button" class="ui-nav-item" data-tab="sentinel" onclick="switchOperationTab('sentinel')"><span class="material-symbols-outlined">radar</span>Sentinel Probes</button>
+      <button type="button" class="ui-nav-item" data-tab="diagnostics" onclick="switchOperationTab('diagnostics')"><span class="material-symbols-outlined">speed</span>Carrier Diagnostics</button>
+      <button type="button" class="ui-nav-item" data-tab="financials" onclick="switchOperationTab('financials')"><span class="material-symbols-outlined">payments</span>Financials &amp; Billing</button>
+      <button type="button" class="ui-nav-item" data-tab="security" onclick="switchOperationTab('security')"><span class="material-symbols-outlined">verified_user</span>Security &amp; Audit</button>
+    </nav>
+
+    <div class="ui-nav-label">Administration</div>
+    <nav class="ui-nav">
+      <button type="button" class="ui-nav-item" data-tab="agents" onclick="switchOperationTab('agents')"><span class="material-symbols-outlined">manage_accounts</span>Agents / نمایندگان</button>
+      <button type="button" class="ui-nav-item" data-tab="settings" onclick="switchOperationTab('settings')"><span class="material-symbols-outlined">tune</span>Settings / تنظیمات</button>
+      <button type="button" class="ui-nav-item" data-tab="online" onclick="switchOperationTab('online')"><span class="material-symbols-outlined">wifi</span>Online Users</button>
+      <button type="button" class="ui-nav-item" data-tab="backup" onclick="switchOperationTab('backup')"><span class="material-symbols-outlined">backup</span>Backup / پشتیبان‌گیری</button>
+      <button type="button" class="ui-nav-item" data-tab="help" onclick="switchOperationTab('help')"><span class="material-symbols-outlined">help</span>Help / راهنما</button>
+      <a class="ui-nav-item" href="/landing"><span class="material-symbols-outlined">public</span>Website</a>
+      <a class="ui-nav-item" href="/agent"><span class="material-symbols-outlined">support_agent</span>Agent Panel</a>
+    </nav>
+
+    <div class="ui-telemetry">
+      <div class="ui-telemetry-head"><span>Core Telemetry</span><span class="ui-pulse" id="tm-dot"></span></div>
+      <div class="ui-tm-row"><span>Xray-core:</span><span id="tm-xray" class="ui-tm-dim">—</span></div>
+      <div class="ui-tm-row"><span>sing-box:</span><span id="tm-singbox" class="ui-tm-dim">—</span></div>
+      <div class="ui-tm-row"><span>Redis:</span><span id="tm-redis" class="ui-tm-dim">—</span></div>
+      <div class="ui-tm-row"><span>RAM / CPU:</span><span id="tm-ramcpu">—</span></div>
+      <div class="ui-quota-bar"><i id="tm-ram-bar"></i></div>
+    </div>
+  </aside>
+
+  <div class="ui-main">
+    <header class="ui-topbar">
+      <div class="ui-topbar-left">
+        <button type="button" id="nav-toggle" class="ui-icon-btn ui-menu-btn" onclick="toggleDrawer()" aria-label="Open navigation"><span class="material-symbols-outlined">menu</span></button>
+        <span class="ui-crumb"><span class="material-symbols-outlined">shield</span>Cluster / <strong id="ops-hostname">—</strong></span>
+        <span class="ui-chip" id="ops-status-chip"><span class="ops-dot" id="ops-host-dot"></span><span id="ops-proto-count">—</span></span>
+        <span class="ui-chip ui-hide-lg"><span class="material-symbols-outlined">schedule</span><span id="ops-uptime">—</span></span>
+      </div>
+      <div class="ui-topbar-right">
+        <button type="button" class="btn btn-sm btn-danger" onclick="panicFlush()" title="Restart Xray: drops every live connection"><span class="material-symbols-outlined">warning</span><span class="ui-hide-md">Panic Flush</span></button>
+        <button type="button" class="btn btn-sm btn-primary" onclick="toggleEmergencyCloak()" title="Emergency Cloak: force fragment + noise on every client"><span class="material-symbols-outlined">shield_lock</span><span class="ui-hide-md" data-cloak-label>Emergency Cloak</span></button>
+        <button type="button" class="ui-icon-btn" onclick="forceSync()" title="Apply users and settings to the VPN server"><span class="material-symbols-outlined">sync</span></button>
+        <button type="button" class="ui-icon-btn" onclick="toggleDirection()" title="Switch to {{ 'LTR' if dir == 'rtl' else 'RTL' }}"><span class="material-symbols-outlined">format_textdirection_r_to_l</span></button>
+        <button type="button" id="theme-btn" class="ui-icon-btn" onclick="cycleTheme()" title="Switch theme (Obsidian / CyberOps / Midnight)"><span class="material-symbols-outlined">palette</span><span id="theme-label" class="ui-hide-md">Theme</span></button>
+        <div class="ui-user">
+          <span class="ui-avatar" id="ops-admin-initial">A</span>
+          <div class="ui-user-meta"><span id="ops-admin-name">Admin</span><span class="ui-user-role">Root session</span></div>
+          <button type="button" class="ui-icon-btn" onclick="doLogout()" title="Sign out"><span class="material-symbols-outlined">logout</span></button>
+        </div>
+      </div>
+    </header>
+
+    <main class="ui-content">
+
+      <!-- ═══ Mission Control ═══ -->
+      <div class="tactical-op-view" id="op-view-mission">
+        <div class="ui-page-head">
+          <div class="ui-page-titles">
+            <div class="ui-eyebrow">Edge telemetry</div>
+            <h1 class="ui-title">Mission Control</h1>
+            <p class="ui-subtitle">Live numbers from this server, refreshed every 5 seconds while this page is open.</p>
+          </div>
+          <div class="ui-actions">
+            <span class="status-pill muted" id="mc-xray">XRAY —</span>
+            <button type="button" class="btn btn-outline btn-sm" onclick="showModal('sysmon-modal')"><span class="material-symbols-outlined">monitoring</span>System details</button>
+            <button type="button" class="btn btn-outline btn-sm" onclick="loadMissionView()"><span class="material-symbols-outlined">refresh</span>Refresh</button>
+          </div>
+        </div>
+        <div class="ui-kpis">
+          <div class="ui-kpi">
+            <div class="ui-kpi-head"><span class="ui-kpi-label">Live ingress</span><span class="ui-kpi-icon material-symbols-outlined">south_west</span></div>
+            <div class="ui-kpi-value" id="mc-in">—</div>
+            <svg class="ops-spark ops-spark-in" id="mc-in-spark" viewBox="0 0 240 48" preserveAspectRatio="none" aria-hidden="true"></svg>
+          </div>
+          <div class="ui-kpi">
+            <div class="ui-kpi-head"><span class="ui-kpi-label">Live egress</span><span class="ui-kpi-icon material-symbols-outlined">north_east</span></div>
+            <div class="ui-kpi-value" id="mc-out">—</div>
+            <svg class="ops-spark ops-spark-out" id="mc-out-spark" viewBox="0 0 240 48" preserveAspectRatio="none" aria-hidden="true"></svg>
+          </div>
+          <div class="ui-kpi">
+            <div class="ui-kpi-head"><span class="ui-kpi-label">Online users</span><span class="ui-kpi-icon material-symbols-outlined">group</span></div>
+            <div class="ui-kpi-value" id="mc-online">—</div>
+            <div class="ui-kpi-foot" id="mc-users">—</div>
+          </div>
+          <div class="ui-kpi">
+            <div class="ui-kpi-head"><span class="ui-kpi-label">Protocols enabled</span><span class="ui-kpi-icon material-symbols-outlined">lan</span></div>
+            <div class="ui-kpi-value" id="mc-protocols">—</div>
+            <div class="ui-kpi-foot" id="mc-uptime">—</div>
+          </div>
+        </div>
+        <section class="ui-card">
+          <div class="ui-card-head">
+            <h2 class="ui-card-title"><span class="material-symbols-outlined">memory</span>Engine compute</h2>
+            <span class="ui-card-meta">Updated every 15 s</span>
+          </div>
+          <div class="ui-compute">
+            <div class="ui-compute-item"><span>CPU</span><div class="gauge gauge-ok" id="sm-cpu-gauge">—</div></div>
+            <div class="ui-compute-item"><span>RAM</span><div class="gauge gauge-ok" id="sm-ram-gauge">—</div></div>
+            <div class="ui-compute-item"><span>Disk</span><div class="gauge gauge-ok" id="sm-disk-gauge">—</div></div>
+            <div class="ui-compute-item"><span>Uptime</span><div class="sysmon-val" id="sm-uptime">—</div></div>
+            <div class="ui-compute-item"><span>Xray core</span><div class="sysmon-val" id="sm-xray">—</div></div>
+            <div class="ui-compute-item"><span>Network I/O (total)</span><div class="sysmon-val" id="sm-net">—</div></div>
+          </div>
+        </section>
+      </div>
+
+      <!-- ═══ Cyber War-Room ═══ -->
+      <div class="tactical-op-view" id="op-view-warroom">
+        <div class="ui-page-head">
+          <div class="ui-page-titles">
+            <div class="ui-eyebrow">Threat intercept</div>
+            <h1 class="ui-title">Cyber War-Room</h1>
+            <p class="ui-subtitle">Attacks on this panel in the last 24 hours, the current DPI posture, and what automation is doing about it.</p>
+          </div>
+          <div class="ui-actions">
+            <button type="button" class="btn btn-danger btn-sm" onclick="panicFlush()"><span class="material-symbols-outlined">warning</span>Panic Flush</button>
+            <button type="button" class="btn btn-primary btn-sm" onclick="toggleEmergencyCloak()"><span class="material-symbols-outlined">shield_lock</span><span data-cloak-label>Emergency Cloak</span></button>
+          </div>
+        </div>
+        <div class="ui-kpis">
+          <div class="ui-kpi">
+            <div class="ui-kpi-head"><span class="ui-kpi-label">Honeypot hits</span><span class="ui-kpi-icon material-symbols-outlined">bug_report</span></div>
+            <div class="ui-kpi-value ops-red" id="wr-honeypot">—</div>
+            <div class="ui-kpi-foot">Scanner requests to decoy paths</div>
+          </div>
+          <div class="ui-kpi">
+            <div class="ui-kpi-head"><span class="ui-kpi-label">Failed logins</span><span class="ui-kpi-icon material-symbols-outlined">password</span></div>
+            <div class="ui-kpi-value ops-yellow" id="wr-failed">—</div>
+            <div class="ui-kpi-foot">Wrong password or 2FA code</div>
+          </div>
+          <div class="ui-kpi">
+            <div class="ui-kpi-head"><span class="ui-kpi-label">Active bans</span><span class="ui-kpi-icon material-symbols-outlined">block</span></div>
+            <div class="ui-kpi-value" id="wr-bans">—</div>
+            <div class="ui-kpi-foot">IPs currently blocked by fail2ban</div>
+          </div>
+          <div class="ui-kpi">
+            <div class="ui-kpi-head"><span class="ui-kpi-label">DPI posture</span><span class="ui-kpi-icon material-symbols-outlined">shield</span></div>
+            <div class="ui-kpi-value" id="wr-posture">—</div>
+            <div class="ui-kpi-foot" id="wr-posture-detail">—</div>
+          </div>
+        </div>
+        <div class="ui-grid-main">
+          <section class="ui-card">
+            <div class="ui-card-head">
+              <h2 class="ui-card-title"><span class="material-symbols-outlined">stream</span>Security event stream</h2>
+              <span class="ui-card-meta">Newest first</span>
+            </div>
+            <div class="ops-stream" id="wr-events"><div class="tactical-empty">Loading…</div></div>
+          </section>
+          <section class="ui-card" id="automation-card">
+            <div class="ui-card-head">
+              <h2 class="ui-card-title"><span class="material-symbols-outlined">smart_toy</span>Automation</h2>
+              <span class="status-pill muted" id="auto-heartbeat" title="The checks run every minute from Celery beat">—</span>
+            </div>
+            <div class="ops-auto-grid">
+              <div class="ops-auto-item">
+                <div>
+                  <strong>Automatic Emergency Cloak</strong>
+                  <div class="ops-cell-sub" id="auto-cloak-rule">Turns on when probes in Iran show the network turning hostile, off when it recovers.</div>
+                </div>
+                <label class="toggle"><input type="checkbox" data-auto-key="auto_cloak_enabled" onchange="setAutomation(this)" aria-label="Automatic Emergency Cloak"><span class="toggle-slider"></span></label>
+              </div>
+              <div class="ops-auto-item">
+                <div>
+                  <strong>Order subscription protocols by probe results</strong>
+                  <div class="ops-cell-sub">Protocols that work from Iran come first, failing ones last. Nothing is removed.</div>
+                </div>
+                <label class="toggle"><input type="checkbox" data-auto-key="auto_protocol_order_enabled" onchange="setAutomation(this)" aria-label="Order subscription protocols"><span class="toggle-slider"></span></label>
+              </div>
+              <div class="ops-auto-item">
+                <div>
+                  <strong>Telegram alerts</strong>
+                  <div class="ops-cell-sub" id="auto-telegram">Xray down/up, edge node down/up, protocol blocked on a carrier, probe gone silent.</div>
+                </div>
+                <label class="toggle"><input type="checkbox" data-auto-key="ops_alerts_enabled" onchange="setAutomation(this)" aria-label="Telegram alerts"><span class="toggle-slider"></span></label>
+              </div>
+            </div>
+            <div class="ui-actions">
+              <button type="button" class="btn btn-outline btn-sm" onclick="runAutomationNow()"><span class="material-symbols-outlined">play_arrow</span>Run checks now</button>
+              <button type="button" class="btn btn-outline btn-sm" onclick="sendTestAlert()"><span class="material-symbols-outlined">send</span>Send test alert</button>
+            </div>
+            <div class="ops-stream" id="auto-log"><div class="tactical-empty">No automatic actions yet.</div></div>
+          </section>
+        </div>
+      </div>
+
+      <!-- ═══ Protocol Engine ═══ -->
+      <div class="tactical-op-view" id="op-view-protocols">
+        <div class="ui-page-head">
+          <div class="ui-page-titles">
+            <div class="ui-eyebrow">Layer 4 – 7 resilience engine</div>
+            <h1 class="ui-title">Protocol Engine &amp; DPI</h1>
+            <p class="ui-subtitle">Every enabled protocol, checked from this server. "From Iran" comes from Sentinel probes.</p>
+          </div>
+          <div class="ui-actions">
+            <button type="button" class="btn btn-outline btn-sm" onclick="loadProtocolsView()"><span class="material-symbols-outlined">refresh</span>Re-check</button>
+            <button type="button" class="btn btn-primary btn-sm" onclick="showModal('settings-modal')"><span class="material-symbols-outlined">tune</span>Configure protocols</button>
+          </div>
+        </div>
+        <section class="ui-card">
+          <div class="ui-card-head">
+            <h2 class="ui-card-title"><span class="material-symbols-outlined">settings_input_component</span>Active on this server</h2>
+            <span class="ui-card-meta">Ports and DPI options currently applied</span>
+          </div>
+          <div class="proto-bar" id="proto-bar">
+            <span class="proto-badge proto-vmess" id="pb-vmess">VMess:443</span>
+            <span class="proto-badge" id="pb-vless" style="display:none">VLESS/Reality</span>
+            <span class="proto-badge" id="pb-cdn" style="display:none">CDN</span>
+            <span class="proto-badge" id="pb-trojan" style="display:none">Trojan</span>
+            <span class="proto-badge" id="pb-grpc" style="display:none">gRPC</span>
+            <span class="proto-badge" id="pb-httpupgrade" style="display:none">HU</span>
+            <span class="proto-badge" id="pb-ss2022" style="display:none">SS2022</span>
+            <span class="proto-badge" id="pb-vless-ws" style="display:none">VLESS-WS</span>
+            <span class="proto-badge" id="pb-vless-xhttp" style="display:none">XHTTP</span>
+            <span class="proto-badge" id="pb-vless-vision" style="display:none">Vision</span>
+            <span class="proto-badge" id="pb-vless-reverse" style="display:none">Reverse</span>
+            <span class="proto-badge" id="pb-trojan-cdn" style="display:none">Trojan-CDN</span>
+            <span class="proto-badge" id="pb-hysteria2" style="display:none">Hy2</span>
+            <span class="proto-badge" id="pb-tuic" style="display:none">TUIC</span>
+            <span class="proto-badge" id="pb-amneziawg" style="display:none">AWG</span>
+            <span class="proto-badge" id="pb-shadowtls" style="display:none">STLS</span>
+            <span class="proto-badge" id="pb-mieru" style="display:none">Mieru</span>
+            <span class="proto-badge" id="pb-naiveproxy" style="display:none">Naive</span>
+            <span class="proto-badge" id="pb-wireguard" style="display:none">WG</span>
+            <span class="proto-badge" id="pb-openvpn" style="display:none">OVPN</span>
+            <span class="proto-badge proto-opt" id="pb-fragment" style="display:none">Fragment</span>
+            <span class="proto-badge proto-opt" id="pb-mux" style="display:none">MUX</span>
+            <span class="proto-badge proto-opt" id="pb-host-spoof" style="display:none">Host Spoof</span>
+            <span class="proto-badge proto-opt" id="pb-dpi-front" style="display:none">Front</span>
+            <span class="proto-badge proto-ks" id="pb-ks">Kill Switch: ON</span>
+          </div>
+        </section>
+        <div class="ui-section-head">
+          <h2 class="ui-section-title"><span class="material-symbols-outlined">tune</span>Protocol health matrix</h2>
+          <span class="ui-section-meta">Listening port · REALITY dest from here · success from Iran</span>
+        </div>
+        <div class="tactical-table-wrapper">
+          <table class="tactical-table">
+            <thead>
+              <tr>
+                <th>Protocol</th>
+                <th>Port</th>
+                <th>Listening</th>
+                <th>REALITY dest (from here)</th>
+                <th>From Iran (24h)</th>
+                <th>Failover</th>
+              </tr>
+            </thead>
+            <tbody id="protocols-health-body">
+              <tr><td colspan="6" class="tactical-empty">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="ops-note" id="protocols-disabled" hidden></div>
+      </div>
+
+      <!-- ═══ Carrier Steering ═══ -->
+      <div class="tactical-op-view" id="op-view-routing">
+        <div class="ui-page-head">
+          <div class="ui-page-titles">
+            <div class="ui-eyebrow">Carrier-aware steering</div>
+            <h1 class="ui-title">Carrier Steering</h1>
+            <p class="ui-subtitle">The protocol to hand users on each Iranian carrier, from the last 24 hours of probe tests.</p>
+          </div>
+          <div class="ui-actions">
+            <button type="button" class="btn btn-outline btn-sm" onclick="loadRoutingView()"><span class="material-symbols-outlined">refresh</span>Refresh</button>
+          </div>
+        </div>
+        <div class="tactical-table-wrapper">
+          <table class="tactical-table">
+            <thead>
+              <tr>
+                <th>Carrier</th>
+                <th>Recommended protocol</th>
+                <th>Success</th>
+                <th>Median latency</th>
+                <th>Last report</th>
+              </tr>
+            </thead>
+            <tbody id="routing-matrix-body">
+              <tr><td colspan="5" class="tactical-empty">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <section class="ui-card">
+          <div class="ui-card-head">
+            <h2 class="ui-card-title"><span class="material-symbols-outlined">swap_calls</span>Automatic failover</h2>
+          </div>
+          <div id="routing-failover" class="ops-chips"></div>
+          <div class="ops-cell-sub">A protocol is marked blocked after 3 failed probe tests in a row and retried after 15 minutes. This state resets when the panel restarts.</div>
+        </section>
+      </div>
+
+      <!-- ═══ Sentinel Probes ═══ -->
+      <div class="tactical-op-view" id="op-view-sentinel">
+        <div class="ui-page-head">
+          <div class="ui-page-titles">
+            <div class="ui-eyebrow">In-country sentinel fleet</div>
+            <h1 class="ui-title">Sentinel Probes</h1>
+            <p class="ui-subtitle">Probes run inside Iran by people you trust, reporting which protocols get through each carrier.</p>
+          </div>
+          <div class="ui-actions">
+            <button type="button" class="btn btn-outline btn-sm" onclick="loadSentinelView()"><span class="material-symbols-outlined">refresh</span>Refresh</button>
+          </div>
+        </div>
+        <section class="ui-card">
+          <div class="ui-card-head">
+            <h2 class="ui-card-title"><span class="material-symbols-outlined">add_location_alt</span>Add a probe</h2>
+          </div>
+          <div class="ops-form">
+            <input type="text" id="probe-name" class="ops-input" placeholder="Name, e.g. tehran-mci-phone" maxlength="100">
+            <button type="button" class="btn btn-primary btn-sm" onclick="createProbe()"><span class="material-symbols-outlined">key</span>Create token</button>
+          </div>
+          <div id="probe-created" class="ops-token" hidden>
+            <div class="ops-token-warn">Copy this now. The token is shown only once.</div>
+            <pre id="probe-command"></pre>
+            <button type="button" class="btn btn-outline btn-sm" onclick="copyProbeCommand()"><span class="material-symbols-outlined">content_copy</span>Copy commands</button>
+          </div>
+          <div class="ops-cell-sub">Needs Python 3 (on Android: Termux). Run it with no VPN active so it measures the carrier directly. The panel stores the carrier, never the probe's IP.</div>
+        </section>
+        <div class="tactical-table-wrapper">
+          <table class="tactical-table">
+            <thead>
+              <tr>
+                <th>Probe</th>
+                <th>Token</th>
+                <th>Carrier</th>
+                <th>Last report</th>
+                <th>Tests (24h)</th>
+                <th>Success</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="sentinel-table-body">
+              <tr><td colspan="7" class="tactical-empty">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ═══ Edge Nodes ═══ -->
+      <div class="tactical-op-view" id="op-view-nodes">
+        <div class="ui-page-head">
+          <div class="ui-page-titles">
+            <div class="ui-eyebrow">Edge cluster</div>
+            <h1 class="ui-title">Edge Nodes</h1>
+            <p class="ui-subtitle">Your other servers, checked from this one every 5 minutes: is the port reachable, and how long does a TCP connect take.</p>
+          </div>
+          <div class="ui-actions">
+            <button type="button" class="btn btn-outline btn-sm" onclick="checkEdgeNodes()"><span class="material-symbols-outlined">network_check</span>Check all now</button>
+          </div>
+        </div>
+        <section class="ui-card">
+          <div class="ui-card-head">
+            <h2 class="ui-card-title"><span class="material-symbols-outlined">add_circle</span>Add a node</h2>
+          </div>
+          <div class="ops-form">
+            <input type="text" id="node-name" class="ops-input" placeholder="Name" maxlength="100">
+            <input type="text" id="node-address" class="ops-input" placeholder="IP or hostname" maxlength="255" spellcheck="false" autocapitalize="off">
+            <input type="number" id="node-port" class="ops-input ops-input-sm" value="443" min="1" max="65535" aria-label="Port">
+            <input type="text" id="node-location" class="ops-input" placeholder="Location (optional)" maxlength="100">
+            <button type="button" class="btn btn-primary btn-sm" onclick="addEdgeNode()"><span class="material-symbols-outlined">add</span>Add &amp; check</button>
+          </div>
+        </section>
+        <div class="tactical-table-wrapper">
+          <table class="tactical-table">
+            <thead>
+              <tr>
+                <th>Node</th>
+                <th>Address</th>
+                <th>Status</th>
+                <th>RTT</th>
+                <th>Last check</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="nodes-table-body">
+              <tr><td colspan="6" class="tactical-empty">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ═══ Carrier Diagnostics ═══ -->
+      <div class="tactical-op-view" id="op-view-diagnostics">
+        <div class="ui-page-head">
+          <div class="ui-page-titles">
+            <div class="ui-eyebrow">Live diagnostics</div>
+            <h1 class="ui-title">Carrier Diagnostics</h1>
+            <p class="ui-subtitle">Every protocol on every carrier, from Sentinel probe tests.</p>
+          </div>
+          <div class="ui-actions">
+            <select id="diag-hours" class="ops-input ops-input-sm" onchange="loadCarriersView()" aria-label="Time window">
+              <option value="24">24 h</option>
+              <option value="168">7 days</option>
+              <option value="720">30 days</option>
+            </select>
+            <button type="button" class="btn btn-primary btn-sm" onclick="loadCarriersView()"><span class="material-symbols-outlined">refresh</span>Refresh</button>
+          </div>
+        </div>
+        <div id="carrier-test-results">
+          <div class="tactical-card tactical-empty">Loading…</div>
+        </div>
+      </div>
+
+      <!-- ═══ Financials ═══ -->
+      <div class="tactical-op-view" id="op-view-financials">
+        <div class="ui-page-head">
+          <div class="ui-page-titles">
+            <div class="ui-eyebrow">Billing core</div>
+            <h1 class="ui-title">Financials &amp; Billing</h1>
+            <p class="ui-subtitle">Payments and reseller wallets, straight from the database.</p>
+          </div>
+          <div class="ui-actions">
+            <button type="button" class="btn btn-outline btn-sm" onclick="loadFinancialsView()"><span class="material-symbols-outlined">refresh</span>Refresh</button>
+          </div>
+        </div>
+        <div class="ui-kpis">
+          <div class="ui-kpi">
+            <div class="ui-kpi-head"><span class="ui-kpi-label">Paid, 30 days (Rial)</span><span class="ui-kpi-icon material-symbols-outlined">payments</span></div>
+            <div class="ui-kpi-value" id="fin-irr-30d">—</div>
+            <div class="ui-kpi-foot" id="fin-irr-all">—</div>
+          </div>
+          <div class="ui-kpi">
+            <div class="ui-kpi-head"><span class="ui-kpi-label">Paid, 30 days (USDT)</span><span class="ui-kpi-icon material-symbols-outlined">currency_bitcoin</span></div>
+            <div class="ui-kpi-value" id="fin-usdt-30d">—</div>
+            <div class="ui-kpi-foot" id="fin-usdt-all">—</div>
+          </div>
+          <div class="ui-kpi">
+            <div class="ui-kpi-head"><span class="ui-kpi-label">Pending invoices</span><span class="ui-kpi-icon material-symbols-outlined">hourglass_top</span></div>
+            <div class="ui-kpi-value" id="fin-pending">—</div>
+            <div class="ui-kpi-foot">Created, not yet paid</div>
+          </div>
+          <div class="ui-kpi">
+            <div class="ui-kpi-head"><span class="ui-kpi-label">Reseller balances (Rial)</span><span class="ui-kpi-icon material-symbols-outlined">account_balance_wallet</span></div>
+            <div class="ui-kpi-value" id="fin-balances">—</div>
+            <div class="ui-kpi-foot" id="fin-resellers">—</div>
+          </div>
+        </div>
+        <section class="ui-card">
+          <div class="ui-card-head">
+            <h2 class="ui-card-title"><span class="material-symbols-outlined">account_balance</span>Payment gateways</h2>
+          </div>
+          <div id="fin-gateways" class="ops-chips"></div>
+        </section>
+        <div class="ui-section-head"><h2 class="ui-section-title"><span class="material-symbols-outlined">receipt_long</span>Recent payments</h2></div>
+        <div class="tactical-table-wrapper">
+          <table class="tactical-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Gateway</th>
+                <th>Amount</th>
+                <th>Status</th>
+                <th>Reseller</th>
+                <th>Created</th>
+              </tr>
+            </thead>
+            <tbody id="financials-tx-body">
+              <tr><td colspan="6" class="tactical-empty">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="ui-section-head"><h2 class="ui-section-title"><span class="material-symbols-outlined">menu_book</span>Reseller ledger</h2></div>
+        <div class="tactical-table-wrapper">
+          <table class="tactical-table">
+            <thead>
+              <tr>
+                <th>Reseller</th>
+                <th>Entry</th>
+                <th>Amount (Rial)</th>
+                <th>Note</th>
+                <th>When</th>
+              </tr>
+            </thead>
+            <tbody id="financials-ledger-body">
+              <tr><td colspan="5" class="tactical-empty">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ═══ Security & Audit ═══ -->
+      <div class="tactical-op-view" id="op-view-security">
+        <div class="ui-page-head">
+          <div class="ui-page-titles">
+            <div class="ui-eyebrow">Zero-trust hardened</div>
+            <h1 class="ui-title">Security &amp; Audit Vault</h1>
+            <p class="ui-subtitle">Every admin action is written to a tamper-evident HMAC-SHA256 hash chain. Verify re-computes the whole chain.</p>
+          </div>
+          <div class="ui-actions">
+            <button type="button" class="btn btn-primary btn-sm" onclick="verifySecurityAudit()"><span class="material-symbols-outlined">fingerprint</span>Verify hash chain</button>
+          </div>
+        </div>
+        <div class="ui-section-head"><h2 class="ui-section-title"><span class="material-symbols-outlined">receipt_long</span>HMAC audit ledger</h2><span class="ui-section-meta">Latest 10 entries</span></div>
+        <div class="tactical-table-wrapper">
+          <table class="tactical-table">
+            <thead>
+              <tr>
+                <th>Timestamp</th>
+                <th>Action</th>
+                <th>Actor</th>
+                <th>HMAC-SHA256 signature</th>
+              </tr>
+            </thead>
+            <tbody id="security-audit-body">
+              <tr><td colspan="4" class="tactical-empty">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ═══ Users & Subscriptions ═══ -->
+      <div class="tactical-op-view active" id="op-view-tenants">
+        <div class="ui-page-head">
+          <div class="ui-page-titles">
+            <div class="ui-eyebrow">Tenancy core / users &amp; groups</div>
+            <h1 class="ui-title">Users &amp; Subscriptions</h1>
+            <p class="ui-subtitle">Every VPN account on this server: quota, expiry, live speed and its subscription link.</p>
+          </div>
+          <div class="ui-actions">
+            <button type="button" class="btn btn-outline btn-sm" id="btn-groups" onclick="switchMainView('groups')"><span class="material-symbols-outlined">workspaces</span>Groups</button>
+            <button type="button" class="btn btn-outline btn-sm" id="btn-users" onclick="switchMainView('users')" style="display:none"><span class="material-symbols-outlined">table_rows</span>All users</button>
+            <button type="button" class="btn btn-outline btn-sm" onclick="doExportCSV()"><span class="material-symbols-outlined">download</span><span class="ui-hide-sm">Export CSV</span></button>
+            <button type="button" class="btn btn-outline btn-sm" onclick="doExportJSON()"><span class="material-symbols-outlined">data_object</span><span class="ui-hide-sm">Export JSON</span></button>
+            <button type="button" class="btn btn-outline btn-sm" onclick="showModal('bulk-modal')"><span class="material-symbols-outlined">group_add</span>Bulk create</button>
+            <button type="button" class="btn btn-primary btn-sm" onclick="showModal('add-modal')"><span class="material-symbols-outlined">person_add</span>Add user</button>
+          </div>
+        </div>
+        <div class="ui-kpis">
+          <div class="ui-kpi">
+            <div class="ui-kpi-head"><span class="ui-kpi-label">Total users</span><span class="ui-kpi-icon material-symbols-outlined">group</span></div>
+            <div class="ui-kpi-value" id="s-total">—</div>
+            <div class="ui-kpi-foot">Active: <strong id="s-active">—</strong></div>
+          </div>
+          <div class="ui-kpi">
+            <div class="ui-kpi-head"><span class="ui-kpi-label">Online now</span><span class="ui-kpi-icon material-symbols-outlined">wifi</span></div>
+            <div class="ui-kpi-value" id="s-online">—</div>
+            <div class="ui-kpi-foot">Traffic in the last 90 seconds</div>
+          </div>
+          <div class="ui-kpi">
+            <div class="ui-kpi-head"><span class="ui-kpi-label">Total traffic</span><span class="ui-kpi-icon material-symbols-outlined">data_usage</span></div>
+            <div class="ui-kpi-value" id="s-traffic">—</div>
+            <div class="ui-kpi-foot">Used across all accounts</div>
+          </div>
+          <div class="ui-kpi">
+            <div class="ui-kpi-head"><span class="ui-kpi-label">Expiring ≤ 7 days</span><span class="ui-kpi-icon material-symbols-outlined">event_upcoming</span></div>
+            <div class="ui-kpi-value" id="s-expiring">—</div>
+            <div class="ui-kpi-foot">Renew before they lapse</div>
+          </div>
+        </div>
+        <div class="filter-bar ui-toolbar">
+          <label class="ui-search"><span class="material-symbols-outlined">search</span><input type="text" class="filter-search" id="filter-search" placeholder="Filter by name or note…" oninput="applyFilter()"></label>
+          <div class="filter-pills" id="filter-pills">
+            <button class="filter-pill active" data-filter="all">All<span class="pill-count" id="fc-all">0</span></button>
+            <button class="filter-pill" data-filter="online">Online<span class="pill-count" id="fc-online">0</span></button>
+            <button class="filter-pill" data-filter="offline">Offline<span class="pill-count" id="fc-offline">0</span></button>
+            <button class="filter-pill" data-filter="active">Active<span class="pill-count" id="fc-active">0</span></button>
+            <button class="filter-pill" data-filter="disabled">Disabled<span class="pill-count" id="fc-disabled">0</span></button>
+            <button class="filter-pill" data-filter="expiring">Expiring<span class="pill-count" id="fc-expiring">0</span></button>
+          </div>
+        </div>
+        <div id="users-grid"></div>
+        <div id="groups-grid" class="ui-groups" style="display:none"></div>
+      </div>
+
+
+      <!-- ═══ Help ═══ -->
+      <section class="tactical-op-view" id="op-view-help">
+        <div class="ui-page-head">
+          <div class="ui-page-titles">
+            <div class="ui-eyebrow">Guide</div>
+            <h1 class="ui-title">Help / راهنما</h1>
+            <p class="ui-subtitle">First setup in five steps, what each label means, and which protocol to pick.</p>
+          </div>
+          <div class="ui-actions"><button type="button" class="btn btn-primary btn-sm" onclick="showModal('add-modal')"><span class="material-symbols-outlined">person_add</span>Add user / افزودن کاربر</button></div>
+        </div>
+        <div id="help-modal" class="ui-card ui-page-card ui-page-help">
+<section class="help-section">
       <h4><span class="help-en">First setup — 5 steps</span><span class="help-fa" lang="fa">راه‌اندازی اولیه — ۵ قدم</span></h4>
       <ol class="help-steps help-en">
         <li><b>Choose protocols.</b> Open <i>Settings → Protocols</i> and keep only what you need. If unsure, enable <b>VLESS Reality (Vision)</b> plus one backup such as <b>Hysteria2</b>. Press <b>Save</b>.</li>
@@ -275,250 +750,43 @@
         <li>اگر مشتری وصل نمی‌شود: اول در برنامه اشتراک را به‌روزرسانی کند، بعد پروتکل دیگری را امتحان کند.</li>
       </ul>
     </section>
+        </div>
+      </section>
 
-    <div class="modal-actions">
-      <button class="btn btn-primary" onclick="closeModal('help-modal');showModal('add-modal')">+ Add User / افزودن کاربر</button>
-      <button class="btn btn-outline" onclick="closeModal('help-modal')">Close / بستن</button>
-    </div>
-  </div>
-</div>
-
-<!-- ── Add Modal ── -->
-<div id="add-modal" class="modal-overlay" onclick="if(event.target===this)closeModal(this.id)">
-  <div class="modal">
-    <h3>New User / کاربر جدید</h3>
-    <div class="hint-box">
-      <span class="help-en">Pick a plan below or type your own values. After you create the user, open their card and send them the <b>subscription link</b>.</span>
-      <span class="help-fa" lang="fa">یک پلن را انتخاب کنید یا مقدار دلخواه بنویسید. بعد از ساخت کاربر، «لینک اشتراک» را از کارت او برایش بفرستید.</span>
-    </div>
-    <div class="preset-row">
-      <button type="button" class="btn btn-outline btn-sm" onclick="applyUserPreset(10,30)">10 GB / 30d</button>
-      <button type="button" class="btn btn-outline btn-sm" onclick="applyUserPreset(30,30)">30 GB / 30d</button>
-      <button type="button" class="btn btn-outline btn-sm" onclick="applyUserPreset(100,60)">100 GB / 60d</button>
-      <button type="button" class="btn btn-outline btn-sm" onclick="applyUserPreset(0,30)">Unlimited / نامحدود</button>
-    </div>
-    <div class="form-group"><label>Username / نام کاربری</label>
-      <input type="text" id="add-name" placeholder="e.g. ali"></div>
-    <div class="form-group"><label>Traffic (GB) / حجم <small class="field-hint">0 = unlimited / نامحدود</small></label>
-      <input type="number" id="add-traffic" value="10" min="0" step="0.1"></div>
-    <div class="form-group"><label>Duration (days) / مدت <small class="field-hint">days from today, 0 = never expires / روز از امروز، ۰ = بدون انقضا</small></label>
-      <input type="number" id="add-days" value="30" min="0"></div>
-    <div class="form-group" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-      <div><label>Speed Down (KB/s) <small class="field-hint">0 = no limit</small></label>
-        <input type="number" id="add-speed-down" value="200" min="0"></div>
-      <div><label>Speed Up (KB/s) <small class="field-hint">0 = no limit</small></label>
-        <input type="number" id="add-speed-up" value="200" min="0"></div>
-    </div>
-    <div class="form-group"><label>Note</label>
-      <input type="text" id="add-note" placeholder="Optional note..." maxlength="500"></div>
-    <div class="modal-actions">
-      <button class="btn btn-primary" onclick="doAddUser()">Create User</button>
-      <button class="btn btn-outline" onclick="closeModal('add-modal')">Cancel</button>
-    </div>
-  </div>
-</div>
-
-<!-- ── Bulk Modal ── -->
-<div id="bulk-modal" class="modal-overlay" onclick="if(event.target===this)closeModal(this.id)">
-  <div class="modal modal-xl" style="max-height:calc(100vh - 40px);overflow-y:auto;-webkit-overflow-scrolling:touch">
-    <div class="bulk-modal-head">
-      <h3 style="margin:0">Bulk Configs (Group)</h3>
-      <button type="button" class="btn btn-green btn-sm bulk-zip-top" onclick="downloadBulkZip()" title="One .txt per user + ALL-CONFIGS.txt">Download ZIP</button>
-    </div>
-    <div style="padding:12px;background:var(--bg3);border-radius:var(--radius-sm);font-size:12px;color:var(--t2);line-height:1.6;margin-bottom:14px">
-      Default mode creates users <b style="color:var(--t1)">without applying to server</b>, so existing connected configs won't drop.
-      You can apply later via <b style="color:var(--t1)">Sync</b>.
-      <br><br>
-      Output uses <code style="color:var(--accent)">&lt;&lt;&lt;BEGIN:name&gt;&gt;&gt;</code> … <code style="color:var(--accent)">&lt;&lt;&lt;END:name&gt;&gt;&gt;</code> for one-block copy. Prefer <b style="color:var(--t1)">Download ZIP</b>: one <code>.txt</code> per user plus <code>ALL-CONFIGS.txt</code>, clearly spaced.
-    </div>
-    <div class="form-group"><label>Prefix (group name)</label>
-      <input type="text" id="bulk-prefix" value="group" placeholder="e.g. 1gig"></div>
-    <div class="form-group"><label>Count</label>
-      <input type="number" id="bulk-count" value="10" min="1" max="500"></div>
-    <div class="form-group"><label>Traffic per user (GB)</label>
-      <input type="number" id="bulk-traffic" value="1" min="0.1" step="0.1"></div>
-    <div class="form-group"><label>Duration (days)</label>
-      <input type="number" id="bulk-days" value="30" min="1"></div>
-    <div class="form-group" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-      <div><label>Speed Down (KB/s)</label>
-        <input type="number" id="bulk-speed-down" value="200" min="0"></div>
-      <div><label>Speed Up (KB/s)</label>
-        <input type="number" id="bulk-speed-up" value="200" min="0"></div>
-    </div>
-    <div class="form-group" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-      <div>
-        <label>Numbering</label>
-        <select id="bulk-numbered">
-          <option value="1" selected>Numbered (001, 002, 003...)</option>
-          <option value="0">Random suffix</option>
-        </select>
-      </div>
-      <div>
-        <label>Start number</label>
-        <input type="number" id="bulk-start" value="1" min="1">
-      </div>
-    </div>
-    <div class="form-group" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-      <div>
-        <label>Pad digits</label>
-        <input type="number" id="bulk-pad" value="3" min="2" max="6">
-      </div>
-      <div style="padding-top:22px;color:var(--t3);font-size:11px;line-height:1.4">
-        Example: <b style="color:var(--t1)">prefix-1g-001</b>
-      </div>
-    </div>
-    <div class="form-group" style="display:flex;gap:10px;align-items:center">
-      <label class="toggle" style="margin:0"><input type="checkbox" id="bulk-apply"><span class="toggle-slider"></span></label>
-      <div>
-        <div class="settings-label" style="font-size:13px">Apply to server now</div>
-        <div class="settings-desc">May reload server config. Leave OFF to avoid any disruption.</div>
-      </div>
+      <!-- ═══ Settings ═══ -->
+      <section class="tactical-op-view" id="op-view-settings">
+        <div class="ui-page-head">
+          <div class="ui-page-titles">
+            <div class="ui-eyebrow">Configuration</div>
+            <h1 class="ui-title">Settings / تنظیمات</h1>
+            <p class="ui-subtitle">Protocols, DPI evasion, network, domain and TLS, notifications and system. Nothing changes until you press Save.</p>
+          </div>
+          <div class="ui-actions"><button type="button" class="btn btn-outline btn-sm" onclick="resetSettingsToDefault()" title="Reset all settings to default"><span class="material-symbols-outlined">restart_alt</span>Reset default</button><button type="button" class="btn btn-primary btn-sm" onclick="saveSettings()"><span class="material-symbols-outlined">save</span>Save / ذخیره</button></div>
+        </div>
+        <div id="settings-modal" class="ui-card ui-page-card ui-page-settings">
+<div class="settings-tabs" style="flex-shrink:0">
+      <button type="button" class="settings-tab-btn active" data-settings-tab="protocols" onclick="switchSettingsTab('protocols')"><span class="material-symbols-outlined">lan</span>Protocols / پروتکل‌ها</button>
+      <button type="button" class="settings-tab-btn" data-settings-tab="dpi-security" onclick="switchSettingsTab('dpi-security')"><span class="material-symbols-outlined">security</span>DPI & Security / امنیت</button>
+      <button type="button" class="settings-tab-btn" data-settings-tab="network-cdn" onclick="switchSettingsTab('network-cdn')"><span class="material-symbols-outlined">cloud</span>Network & CDN / شبکه</button>
+      <button type="button" class="settings-tab-btn" data-settings-tab="domain" onclick="switchSettingsTab('domain')"><span class="material-symbols-outlined">language</span>Domain & TLS / دامنه</button>
+      <button type="button" class="settings-tab-btn" data-settings-tab="notifications-backup" onclick="switchSettingsTab('notifications-backup')"><span class="material-symbols-outlined">notifications</span>Notifications & Backup / اعلان‌ها</button>
+      <button type="button" class="settings-tab-btn" data-settings-tab="system" onclick="switchSettingsTab('system')"><span class="material-symbols-outlined">dns</span>System / سیستم</button>
     </div>
 
-    <div class="modal-actions">
-      <button class="btn btn-primary" onclick="doBulkCreate()">Create Bulk</button>
-      <button class="btn btn-danger" onclick="deleteBulkGroup()">Delete This Group</button>
-      <button class="btn btn-outline" onclick="closeModal('bulk-modal')">Close</button>
-    </div>
-
-    <div style="margin-top:14px;border-top:1px solid var(--border);padding-top:14px">
-      <div class="settings-title">Results</div>
-      <div id="bulk-tabs" class="bulk-tabs" style="display:none"></div>
-      <textarea id="bulk-output" rows="10" readonly class="code-ltr" style="width:100%;padding:12px;background:var(--bg1);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--t1);font-size:11px;font-family:var(--font-mono);resize:vertical;word-break:break-all"></textarea>
-      <div class="bulk-qr-section">
-        <div class="settings-title">QR codes (all in this group)</div>
-        <div id="bulk-qr-wrap" class="bulk-qr-wrap" style="display:none"></div>
-      </div>
-      <div style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap">
-        <button class="btn btn-primary btn-sm" onclick="downloadBulkZip()">Download ZIP</button>
-        <button class="btn btn-outline btn-sm" onclick="copyBulkOutput()">Copy</button>
-        <button class="btn btn-outline btn-sm" onclick="downloadBulkCSV()">Download CSV</button>
-        <button class="btn btn-outline btn-sm" onclick="openBulkInNewTab()">Open Tab</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- ── Renew Modal ── -->
-<div id="renew-modal" class="modal-overlay" onclick="if(event.target===this)closeModal(this.id)">
-  <div class="modal">
-    <h3>Renew: <span id="renew-name" style="color:var(--accent)"></span></h3>
-    <div class="form-group"><label>New Traffic (GB)</label>
-      <input type="number" id="renew-traffic" value="10" min="0.1" step="0.1"></div>
-    <div class="form-group"><label>Duration (days)</label>
-      <input type="number" id="renew-days" value="30" min="1"></div>
-    <div class="modal-actions">
-      <button class="btn btn-primary" onclick="doRenewUser()">Renew</button>
-      <button class="btn btn-outline" onclick="closeModal('renew-modal')">Cancel</button>
-    </div>
-  </div>
-</div>
-
-<!-- ── Config Modal ── -->
-<div id="config-modal" class="modal-overlay" onclick="if(event.target===this)closeModal(this.id)">
-  <div class="modal modal-lg" style="max-height:calc(100vh - 40px);overflow-y:auto;-webkit-overflow-scrolling:touch">
-    <h3>Config: <span id="config-name" style="color:var(--accent)"></span></h3>
-    <div class="config-tabs" id="config-tabs" style="flex-wrap:wrap;gap:4px">
-      <button class="config-tab tab-vmess active" onclick="switchConfigTab('vmess')">VMess</button>
-      <button class="config-tab tab-vless" onclick="switchConfigTab('vless')" id="ct-vless" style="display:none">VLESS</button>
-      <button class="config-tab tab-cdn" onclick="switchConfigTab('cdn')" id="ct-cdn" style="display:none">CDN</button>
-      <button class="config-tab tab-trojan" onclick="switchConfigTab('trojan')" id="ct-trojan" style="display:none">Trojan</button>
-      <button class="config-tab tab-grpc" onclick="switchConfigTab('grpc')" id="ct-grpc" style="display:none">gRPC</button>
-      <button class="config-tab tab-httpupgrade" onclick="switchConfigTab('httpupgrade')" id="ct-httpupgrade" style="display:none">HU</button>
-      <button class="config-tab tab-ss2022" onclick="switchConfigTab('ss2022')" id="ct-ss2022" style="display:none">SS2022</button>
-      <button class="config-tab tab-vless_ws" onclick="switchConfigTab('vless_ws')" id="ct-vless_ws" style="display:none">VLESS-WS</button>
-      <button class="config-tab tab-vless_xhttp" onclick="switchConfigTab('vless_xhttp')" id="ct-vless_xhttp" style="display:none">XHTTP</button>
-      <button class="config-tab tab-vless_vision" onclick="switchConfigTab('vless_vision')" id="ct-vless_vision" style="display:none">Vision</button>
-      <button class="config-tab tab-vless_reverse" onclick="switchConfigTab('vless_reverse')" id="ct-vless_reverse" style="display:none">Reverse</button>
-      <button class="config-tab tab-trojan_cdn" onclick="switchConfigTab('trojan_cdn')" id="ct-trojan_cdn" style="display:none">Trojan-CDN</button>
-      <button class="config-tab tab-hysteria2" onclick="switchConfigTab('hysteria2')" id="ct-hysteria2" style="display:none">Hy2</button>
-      <button class="config-tab tab-tuic" onclick="switchConfigTab('tuic')" id="ct-tuic" style="display:none">TUIC</button>
-      <button class="config-tab tab-amneziawg" onclick="switchConfigTab('amneziawg')" id="ct-amneziawg" style="display:none">AWG</button>
-      <button class="config-tab tab-shadowtls" onclick="switchConfigTab('shadowtls')" id="ct-shadowtls" style="display:none">STLS</button>
-      <button class="config-tab tab-mieru" onclick="switchConfigTab('mieru')" id="ct-mieru" style="display:none">Mieru</button>
-      <button class="config-tab tab-naiveproxy" onclick="switchConfigTab('naiveproxy')" id="ct-naiveproxy" style="display:none">Naive</button>
-      <button class="config-tab tab-wireguard" onclick="switchConfigTab('wireguard')" id="ct-wireguard" style="display:none">WG</button>
-      <button class="config-tab tab-openvpn" onclick="switchConfigTab('openvpn')" id="ct-openvpn" style="display:none">OVPN</button>
-    </div>
-    <div class="config-center">
-      <div class="qr-box" id="config-qr"></div>
-    </div>
-    <div class="vmess-box">
-      <label style="font-size:12px;color:var(--t3)" id="config-link-label">VMess Link</label>
-      <textarea id="config-vmess" rows="3" readonly style="word-break:break-all;overflow-wrap:break-word"></textarea>
-      <button class="btn btn-primary btn-sm" onclick="copyConfigLink()" style="width:100%;margin-top:8px">Copy Link</button>
-    </div>
-    <div class="config-grid" id="config-info"></div>
-    <div style="margin-top:14px;padding:12px;background:var(--bg3);border-radius:var(--radius-sm);display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-      <span style="font-size:12px;color:var(--t3);flex-shrink:0">📄 Sub Page:</span>
-      <input type="text" id="config-sub-url" readonly style="flex:1;min-width:120px;padding:8px 10px;background:var(--bg1);border:1px solid var(--border);border-radius:8px;color:var(--green);font-size:11px;font-family:monospace">
-      <button class="btn btn-primary btn-sm" onclick="copySubUrl()" style="flex-shrink:0">Copy</button>
-      <a id="config-sub-open" href="#" target="_blank" class="btn btn-outline btn-sm" style="flex-shrink:0;text-decoration:none">Open</a>
-    </div>
-    <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
-      <button class="btn btn-outline" onclick="closeModal('config-modal')" style="width:100%;justify-content:center;padding:12px">Close</button>
-    </div>
-  </div>
-</div>
-
-<!-- ── Activity Modal ── -->
-<div id="activity-modal" class="modal-overlay" onclick="if(event.target===this)closeActivity()">
-  <div class="modal modal-lg" style="max-height:calc(100vh - 40px);overflow-y:auto;-webkit-overflow-scrolling:touch;max-width:640px">
-    <div class="activity-header">
-      <h3>Activity: <span id="activity-name" style="color:var(--accent)"></span></h3>
-      <span class="live-dot" id="activity-live">LIVE</span>
-    </div>
-    <div id="activity-alerts"></div>
-    <div class="activity-tabs">
-      <button class="activity-tab active" onclick="switchActivityTab('analysis')">Analysis</button>
-      <button class="activity-tab" onclick="switchActivityTab('sites')">Sites</button>
-      <button class="activity-tab" onclick="switchActivityTab('recent')">Recent</button>
-    </div>
-    <div id="activity-analysis" class="activity-body"></div>
-    <div id="activity-sites" class="activity-body" style="display:none"></div>
-    <div id="activity-recent" class="activity-body" style="display:none"></div>
-    <div class="activity-total" id="activity-total"></div>
-    <div style="margin-top:12px">
-      <button class="btn btn-outline" onclick="closeActivity()" style="width:100%;justify-content:center;padding:12px">Close</button>
-    </div>
-  </div>
-</div>
-
-<!-- ── Settings Modal ── -->
-<div id="settings-modal" class="modal-overlay" onclick="if(event.target===this)closeModal(this.id)">
-  <div class="modal modal-xxl" style="display:flex;flex-direction:column;max-height:calc(100vh - 40px)">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-      <h3 style="margin:0">Settings / تنظیمات</h3>
-      <div style="display:flex;gap:8px">
-        <button class="btn btn-outline btn-sm" onclick="resetSettingsToDefault()" title="Reset all settings to default">↺ Reset Default</button>
-        <button class="btn btn-primary btn-sm" onclick="saveSettings()">💾 Save / ذخیره</button>
-      </div>
-    </div>
-
-    <!-- ═══ Settings Tabs ═══ -->
-    <div class="settings-tabs" style="flex-shrink:0">
-      <button class="settings-tab-btn active" onclick="switchSettingsTab('protocols')">🌐 Protocols / پروتکل‌ها</button>
-      <button class="settings-tab-btn" onclick="switchSettingsTab('dpi-security')">🛡️ DPI & Security / امنیت</button>
-      <button class="settings-tab-btn" onclick="switchSettingsTab('network-cdn')">☁️ Network & CDN / شبکه</button>
-      <button class="settings-tab-btn" onclick="switchSettingsTab('domain')">🌍 Domain & TLS / دامنه</button>
-      <button class="settings-tab-btn" onclick="switchSettingsTab('notifications-backup')">📨 Notifications & Backup / اعلان‌ها</button>
-      <button class="settings-tab-btn" onclick="switchSettingsTab('system')">💻 System / سیستم</button>
-    </div>
-
-    <!-- ═══ Protocols Tab ═══ -->
-    <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch">
+    
+    <div>
     <div id="settings-protocols" class="settings-tab-content active">
-    <!-- ═══ 1. Config Customization ═══ -->
+    
     <div class="settings-section">
       <div class="sec-header">
-        <div class="settings-title">⚙️ Config Customization</div>
+        <div class="settings-title">Config Customization</div>
         <span class="s-indicator on" id="si-vmess"><span class="dot"></span> VMess Active</span>
       </div>
       <div class="help-box">
         <div class="help-en">🔧 <b>Config names &amp; VMess base settings.</b> The prefix appears before every config name. VMess is always active on port 443 with WebSocket + TLS — the most compatible protocol.</div>
         <div class="help-fa">🔧 <b>نام کانفیگ و تنظیمات پایه VMess.</b> پیشوند قبل از نام هر کانفیگ نمایش داده می‌شه. VMess همیشه روی پورت ۴۴۳ با WebSocket + TLS فعاله — سازگارترین پروتکل.</div>
       </div>
-      <div class="form-group" style="margin-top:12px"><label>Config Name Prefix / پیشوند نام</label>
+      <div class="form-group"><label>Config Name Prefix / پیشوند نام</label>
         <input type="text" id="set-config-prefix" value="Proxy" placeholder="Proxy" maxlength="20">
         <div class="settings-desc">Prefix for all config names (e.g. Proxy-username) / پیشوند نام کانفیگ‌ها (مثلاً Proxy-نام‌کاربر)</div></div>
       <div class="form-group"><label>VMess Port / پورت VMess</label>
@@ -531,11 +799,11 @@
         <div class="settings-desc">WebSocket URL path — change if default is blocked / مسیر وب‌سوکت — اگه فیلتر شده عوض کنید</div></div>
     </div>
 
-    <!-- ═══ Core Protocols ═══ -->
-    <!-- ═══ 2. VLESS / Reality ═══ -->
+    
+    
     <div class="settings-section">
       <div class="sec-header">
-        <div class="settings-title">🌐 VLESS / Reality</div>
+        <div class="settings-title">VLESS / Reality</div>
         <span class="s-indicator off" id="si-vless"><span class="dot"></span> <span class="si-text">Checking...</span></span>
       </div>
       <div class="help-box">
@@ -547,17 +815,17 @@
           <div class="settings-desc" id="vless-status">Checking...</div></div>
         <button class="btn btn-outline btn-sm" onclick="regenerateReality()">Regenerate Keys</button>
       </div>
-      <div class="form-group" style="margin-top:12px"><label>Destination (SNI) / سایت مقصد</label>
+      <div class="form-group"><label>Destination (SNI) / سایت مقصد</label>
         <input type="text" id="set-reality-sni" placeholder="chat.deepseek.com">
         <div class="settings-desc">Must be a real HTTPS website — used to disguise traffic / باید یک سایت HTTPS واقعی باشه — برای پنهان‌سازی ترافیک</div></div>
       <div class="form-group"><label>Port / پورت</label>
         <input type="number" id="set-vless-port" value="2053" min="1" max="65535"></div>
     </div>
 
-    <!-- ═══ 4. Trojan ═══ -->
+    
     <div class="settings-section">
       <div class="sec-header">
-        <div class="settings-title">🛡️ Trojan Protocol</div>
+        <div class="settings-title">Trojan Protocol</div>
         <span class="s-indicator off" id="si-trojan"><span class="dot"></span> <span class="si-text">OFF</span></span>
       </div>
       <div class="help-box">
@@ -569,14 +837,14 @@
           <div class="settings-desc">Enable Trojan protocol / فعال‌سازی پروتکل تروجان</div></div>
         <label class="toggle"><input type="checkbox" id="set-trojan"><span class="toggle-slider"></span></label>
       </div>
-      <div class="form-group" style="margin-top:12px"><label>Trojan Port / پورت</label>
+      <div class="form-group"><label>Trojan Port / پورت</label>
         <input type="number" id="set-trojan-port" value="2083" min="1" max="65535"></div>
     </div>
 
-    <!-- ═══ 5. gRPC ═══ -->
+    
     <div class="settings-section">
       <div class="sec-header">
-        <div class="settings-title">📡 gRPC Transport</div>
+        <div class="settings-title">gRPC Transport</div>
         <span class="s-indicator off" id="si-grpc"><span class="dot"></span> <span class="si-text">OFF</span></span>
       </div>
       <div class="help-box">
@@ -588,17 +856,17 @@
           <div class="settings-desc">Enable gRPC transport / فعال‌سازی ترنسپورت gRPC</div></div>
         <label class="toggle"><input type="checkbox" id="set-grpc"><span class="toggle-slider"></span></label>
       </div>
-      <div class="form-group" style="margin-top:12px"><label>gRPC Port / پورت</label>
+      <div class="form-group"><label>gRPC Port / پورت</label>
         <input type="number" id="set-grpc-port" value="2054" min="1" max="65535"></div>
       <div class="form-group"><label>gRPC Service Name / نام سرویس</label>
         <input type="text" id="set-grpc-service" value="GunService" placeholder="GunService">
         <div class="settings-desc">Must match between server &amp; client — don't change after deployment / باید بین سرور و کلاینت یکی باشه — بعد استقرار تغییر ندید</div></div>
     </div>
 
-    <!-- ═══ 6. HTTPUpgrade ═══ -->
+    
     <div class="settings-section">
       <div class="sec-header">
-        <div class="settings-title">🔄 HTTPUpgrade Transport</div>
+        <div class="settings-title">HTTPUpgrade Transport</div>
         <span class="s-indicator off" id="si-hu"><span class="dot"></span> <span class="si-text">OFF</span></span>
       </div>
       <div class="help-box">
@@ -610,17 +878,17 @@
           <div class="settings-desc">Enable HTTPUpgrade transport / فعال‌سازی ترنسپورت HTTPUpgrade</div></div>
         <label class="toggle"><input type="checkbox" id="set-httpupgrade"><span class="toggle-slider"></span></label>
       </div>
-      <div class="form-group" style="margin-top:12px"><label>HTTPUpgrade Port / پورت</label>
+      <div class="form-group"><label>HTTPUpgrade Port / پورت</label>
         <input type="number" id="set-httpupgrade-port" value="2055" min="1" max="65535"></div>
       <div class="form-group"><label>HTTPUpgrade Path / مسیر</label>
         <input type="text" id="set-httpupgrade-path" value="/httpupgrade" placeholder="/httpupgrade">
         <div class="settings-desc">URL path for HTTPUpgrade handshake / مسیر URL برای هند‌شیک HTTPUpgrade</div></div>
     </div>
 
-    <!-- ═══ 7. Fragment (Anti-DPI) ═══ -->
+    
     <div class="settings-section">
       <div class="sec-header">
-        <div class="settings-title">🧩 Fragment (Anti-DPI)</div>
+        <div class="settings-title">Fragment (Anti-DPI)</div>
         <span class="s-indicator off" id="si-fragment"><span class="dot"></span> <span class="si-text">OFF</span></span>
       </div>
       <div class="help-box">
@@ -632,8 +900,8 @@
           <div class="settings-desc">Client-side TCP fragmentation / تکه‌تکه‌سازی TCP سمت کلاینت</div></div>
         <label class="toggle"><input type="checkbox" id="set-fragment"><span class="toggle-slider"></span></label>
       </div>
-      <div class="form-group" style="margin-top:12px"><label>Packets / نوع پکت</label>
-        <select id="set-fragment-packets" style="width:100%;padding:10px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--t1)">
+      <div class="form-group"><label>Packets / نوع پکت</label>
+        <select id="set-fragment-packets">
           <option value="tlshello">tlshello (recommended / توصیه‌شده)</option>
           <option value="1-1">1-1 (all packets / همه پکت‌ها)</option>
           <option value="1-3">1-3</option>
@@ -647,10 +915,10 @@
         <div class="settings-desc">Delay between fragments in milliseconds / تأخیر بین تکه‌ها به میلی‌ثانیه</div></div>
     </div>
 
-    <!-- ═══ 8. MUX ═══ -->
+    
     <div class="settings-section">
       <div class="sec-header">
-        <div class="settings-title">🔀 MUX (Multiplexing)</div>
+        <div class="settings-title">MUX (Multiplexing)</div>
         <span class="s-indicator off" id="si-mux"><span class="dot"></span> <span class="si-text">OFF</span></span>
       </div>
       <div class="help-box">
@@ -662,15 +930,15 @@
           <div class="settings-desc">Multiplex connections into one tunnel / ادغام اتصالات در یک تونل</div></div>
         <label class="toggle"><input type="checkbox" id="set-mux"><span class="toggle-slider"></span></label>
       </div>
-      <div class="form-group" style="margin-top:12px"><label>Concurrency / همزمانی</label>
+      <div class="form-group"><label>Concurrency / همزمانی</label>
         <input type="number" id="set-mux-concurrency" value="8" min="1" max="1024">
         <div class="settings-desc">Number of streams per tunnel (recommended: 8) / تعداد استریم در هر تونل (پیشنهاد: ۸)</div></div>
     </div>
 
-    <!-- ═══ 9. ShadowSocks 2022 ═══ -->
+    
     <div class="settings-section">
       <div class="sec-header">
-        <div class="settings-title">🔐 ShadowSocks 2022</div>
+        <div class="settings-title">ShadowSocks 2022</div>
         <span class="s-indicator off" id="si-ss2022"><span class="dot"></span> <span class="si-text">OFF</span></span>
       </div>
       <div class="help-box">
@@ -682,27 +950,27 @@
           <div class="settings-desc">Enable ShadowSocks 2022 / فعال‌سازی شدوساکس ۲۰۲۲</div></div>
         <label class="toggle"><input type="checkbox" id="set-ss2022"><span class="toggle-slider"></span></label>
       </div>
-      <div class="form-group" style="margin-top:12px"><label>Port / پورت</label>
+      <div class="form-group"><label>Port / پورت</label>
         <input type="number" id="set-ss2022-port" value="2056" min="1" max="65535"></div>
       <div class="form-group"><label>Method / روش رمزنگاری</label>
-        <select id="set-ss2022-method" style="width:100%;padding:10px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--t1)">
+        <select id="set-ss2022-method">
           <option value="2022-blake3-aes-128-gcm">2022-blake3-aes-128-gcm (recommended / توصیه‌شده)</option>
           <option value="2022-blake3-aes-256-gcm">2022-blake3-aes-256-gcm</option>
         </select>
         <div class="settings-desc">AES-128 = faster, AES-256 = stronger / AES-128 = سریع‌تر، AES-256 = قوی‌تر</div></div>
       <div class="form-group"><label>Server Key / کلید سرور</label>
         <div style="display:flex;gap:8px">
-          <input type="text" id="set-ss2022-key" readonly placeholder="Click Generate / کلیک روی Generate" style="flex:1;font-family:monospace;font-size:11px">
+          <input type="text" id="set-ss2022-key" class="ui-flex1 ui-mono" readonly placeholder="Click Generate / کلیک روی Generate">
           <button class="btn btn-green btn-sm" onclick="generateSS2022Key()">Generate</button>
         </div>
         <div id="ss2022-status" style="font-size:11px;color:var(--t3);margin-top:4px"></div>
       </div>
     </div>
 
-    <!-- ═══ 10. VLESS + WS + TLS ═══ -->
+    
     <div class="settings-section">
       <div class="sec-header">
-        <div class="settings-title">🌐 VLESS + WebSocket + TLS</div>
+        <div class="settings-title">VLESS + WebSocket + TLS</div>
         <span class="s-indicator off" id="si-vless-ws"><span class="dot"></span> <span class="si-text">OFF</span></span>
       </div>
       <div class="help-box">
@@ -714,17 +982,17 @@
           <div class="settings-desc">Enable VLESS + WebSocket / فعال‌سازی VLESS + وب‌سوکت</div></div>
         <label class="toggle"><input type="checkbox" id="set-vless-ws"><span class="toggle-slider"></span></label>
       </div>
-      <div class="form-group" style="margin-top:12px"><label>Port / پورت</label>
+      <div class="form-group"><label>Port / پورت</label>
         <input type="number" id="set-vless-ws-port" value="2057" min="1" max="65535"></div>
       <div class="form-group"><label>WebSocket Path / مسیر وب‌سوکت</label>
         <input type="text" id="set-vless-ws-path" value="/vless-ws" placeholder="/vless-ws">
         <div class="settings-desc">URL path for VLESS WebSocket / مسیر URL برای وب‌سوکت VLESS</div></div>
     </div>
 
-    <!-- ═══ VLESS+XHTTP+REALITY ═══ -->
+    
     <div class="settings-section">
       <div class="sec-header">
-        <div class="settings-title">🚀 VLESS+XHTTP+REALITY</div>
+        <div class="settings-title">VLESS+XHTTP+REALITY</div>
         <span class="s-indicator off" id="si-vless-xhttp"><span class="dot"></span> <span class="si-text">OFF</span></span>
       </div>
       <div class="help-box">
@@ -736,11 +1004,11 @@
           <div class="settings-desc">Enable VLESS XHTTP Reality / فعال‌سازی پروتکل اصلی</div></div>
         <label class="toggle"><input type="checkbox" id="set-vless-xhttp"><span class="toggle-slider"></span></label>
       </div>
-      <div class="form-group" style="margin-top:12px"><label>Port / پورت</label>
+      <div class="form-group"><label>Port / پورت</label>
         <input type="number" id="set-vless-xhttp-port" value="2053" min="1" max="65535"></div>
       <div class="form-group"><label>REALITY SNI / دامنه SNI</label>
         <div style="display:flex;gap:8px;align-items:center">
-          <input type="text" id="set-vless-xhttp-reality-sni" placeholder="digikala.com" style="flex:1" list="sni-xhttp-list">
+          <input type="text" id="set-vless-xhttp-reality-sni" class="ui-flex1" placeholder="digikala.com" list="sni-xhttp-list">
           <button type="button" class="btn btn-outline btn-sm" onclick="autoSelectBestSNI('xhttp')" title="Auto-select best SNI / انتخاب خودکار بهترین SNI">🤖 Auto</button>
         </div>
         <datalist id="sni-xhttp-list">
@@ -763,24 +1031,24 @@
         <input type="text" id="set-vless-xhttp-path" value="/xhttp-stream" placeholder="/xhttp-stream">
         <div class="settings-desc">مسیر ترنسپورت XHTTP — شبیه مسیر API واقعی بذارید / XHTTP transport path — make it look like a real API path</div></div>
       <div class="form-group"><label>XHTTP Mode / حالت XHTTP</label>
-        <select id="set-vless-xhttp-mode" style="width:100%;padding:10px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--t1)">
+        <select id="set-vless-xhttp-mode">
           <option value="auto">auto (توصیه‌شده / recommended)</option>
           <option value="packet-up">packet-up (بسته‌ای / packet mode)</option>
           <option value="stream-up">stream-up (جریانی / stream mode)</option>
         </select>
         <div class="settings-desc">حالت auto بهترین عملکرد رو داره / auto mode has best performance</div></div>
       <div class="form-group"><label>Short ID / شناسه کوتاه</label>
-        <input type="text" id="set-vless-xhttp-reality-short-id" placeholder="Auto-generated / خودکار ساخته میشه" style="font-family:monospace;font-size:11px">
+        <input type="text" id="set-vless-xhttp-reality-short-id" class="ui-mono" placeholder="Auto-generated / خودکار ساخته میشه">
         <div class="settings-desc">خودکار ساخته میشه — دستی وارد نکنید / Auto-generated — leave empty for random</div></div>
       <div class="form-group"><label>Public Key / کلید عمومی</label>
-        <input type="text" id="set-vless-xhttp-reality-public-key" readonly placeholder="Generated with keys / ساخته شده با کلیدها" style="font-family:monospace;font-size:11px">
+        <input type="text" id="set-vless-xhttp-reality-public-key" class="ui-mono" readonly placeholder="Generated with keys / ساخته شده با کلیدها">
         <div class="settings-desc">خودکار از کلیدها ساخته میشه / Auto-generated from key pair</div></div>
     </div>
 
-    <!-- ═══ VLESS+REALITY+Vision ═══ -->
+    
     <div class="settings-section">
       <div class="sec-header">
-        <div class="settings-title">👁️ VLESS+REALITY+Vision</div>
+        <div class="settings-title">VLESS+REALITY+Vision</div>
         <span class="s-indicator off" id="si-vless-vision"><span class="dot"></span> <span class="si-text">OFF</span></span>
       </div>
       <div class="help-box">
@@ -792,11 +1060,11 @@
           <div class="settings-desc">Enable / فعال‌سازی</div></div>
         <label class="toggle"><input type="checkbox" id="set-vless-vision"><span class="toggle-slider"></span></label>
       </div>
-      <div class="form-group" style="margin-top:12px"><label>Port / پورت</label>
+      <div class="form-group"><label>Port / پورت</label>
         <input type="number" id="set-vless-vision-port" value="2058" min="1" max="65535"></div>
       <div class="form-group"><label>REALITY SNI / دامنه SNI</label>
         <div style="display:flex;gap:8px;align-items:center">
-          <input type="text" id="set-vless-vision-reality-sni" placeholder="objects.githubusercontent.com" style="flex:1" list="sni-vision-list">
+          <input type="text" id="set-vless-vision-reality-sni" class="ui-flex1" placeholder="objects.githubusercontent.com" list="sni-vision-list">
           <button type="button" class="btn btn-outline btn-sm" onclick="autoSelectBestSNI('vision')" title="Auto-select best SNI / انتخاب خودکار بهترین SNI">🤖 Auto</button>
         </div>
         <datalist id="sni-vision-list">
@@ -818,17 +1086,17 @@
         <input type="text" id="set-vless-vision-flow" value="xtls-rprx-vision" placeholder="xtls-rprx-vision">
         <div class="settings-desc">فلوی XTLS Vision — تغییر ندهید مگر اینکه بدانید / XTLS Vision flow — do not change unless you know what you're doing</div></div>
       <div class="form-group"><label>Short ID / شناسه کوتاه</label>
-        <input type="text" id="set-vless-vision-reality-short-id" placeholder="Auto-generated / خودکار ساخته میشه" style="font-family:monospace;font-size:11px">
+        <input type="text" id="set-vless-vision-reality-short-id" class="ui-mono" placeholder="Auto-generated / خودکار ساخته میشه">
         <div class="settings-desc">خودکار ساخته میشه — دستی وارد نکنید / Auto-generated — leave empty for random</div></div>
       <div class="form-group"><label>Public Key / کلید عمومی</label>
-        <input type="text" id="set-vless-vision-reality-public-key" readonly placeholder="Generated with keys / ساخته شده با کلیدها" style="font-family:monospace;font-size:11px">
+        <input type="text" id="set-vless-vision-reality-public-key" class="ui-mono" readonly placeholder="Generated with keys / ساخته شده با کلیدها">
         <div class="settings-desc">خودکار از کلیدها ساخته میشه / Auto-generated from key pair</div></div>
     </div>
 
-    <!-- ═══ VLESS-Reverse-Reality ═══ -->
+    
     <div class="settings-section">
       <div class="sec-header">
-        <div class="settings-title">🔄 VLESS-Reverse-Reality</div>
+        <div class="settings-title">VLESS-Reverse-Reality</div>
         <span class="s-indicator off" id="si-vless-reverse"><span class="dot"></span> <span class="si-text">OFF</span></span>
       </div>
       <div class="help-box">
@@ -840,11 +1108,11 @@
           <div class="settings-desc">Enable / فعال‌سازی</div></div>
         <label class="toggle"><input type="checkbox" id="set-vless-reverse"><span class="toggle-slider"></span></label>
       </div>
-      <div class="form-group" style="margin-top:12px"><label>Port / پورت</label>
+      <div class="form-group"><label>Port / پورت</label>
         <input type="number" id="set-vless-reverse-port" value="2059" min="1" max="65535"></div>
       <div class="form-group"><label>REALITY SNI / دامنه SNI</label>
         <div style="display:flex;gap:8px;align-items:center">
-          <input type="text" id="set-vless-reverse-reality-sni" placeholder="digikala.com" style="flex:1" list="sni-reverse-list">
+          <input type="text" id="set-vless-reverse-reality-sni" class="ui-flex1" placeholder="digikala.com" list="sni-reverse-list">
           <button type="button" class="btn btn-outline btn-sm" onclick="autoSelectBestSNI('reverse')" title="Auto-select best SNI / انتخاب خودکار بهترین SNI">🤖 Auto</button>
         </div>
         <datalist id="sni-reverse-list">
@@ -861,20 +1129,20 @@
       <div class="form-group"><label>Tunnel Port</label>
         <input type="number" id="set-vless-reverse-tunnel-port" value="0" min="0" max="65535"></div>
       <div class="form-group"><label>Backhaul Mode</label>
-        <select id="set-vless-reverse-backhaul-mode" style="width:100%;padding:10px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--t1)">
+        <select id="set-vless-reverse-backhaul-mode">
           <option value="rathole">Rathole</option>
           <option value="frp">FRP</option>
         </select></div>
       <div class="form-group"><label>Short ID</label>
-        <input type="text" id="set-vless-reverse-reality-short-id" placeholder="Auto-generated" style="font-family:monospace;font-size:11px"></div>
+        <input type="text" id="set-vless-reverse-reality-short-id" class="ui-mono" placeholder="Auto-generated"></div>
       <div class="form-group"><label>Public Key</label>
-        <input type="text" id="set-vless-reverse-reality-public-key" readonly placeholder="Generated with keys" style="font-family:monospace;font-size:11px"></div>
+        <input type="text" id="set-vless-reverse-reality-public-key" class="ui-mono" readonly placeholder="Generated with keys"></div>
     </div>
 
-    <!-- ═══ Trojan+CDN ═══ -->
+    
     <div class="settings-section">
       <div class="sec-header">
-        <div class="settings-title">🛡️ Trojan+WS/gRPC+CDN</div>
+        <div class="settings-title">Trojan+WS/gRPC+CDN</div>
         <span class="s-indicator off" id="si-trojan-cdn"><span class="dot"></span> <span class="si-text">OFF</span></span>
       </div>
       <div class="help-box">
@@ -886,7 +1154,7 @@
           <div class="settings-desc">Enable Trojan over CDN / فعال‌سازی</div></div>
         <label class="toggle"><input type="checkbox" id="set-trojan-cdn"><span class="toggle-slider"></span></label>
       </div>
-      <div class="form-group" style="margin-top:12px"><label>Port</label>
+      <div class="form-group"><label>Port</label>
         <input type="number" id="set-trojan-cdn-port" value="2083" min="1" max="65535"></div>
       <div class="form-group"><label>WS Path</label>
         <input type="text" id="set-trojan-cdn-ws-path" value="/trojan-ws" placeholder="/trojan-ws"></div>
@@ -899,16 +1167,16 @@
           <div class="settings-desc">Enable additional gRPC transport / فعال‌سازی ترنسپورت gRPC</div></div>
         <label class="toggle"><input type="checkbox" id="set-trojan-cdn-grpc"><span class="toggle-slider"></span></label>
       </div>
-      <div class="form-group" style="margin-top:12px"><label>gRPC Port</label>
+      <div class="form-group"><label>gRPC Port</label>
         <input type="number" id="set-trojan-cdn-grpc-port" value="2060" min="1" max="65535"></div>
       <div class="form-group"><label>gRPC Service Name</label>
         <input type="text" id="set-trojan-cdn-grpc-service" value="TrojanService" placeholder="TrojanService"></div>
     </div>
 
-    <!-- ═══ Hysteria2+Salamander ═══ -->
+    
     <div class="settings-section">
       <div class="sec-header">
-        <div class="settings-title">⚡ Hysteria2+Salamander+Port-Hop</div>
+        <div class="settings-title">Hysteria2+Salamander+Port-Hop</div>
         <span class="s-indicator off" id="si-hysteria2"><span class="dot"></span> <span class="si-text">OFF</span></span>
       </div>
       <div class="help-box">
@@ -920,10 +1188,10 @@
           <div class="settings-desc">Enable / فعال‌سازی</div></div>
         <label class="toggle"><input type="checkbox" id="set-hysteria2"><span class="toggle-slider"></span></label>
       </div>
-      <div class="form-group" style="margin-top:12px"><label>Port</label>
+      <div class="form-group"><label>Port</label>
         <input type="number" id="set-hysteria2-port" value="8443" min="1" max="65535"></div>
       <div class="form-group"><label>Password</label>
-        <input type="text" id="set-hysteria2-password" placeholder="Auto-generated" style="font-family:monospace;font-size:11px"></div>
+        <input type="text" id="set-hysteria2-password" class="ui-mono" placeholder="Auto-generated"></div>
       <div class="form-group" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         <div><label>Bandwidth Up</label>
           <input type="text" id="set-hysteria2-bandwidth-up" value="100 mbps" placeholder="100 mbps"></div>
@@ -935,21 +1203,21 @@
           <div class="settings-desc">Traffic obfuscation / مخفی‌سازی ترافیک</div></div>
         <label class="toggle"><input type="checkbox" id="set-hysteria2-salamander"><span class="toggle-slider"></span></label>
       </div>
-      <div class="form-group" style="margin-top:8px"><label>Salamander Password</label>
-        <input type="text" id="set-hysteria2-salamander-password" placeholder="Obfuscation password" style="font-family:monospace;font-size:11px"></div>
+      <div class="form-group"><label>Salamander Password</label>
+        <input type="text" id="set-hysteria2-salamander-password" class="ui-mono" placeholder="Obfuscation password"></div>
       <div class="settings-row" style="margin-top:12px">
         <div><div class="settings-label">Port Hopping</div>
           <div class="settings-desc">Evade port-based blocking / دور زدن بلاک پورت</div></div>
         <label class="toggle"><input type="checkbox" id="set-hysteria2-port-hop"><span class="toggle-slider"></span></label>
       </div>
-      <div class="form-group" style="margin-top:8px"><label>Port Hop Range</label>
+      <div class="form-group"><label>Port Hop Range</label>
         <input type="text" id="set-hysteria2-port-hop-ports" value="20000-50000" placeholder="20000-50000"></div>
     </div>
 
-    <!-- ═══ TUIC v5 ═══ -->
+    
     <div class="settings-section">
       <div class="sec-header">
-        <div class="settings-title">🌊 TUIC v5</div>
+        <div class="settings-title">TUIC v5</div>
         <span class="s-indicator off" id="si-tuic"><span class="dot"></span> <span class="si-text">OFF</span></span>
       </div>
       <div class="help-box">
@@ -961,12 +1229,12 @@
           <div class="settings-desc">Enable / فعال‌سازی</div></div>
         <label class="toggle"><input type="checkbox" id="set-tuic"><span class="toggle-slider"></span></label>
       </div>
-      <div class="form-group" style="margin-top:12px"><label>Port</label>
+      <div class="form-group"><label>Port</label>
         <input type="number" id="set-tuic-port" value="8444" min="1" max="65535"></div>
       <div class="form-group"><label>Password</label>
-        <input type="text" id="set-tuic-password" placeholder="Auto-generated" style="font-family:monospace;font-size:11px"></div>
+        <input type="text" id="set-tuic-password" class="ui-mono" placeholder="Auto-generated"></div>
       <div class="form-group"><label>Congestion Control</label>
-        <select id="set-tuic-congestion" style="width:100%;padding:10px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--t1)">
+        <select id="set-tuic-congestion">
           <option value="cubic">cubic</option>
           <option value="bbr">bbr</option>
           <option value="new_reno">new_reno</option>
@@ -978,10 +1246,10 @@
       </div>
     </div>
 
-    <!-- ═══ AmneziaWG 2.0 ═══ -->
-    <div class="settings-section">
+    
+    <div class="settings-section" hidden data-unavailable="amneziawg">
       <div class="sec-header">
-        <div class="settings-title">🛡️ AmneziaWG 2.0</div>
+        <div class="settings-title">AmneziaWG 2.0</div>
         <span class="s-indicator off" id="si-amneziawg"><span class="dot"></span> <span class="si-text">OFF</span></span>
       </div>
       <div class="help-box">
@@ -993,7 +1261,7 @@
           <div class="settings-desc">Enable / فعال‌سازی</div></div>
         <label class="toggle"><input type="checkbox" id="set-amneziawg"><span class="toggle-slider"></span></label>
       </div>
-      <div class="form-group" style="margin-top:12px"><label>Port</label>
+      <div class="form-group"><label>Port</label>
         <input type="number" id="set-amneziawg-port" value="51820" min="1" max="65535"></div>
       <div class="form-group"><label>Address</label>
         <input type="text" id="set-amneziawg-address" value="10.8.0.1/24" placeholder="10.8.0.1/24"></div>
@@ -1018,10 +1286,10 @@
       </div>
     </div>
 
-    <!-- ═══ ShadowTLS v3 ═══ -->
+    
     <div class="settings-section">
       <div class="sec-header">
-        <div class="settings-title">🔒 ShadowTLS v3</div>
+        <div class="settings-title">ShadowTLS v3</div>
         <span class="s-indicator off" id="si-shadowtls"><span class="dot"></span> <span class="si-text">OFF</span></span>
       </div>
       <div class="help-box">
@@ -1033,18 +1301,18 @@
           <div class="settings-desc">Enable / فعال‌سازی</div></div>
         <label class="toggle"><input type="checkbox" id="set-shadowtls"><span class="toggle-slider"></span></label>
       </div>
-      <div class="form-group" style="margin-top:12px"><label>Port</label>
+      <div class="form-group"><label>Port</label>
         <input type="number" id="set-shadowtls-port" value="8445" min="1" max="65535"></div>
       <div class="form-group"><label>Password</label>
-        <input type="text" id="set-shadowtls-password" placeholder="Auth password" style="font-family:monospace;font-size:11px"></div>
+        <input type="text" id="set-shadowtls-password" class="ui-mono" placeholder="Auth password"></div>
       <div class="form-group"><label>SNI</label>
         <input type="text" id="set-shadowtls-sni" value="rubika.ir" placeholder="rubika.ir"></div>
     </div>
 
-    <!-- ═══ Mieru ═══ -->
+    
     <div class="settings-section">
       <div class="sec-header">
-        <div class="settings-title">🔮 Mieru</div>
+        <div class="settings-title">Mieru</div>
         <span class="s-indicator off" id="si-mieru"><span class="dot"></span> <span class="si-text">OFF</span></span>
       </div>
       <div class="help-box">
@@ -1056,17 +1324,17 @@
           <div class="settings-desc">Enable / فعال‌سازی</div></div>
         <label class="toggle"><input type="checkbox" id="set-mieru"><span class="toggle-slider"></span></label>
       </div>
-      <div class="form-group" style="margin-top:12px"><label>Port</label>
+      <div class="form-group"><label>Port</label>
         <input type="number" id="set-mieru-port" value="8446" min="1" max="65535"></div>
       <div class="form-group"><label>Password</label>
-        <input type="text" id="set-mieru-password" placeholder="Password" style="font-family:monospace;font-size:11px"></div>
+        <input type="text" id="set-mieru-password" class="ui-mono" placeholder="Password"></div>
       <div class="form-group"><label>Encryption</label>
-        <select id="set-mieru-encryption" style="width:100%;padding:10px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--t1)">
+        <select id="set-mieru-encryption">
           <option value="aes-256-gcm">AES-256-GCM</option>
           <option value="chacha20-poly1305">ChaCha20-Poly1305</option>
         </select></div>
       <div class="form-group"><label>Transport</label>
-        <select id="set-mieru-transport" style="width:100%;padding:10px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--t1)">
+        <select id="set-mieru-transport">
           <option value="tcp">TCP</option>
           <option value="udp">UDP</option>
         </select></div>
@@ -1074,10 +1342,10 @@
         <input type="number" id="set-mieru-mux-concurrency" value="8" min="1" max="64"></div>
     </div>
 
-    <!-- ═══ NaiveProxy ═══ -->
+    
     <div class="settings-section">
       <div class="sec-header">
-        <div class="settings-title">🌐 NaiveProxy</div>
+        <div class="settings-title">NaiveProxy</div>
         <span class="s-indicator off" id="si-naiveproxy"><span class="dot"></span> <span class="si-text">OFF</span></span>
       </div>
       <div class="help-box">
@@ -1089,22 +1357,22 @@
           <div class="settings-desc">Enable / فعال‌سازی</div></div>
         <label class="toggle"><input type="checkbox" id="set-naiveproxy"><span class="toggle-slider"></span></label>
       </div>
-      <div class="form-group" style="margin-top:12px"><label>Port</label>
+      <div class="form-group"><label>Port</label>
         <input type="number" id="set-naiveproxy-port" value="8447" min="1" max="65535"></div>
       <div class="form-group"><label>Username</label>
         <input type="text" id="set-naiveproxy-user" placeholder="Username"></div>
       <div class="form-group"><label>Password</label>
-        <input type="text" id="set-naiveproxy-password" placeholder="Password" style="font-family:monospace;font-size:11px"></div>
+        <input type="text" id="set-naiveproxy-password" class="ui-mono" placeholder="Password"></div>
       <div class="form-group"><label>SNI</label>
         <input type="text" id="set-naiveproxy-sni" placeholder="yourdomain.com"></div>
       <div class="form-group"><label>Concurrency</label>
         <input type="number" id="set-naiveproxy-concurrency" value="4" min="1" max="32"></div>
     </div>
 
-    <!-- ═══ WireGuard ═══ -->
+    
     <div class="settings-section">
       <div class="sec-header">
-        <div class="settings-title">🔧 WireGuard</div>
+        <div class="settings-title">WireGuard</div>
         <span class="s-indicator off" id="si-wireguard"><span class="dot"></span> <span class="si-text">OFF</span></span>
       </div>
       <div class="help-box">
@@ -1116,20 +1384,20 @@
           <div class="settings-desc">Enable / فعال‌سازی</div></div>
         <label class="toggle"><input type="checkbox" id="set-wireguard"><span class="toggle-slider"></span></label>
       </div>
-      <div class="form-group" style="margin-top:12px"><label>Port</label>
+      <div class="form-group"><label>Port</label>
         <input type="number" id="set-wireguard-port" value="51821" min="1" max="65535"></div>
       <div class="form-group"><label>Address</label>
-        <input type="text" id="set-wireguard-address" value="10.9.0.1/24" placeholder="10.9.0.1/24"></div>
+        <input type="text" id="set-wireguard-address" value="10.9.0.1/16" placeholder="10.9.0.1/16"></div>
       <div class="form-group"><label>DNS</label>
         <input type="text" id="set-wireguard-dns" value="1.1.1.1" placeholder="1.1.1.1"></div>
       <div class="form-group"><label>MTU</label>
         <input type="number" id="set-wireguard-mtu" value="1280" min="1200" max="1500"></div>
     </div>
 
-    <!-- ═══ OpenVPN ═══ -->
-    <div class="settings-section">
+    
+    <div class="settings-section" hidden data-unavailable="openvpn">
       <div class="sec-header">
-        <div class="settings-title">🔑 OpenVPN</div>
+        <div class="settings-title">OpenVPN</div>
         <span class="s-indicator off" id="si-openvpn"><span class="dot"></span> <span class="si-text">OFF</span></span>
       </div>
       <div class="help-box">
@@ -1141,10 +1409,10 @@
           <div class="settings-desc">Enable / فعال‌سازی</div></div>
         <label class="toggle"><input type="checkbox" id="set-openvpn"><span class="toggle-slider"></span></label>
       </div>
-      <div class="form-group" style="margin-top:12px"><label>Port</label>
+      <div class="form-group"><label>Port</label>
         <input type="number" id="set-openvpn-port" value="1194" min="1" max="65535"></div>
       <div class="form-group"><label>Protocol</label>
-        <select id="set-openvpn-proto" style="width:100%;padding:10px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--t1)">
+        <select id="set-openvpn-proto">
           <option value="udp">UDP</option>
           <option value="tcp">TCP</option>
         </select></div>
@@ -1155,12 +1423,12 @@
     </div>
 
     </div>
-    <!-- ═══ DPI & Security Tab ═══ -->
+    
     <div id="settings-dpi-security" class="settings-tab-content">
-    <!-- ═══ Real DPI Evasion Settings ═══ -->
+    
     <div class="settings-section">
       <div class="sec-header">
-        <div class="settings-title">🛡️ Real DPI Evasion / ضد بازرسی عمیق واقعی</div>
+        <div class="settings-title">Real DPI Evasion / ضد بازرسی عمیق واقعی</div>
         <span class="s-indicator on" id="si-dpi-real"><span class="dot"></span> <span class="si-text">Active</span></span>
       </div>
       <div class="help-box">
@@ -1193,10 +1461,10 @@
       </div>
     </div>
 
-    <!-- ═══ Host Header Spoofing ═══ -->
+    
     <div class="settings-section">
       <div class="sec-header">
-        <div class="settings-title">🎭 Host Spoofing / جعل هاست</div>
+        <div class="settings-title">Host Spoofing / جعل هاست</div>
         <span class="s-indicator off" id="si-host-spoof"><span class="dot"></span> <span class="si-text">OFF</span></span>
       </div>
       <div class="help-box">
@@ -1256,11 +1524,11 @@
         <input type="text" id="set-dpi-bug-host-domain" placeholder="chat.deepseek.com" value="chat.deepseek.com">
       </div>
 
-      <!-- Fingerprint & Noise -->
+      
       <div class="settings-row">
         <div><div class="settings-label">TLS Fingerprint / اثر انگشت TLS</div>
           <div class="settings-desc">Browser TLS fingerprint for DPI evasion / اثر انگشت مرورگر برای دور زدن DPI</div></div>
-        <select id="set-fingerprint" style="width:180px;background:var(--bg2);color:var(--t0);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-family:var(--font-body);font-size:13px">
+        <select id="set-fingerprint" class="ui-w-sm">
           <option value="chrome">Chrome</option>
           <option value="firefox">Firefox</option>
           <option value="safari">Safari</option>
@@ -1283,17 +1551,17 @@
       <div class="settings-row">
         <div><div class="settings-label">Noise Packet Size / اندازه بسته نویز</div>
           <div class="settings-desc">Format: min-max bytes (e.g., rand:50-100) / فرمت: حداقل-حداکثر بایت</div></div>
-        <input type="text" id="set-noise-packet" placeholder="rand:50-100" value="rand:50-100" style="width:180px">
+        <input type="text" id="set-noise-packet" class="ui-w-sm" placeholder="rand:50-100" value="rand:50-100">
       </div>
 
       <div class="settings-row">
         <div><div class="settings-label">Noise Delay / تأخیر نویز</div>
           <div class="settings-desc">Delay between noise packets (ms) / تأخیر بین بسته‌های نویز (میلی‌ثانیه)</div></div>
-        <input type="text" id="set-noise-delay" placeholder="10-20" value="10-20" style="width:180px">
+        <input type="text" id="set-noise-delay" class="ui-w-sm" placeholder="10-20" value="10-20">
       </div>
     </div>
 
-    <!-- ═══ Emergency Relay / رله اضطراری ═══ -->
+    
     <div class="settings-section" style="border: 2px solid var(--red);border-radius:var(--radius-lg);padding:20px;margin-bottom:20px;background:linear-gradient(135deg,rgba(255,180,171,.06),transparent)">
       <div class="sec-header" style="margin-bottom:14px">
         <span style="font-size:20px;margin-right:8px">🆘</span>
@@ -1323,38 +1591,17 @@
       <div class="settings-row">
         <div><div class="settings-label">Relay Server Address / آدرس سرور رله</div>
           <div class="settings-desc">IP or domain of your relay server (must run tcp-relay.py) / IP یا دامنه سرور رله (باید tcp-relay.py اجرا شده باشه)</div></div>
-        <input type="text" id="set-emergency-relay-address" placeholder="e.g. 5.42.106.42 or relay.example.com" style="width:280px">
+        <input type="text" id="set-emergency-relay-address" class="ui-w-md" placeholder="e.g. 5.42.106.42 or relay.example.com">
       </div>
     </div>
 
-    <!-- ═══ Tunneling Techniques ═══ -->
-    <div class="settings-section">
-      <div class="sec-header">
-        <div class="settings-title">🕳️ Tunneling / تونل‌زنی</div>
-        <span class="s-indicator info" id="si-dpi-tunnel"><span class="dot"></span> <span class="si-text">Active</span></span>
-      </div>
-      <div class="help-box">
-        <div class="help-en">🕳️ <b>Tunneling</b> encapsulates VPN traffic inside other protocols to bypass firewalls. Useful when standard VPN protocols are blocked.</div>
-        <div class="help-fa">🕳️ <b>تونل‌زنی</b> ترافیک VPN را داخل پروتکل‌های دیگر کپسوله می‌کند تا از فایروال عبور کند. وقتی پروتکل‌های معمولی VPN مسدود هستند مفید است.</div>
-      </div>
-      
-      <div class="settings-row">
-        <div><div class="settings-label">DNS Tunneling / تونل DNS</div>
-          <div class="settings-desc">Encapsulate VPN data in DNS queries</div></div>
-        <label class="toggle"><input type="checkbox" id="set-dpi-dns-tunnel"><span class="toggle-slider"></span></label>
-      </div>
-      
-      <div class="settings-row">
-        <div><div class="settings-label">ICMP Tunneling / تونل ICMP</div>
-          <div class="settings-desc">Encapsulate VPN data in ICMP packets</div></div>
-        <label class="toggle"><input type="checkbox" id="set-dpi-icmp-tunnel"><span class="toggle-slider"></span></label>
-      </div>
+    
     </div>
 
-    <!-- ═══ Protocol Obfuscation ═══ -->
+    
     <div class="settings-section">
       <div class="sec-header">
-        <div class="settings-title">🎭 Protocol Obfuscation / مخفی‌سازی پروتکل</div>
+        <div class="settings-title">Protocol Obfuscation / مخفی‌سازی پروتکل</div>
         <span class="s-indicator on" id="si-dpi-obfuscate"><span class="dot"></span> <span class="si-text">Active</span></span>
       </div>
       <div class="help-box">
@@ -1377,7 +1624,7 @@
 
     <div class="settings-section">
       <div class="sec-header">
-        <div class="settings-title">🛡️ Advanced Network Resilience / تاب‌آوری پیشرفته شبکه</div>
+        <div class="settings-title">Advanced Network Resilience / تاب‌آوری پیشرفته شبکه</div>
         <span class="s-indicator danger" id="si-dpi-iran"><span class="dot"></span> <span class="si-text">Advanced</span></span>
       </div>
       <div class="help-box">
@@ -1421,9 +1668,9 @@
         <label class="toggle"><input type="checkbox" id="set-dpi-protocol-hop"><span class="toggle-slider"></span></label>
       </div>
       
-      <div class="form-group" style="margin-top:12px">
+      <div class="form-group">
         <label>Aggression Level / سطح تهاجمی</label>
-        <select id="set-dpi-aggression-level" style="width:100%;padding:10px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--t1)">
+        <select id="set-dpi-aggression-level">
           <option value="low">Low (کم)</option>
           <option value="medium" selected>Medium (متوسط)</option>
           <option value="high">High (زیاد)</option>
@@ -1432,15 +1679,15 @@
         <div class="settings-desc">Higher levels = more aggressive but may affect stability</div>
       </div>
       
-      <div class="form-group" style="margin-top:12px"><label>CDN Domain / دامنه CDN</label>
-        <input type="text" id="set-dpi-cdn-front" placeholder="cdn.example.com" style="width:100%;padding:10px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--t1)">
+      <div class="form-group"><label>CDN Domain / دامنه CDN</label>
+        <input type="text" id="set-dpi-cdn-front" placeholder="cdn.example.com">
         <div class="settings-desc">CDN domain for fronting / دامنه CDN برای fronting</div></div>
     </div>
 
-    <!-- ═══ Kill Switch & Content Filter ═══ -->
+    
     <div class="settings-section">
       <div class="sec-header">
-        <div class="settings-title">🛡️ Kill Switch & Filter / کیل سوییچ و فیلتر</div>
+        <div class="settings-title">Kill Switch & Filter / کیل سوییچ و فیلتر</div>
         <span class="s-indicator off" id="si-ks"><span class="dot"></span> <span class="si-text">OFF</span></span>
       </div>
       <div class="help-box">
@@ -1452,8 +1699,8 @@
           <div class="settings-desc">Auto-disable suspicious connections / غیرفعال‌سازی خودکار اتصالات مشکوک</div></div>
         <label class="toggle"><input type="checkbox" id="set-ks" onchange="toggleKillSwitch()"><span class="toggle-slider"></span></label>
       </div>
-      <input type="checkbox" id="set-security-ks" onchange="toggleKillSwitch()" style="display:none">
-      <div class="form-group" style="margin-top:12px"><label>Blocked Countries / کشورهای مسدود</label>
+      <input type="checkbox" id="set-security-ks" hidden onchange="toggleKillSwitch()">
+      <div class="form-group"><label>Blocked Countries / کشورهای مسدود</label>
         <input type="text" id="set-security-blocked-countries" value="IL" placeholder="IL,PS,...">
         <div class="settings-desc">Comma-separated country codes (ISO 3166-1 alpha-2) / کد کشورها با کاما جدا شده</div></div>
       <div class="settings-row" style="margin-top:12px">
@@ -1468,10 +1715,10 @@
       </div>
     </div>
 
-    <!-- ═══ Access Control ═══ -->
+    
     <div class="settings-section">
       <div class="sec-header">
-        <div class="settings-title">🔐 Access Control / کنترل دسترسی</div>
+        <div class="settings-title">Access Control / کنترل دسترسی</div>
         <span class="s-indicator info" id="si-access"><span class="dot"></span> <span class="si-text">Secure</span></span>
       </div>
       <div class="help-box">
@@ -1483,23 +1730,23 @@
           <div class="settings-desc">Update panel login password / رمز ورود پنل رو تغییر بدید</div></div>
         <button class="btn btn-outline btn-sm" onclick="closeModal('settings-modal');showModal('pw-modal')">Change</button>
       </div>
-      <div class="form-group" style="margin-top:12px"><label>Session Timeout (hours) / زمان نشست</label>
+      <div class="form-group"><label>Session Timeout (hours) / زمان نشست</label>
         <input type="number" id="set-security-session-timeout" value="1" min="1" max="24">
         <div class="settings-desc">Auto-logout after inactivity / خروج خودکار پس از عدم فعالیت</div></div>
       <div class="settings-row" style="margin-top:12px">
         <div><div class="settings-label">Login Attempt Limit / محدودیت تلاش</div>
           <div class="settings-desc">Max failed attempts before lockout / حداکثر تلاش ناموفق قبل از قفل شدن</div></div>
-        <input type="number" id="set-security-login-limit" value="3" min="1" max="10" style="width:80px;padding:8px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--t1)">
+        <input type="number" id="set-security-login-limit" class="ui-w-xs" value="3" min="1" max="10">
       </div>
     </div>
 
     </div>
-    <!-- ═══ Network & CDN Tab ═══ -->
+    
     <div id="settings-network-cdn" class="settings-tab-content">
-    <!-- ═══ Network Settings ═══ -->
+    
     <div class="settings-section">
       <div class="sec-header">
-        <div class="settings-title">☁️ Network Configuration / پیکربندی شبکه</div>
+        <div class="settings-title">Network Configuration / پیکربندی شبکه</div>
         <span class="s-indicator info" id="si-network"><span class="dot"></span> <span class="si-text">Config</span></span>
       </div>
       <div class="help-box">
@@ -1507,8 +1754,8 @@
         <div class="help-fa">⚙️ <b>تنظیمات شبکه</b> نحوه ارتباط سرور VPN با کلاینت‌ها و شبکه‌های خارجی را کنترل می‌کند.</div>
       </div>
       
-      <div class="form-group" style="margin-top:12px"><label>Server IP / IP سرور</label>
-        <input type="text" id="set-network-server-ip" value="{{ server_ip }}" readonly style="background:var(--bg3)">
+      <div class="form-group"><label>Server IP / IP سرور</label>
+        <input type="text" id="set-network-server-ip" value="{{ server_ip }}" readonly>
         <div class="settings-desc">Public IP address of your server / آدرس IP عمومی سرور شما</div></div>
       
       <div class="form-group"><label>Default Port / پورت پیش‌فرض</label>
@@ -1522,10 +1769,10 @@
       </div>
     </div>
 
-    <!-- ═══ VLESS WS+TLS Domain Fronting ═══ -->
+    
     <div class="settings-section">
       <div class="sec-header">
-        <div class="settings-title">🔄 VLESS WS+TLS Domain Fronting</div>
+        <div class="settings-title">VLESS WS+TLS Domain Fronting</div>
         <span class="s-indicator off" id="si-vless-ws-plain"><span class="dot"></span> <span class="si-text">OFF</span></span>
       </div>
       <div class="help-box">
@@ -1537,7 +1784,7 @@
           <div class="settings-desc">Enable TLS domain fronting with spoofed SNI / فعال‌سازی Domain Fronting با SNI جعلی</div></div>
         <label class="toggle"><input type="checkbox" id="set-vless-ws-plain-front"><span class="toggle-slider"></span></label>
       </div>
-      <div class="form-group" style="margin-top:12px"><label>SNI Domain / دامنه SNI</label>
+      <div class="form-group"><label>SNI Domain / دامنه SNI</label>
         <input type="text" id="set-vless-ws-plain-front-domain" value="chat.deepseek.com" placeholder="chat.deepseek.com">
         <div class="settings-desc">Trusted domain shown as SNI to DPI / دامنه معتبر که به عنوان SNI به DPI نمایش داده میشه</div></div>
       <div class="form-group"><label>Port / پورت</label>
@@ -1548,10 +1795,10 @@
         <div class="settings-desc">WebSocket path / مسیر وب‌سوکت</div></div>
     </div>
 
-    <!-- ═══ Cloudflare CDN ═══ -->
+    
     <div class="settings-section">
       <div class="sec-header">
-        <div class="settings-title">☁️ Cloudflare CDN</div>
+        <div class="settings-title">Cloudflare CDN</div>
         <span class="s-indicator off" id="si-cdn"><span class="dot"></span> <span class="si-text">OFF</span></span>
       </div>
       <div class="help-box">
@@ -1563,7 +1810,7 @@
           <div class="settings-desc">Route through Cloudflare / مسیریابی از طریق کلادفلر</div></div>
         <label class="toggle"><input type="checkbox" id="set-cdn" onchange="toggleCDN()"><span class="toggle-slider"></span></label>
       </div>
-      <div class="form-group" style="margin-top:12px"><label>CDN Domain / دامنه CDN</label>
+      <div class="form-group"><label>CDN Domain / دامنه CDN</label>
         <input type="text" id="set-cdn-domain" placeholder="vpn.yourdomain.com">
         <div class="settings-desc">Your Cloudflare-proxied domain / دامنه پروکسی‌شده کلادفلر</div></div>
       <div class="form-group"><label>CDN WebSocket Path / مسیر وب‌سوکت</label>
@@ -1574,9 +1821,9 @@
     </div>
 
     </div>
-    <!-- ═══ Domain & TLS Tab ═══ -->
+    
     <div id="settings-domain" class="settings-tab-content">
-    <!-- ═══ Active Domain Card ═══ -->
+    
     <div class="settings-section" id="domain-active-section" style="border:2px solid var(--accent);border-radius:var(--radius-lg);padding:20px;margin-bottom:20px;background:linear-gradient(135deg,rgba(88,166,255,.06),transparent)">
       <div class="sec-header" style="margin-bottom:14px">
         <span style="font-size:20px;margin-right:8px">🌍</span>
@@ -1607,20 +1854,20 @@
       </div>
     </div>
 
-    <!-- ═══ Set / Change Domain ═══ -->
+    
     <div class="settings-section">
       <div class="sec-header">
-        <div class="settings-title">🔧 Set or Change Domain / تنظیم یا تغییر دامنه</div>
+        <div class="settings-title">Set or Change Domain / تنظیم یا تغییر دامنه</div>
       </div>
       <div class="help-box">
         <div class="help-en">🌐 Enter the FQDN that's pointed at this server's IP. The panel tries <b>acme.sh</b> first (preferred — no root daemon), then <b>certbot</b>, and finally falls back to a self-signed cert if both fail. Every TLS-bearing inbound (VLESS-Reality, VLESS-WS, Trojan, NaiveProxy, etc.) gets this domain as SNI.</div>
         <div class="help-fa">🌐 FQDN که به IP این سرور اشاره می‌کنه رو وارد کنید. پنل اول <b>acme.sh</b> رو امتحان می‌کنه (ترجیحی — بدون دیمون ریشه)، بعد <b>certbot</b>، و در نهایت اگه هر دو fail بشن به self-signed برمی‌گرده. همه inboundهای TLS (VLESS-Reality، VLESS-WS، Trojan، NaiveProxy و غیره) این دامنه رو به عنوان SNI می‌گیرن.</div>
       </div>
-      <div class="form-group" style="margin-top:12px"><label>Domain / دامنه</label>
-        <input type="text" id="set-domain-name" placeholder="vpn.example.com" style="font-family:monospace">
+      <div class="form-group"><label>Domain / دامنه</label>
+        <input type="text" id="set-domain-name" class="ui-mono" placeholder="vpn.example.com">
         <div class="settings-desc">Lowercase FQDN, no http://, no trailing slash / FQDN با حروف کوچک، بدون http://، بدون اسلش آخر</div></div>
       <div class="form-group"><label>Contact Email (optional) / ایمیل تماس (اختیاری)</label>
-        <input type="text" id="set-domain-email" placeholder="admin@example.com" style="font-family:monospace">
+        <input type="text" id="set-domain-email" class="ui-mono" placeholder="admin@example.com">
         <div class="settings-desc">For Let's Encrypt expiry warnings / برای هشدارهای انقضای Let's Encrypt</div></div>
       <div class="settings-row" style="margin-top:8px">
         <div><div class="settings-label">Force Self-Signed / مجبور به Self-Signed</div>
@@ -1634,30 +1881,30 @@
       <div id="domain-set-result" style="margin-top:14px;display:none"></div>
     </div>
 
-    <!-- ═══ Autorenew & Files ═══ -->
+    
     <div class="settings-section">
       <div class="sec-header">
-        <div class="settings-title">⏰ Auto-Renewal & Files / تمدید خودکار و فایل‌ها</div>
+        <div class="settings-title">Auto-Renewal & Files / تمدید خودکار و فایل‌ها</div>
         <span class="s-indicator info" id="si-domain-autorenew"><span class="dot"></span> <span class="si-text" id="si-domain-autorenew-text">—</span></span>
       </div>
       <div class="help-box">
         <div class="help-en">⏰ The Celery <code>domain_autorenew</code> job runs daily and re-issues the cert when it's within the renew window. The default window is 30 days, hard floor is 7 days (so we never race expiry).</div>
         <div class="help-fa">⏰ Job <code>domain_autorenew</code> سلری روزانه اجرا میشه و وقتی گواهی به پنجره تمدید رسید، دوباره صادرش می‌کنه. پنجره پیش‌فرض ۳۰ روز، کف سخت ۷ روز (پس هیچ‌وقت با انقضا مسابقه نمی‌دیم).</div>
       </div>
-      <div class="form-group" style="margin-top:12px"><label>Auto-Renew Window (days) / پنجره تمدید خودکار (روز)</label>
+      <div class="form-group"><label>Auto-Renew Window (days) / پنجره تمدید خودکار (روز)</label>
         <input type="number" id="set-domain-autorenew-days" value="30" min="7" max="60">
         <div class="settings-desc">Renew when ≤ this many days remain. Minimum 7 to avoid the 7-day floor. / وقتی ≤ این روزها مانده تمدید کن. حداقل ۷ برای جلوگیری از کف ۷ روزه.</div></div>
     </div>
 
-    <!-- ═══ Notification message area (toast) ═══ -->
+    
     <div id="domain-toast" style="position:fixed;bottom:30px;right:30px;z-index:10000;display:none"></div>
     </div>
-    <!-- ═══ Notifications & Backup Tab ═══ -->
+    
     <div id="settings-notifications-backup" class="settings-tab-content">
-    <!-- ═══ Telegram Notifications ═══ -->
+    
     <div class="settings-section">
       <div class="sec-header">
-        <div class="settings-title">📨 Telegram Notifications / اعلان‌های تلگرام</div>
+        <div class="settings-title">Telegram Notifications / اعلان‌های تلگرام</div>
         <span class="s-indicator off" id="si-telegram"><span class="dot"></span> <span class="si-text">OFF</span></span>
       </div>
       <div class="help-box">
@@ -1669,11 +1916,11 @@
           <div class="settings-desc">Enable Telegram bot alerts / فعال‌سازی هشدارهای ربات تلگرام</div></div>
         <label class="toggle"><input type="checkbox" id="set-telegram"><span class="toggle-slider"></span></label>
       </div>
-      <div class="form-group" style="margin-top:12px"><label>Bot Token / توکن ربات</label>
-        <input type="text" id="set-telegram-token" placeholder="123456:ABC-DEF..." style="font-family:monospace;font-size:12px">
+      <div class="form-group"><label>Bot Token / توکن ربات</label>
+        <input type="text" id="set-telegram-token" class="ui-mono" placeholder="123456:ABC-DEF...">
         <div class="settings-desc">From @BotFather / از @BotFather دریافت کنید</div></div>
       <div class="form-group"><label>Chat ID / شناسه چت</label>
-        <input type="text" id="set-telegram-chat" placeholder="-100123456789" style="font-family:monospace;font-size:12px">
+        <input type="text" id="set-telegram-chat" class="ui-mono" placeholder="-100123456789">
         <div class="settings-desc">Your user ID, group ID, or channel ID / شناسه کاربر، گروه یا کانال</div></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px">
         <div class="settings-row" style="padding:6px 10px;background:var(--bg3);border-radius:var(--radius-sm)">
@@ -1704,10 +1951,10 @@
       <button class="btn btn-outline btn-sm" onclick="testTelegram()" style="margin-top:12px;width:100%">🔔 Send Test Notification</button>
     </div>
 
-    <!-- ═══ Backup / پشتیبان‌گیری ═══ -->
+    
     <div class="settings-section">
       <div class="sec-header">
-        <div class="settings-title">💾 Backup / پشتیبان‌گیری</div>
+        <div class="settings-title">Backup / پشتیبان‌گیری</div>
         <span class="s-indicator info" id="si-backup"><span class="dot"></span> Auto</span>
       </div>
       <div class="help-box">
@@ -1723,12 +1970,12 @@
     </div>
 
     </div>
-    <!-- ═══ System Tab ═══ -->
+    
     <div id="settings-system" class="settings-tab-content">
-    <!-- ═══ System Info ═══ -->
+    
     <div class="settings-section">
       <div class="sec-header">
-        <div class="settings-title">💻 System Information / اطلاعات سیستم</div>
+        <div class="settings-title">System Information / اطلاعات سیستم</div>
         <span class="s-indicator info" id="si-sys-info"><span class="dot"></span> <span class="si-text">Live</span></span>
       </div>
       <div class="help-box">
@@ -1767,10 +2014,10 @@
       </div>
     </div>
 
-    <!-- ═══ Panel Settings ═══ -->
+    
     <div class="settings-section">
       <div class="sec-header">
-        <div class="settings-title">⚙️ Panel Configuration / پیکربندی پنل</div>
+        <div class="settings-title">Panel Configuration / پیکربندی پنل</div>
         <span class="s-indicator info" id="si-panel-config"><span class="dot"></span> <span class="si-text">Config</span></span>
       </div>
       <div class="help-box">
@@ -1778,8 +2025,8 @@
         <div class="help-fa">⚙️ <b>پیکربندی پنل</b> اجازه تغییر پورت وب پنل، فعال/غیرفعال کردن سیستم نمایندگی و همگام‌سازی خودکار ترافیک رو میده.</div>
       </div>
       
-      <div class="form-group" style="margin-top:12px"><label>Panel Port / پورت پنل</label>
-        <input type="number" id="set-system-panel-port" value="38471" min="1" max="65535" readonly style="background:var(--bg3)">
+      <div class="form-group"><label>Panel Port / پورت پنل</label>
+        <input type="number" id="set-system-panel-port" value="38471" min="1" max="65535" readonly>
         <div class="settings-desc">Web panel access port (restart required for change) / پورت دسترسی پنل وب (برای تغییر نیاز به راه‌اندازی مجدد)</div></div>
       
       <div class="settings-row" style="margin-top:12px">
@@ -1793,10 +2040,10 @@
           <div class="settings-desc">Automatically sync usage stats / همگام‌سازی خودکار آمار مصرف</div></div>
         <label class="toggle"><input type="checkbox" id="set-system-auto-sync" checked><span class="toggle-slider"></span></label>
       </div>
-    <!-- ═══ Network Intelligence ═══ -->
+    
     <div class="settings-section">
       <div class="sec-header">
-        <div class="settings-title">🎯 Network Intelligence / اطلاعات شبکه</div>
+        <div class="settings-title">Network Intelligence / اطلاعات شبکه</div>
         <span class="s-indicator info" id="si-iran-targets"><span class="dot"></span> <span class="si-text">Active</span></span>
       </div>
       <div class="help-box">
@@ -1842,18 +2089,314 @@
 
     </div>
 
-    </div><!-- end scrollable content -->
+    </div>
     <div id="settings-validation" style="margin-top:8px;display:none"></div>
     <div class="modal-actions" style="flex-shrink:0;padding-top:12px;border-top:1px solid var(--border);margin-top:4px">
       <button class="btn btn-outline btn-sm" onclick="resetSettingsToDefault()" title="Reset all to defaults">↺ Reset to Default / بازنشانی</button>
       <button class="btn btn-primary" onclick="saveSettings()">💾 Save Settings / ذخیره تنظیمات</button>
-      <button class="btn btn-outline" onclick="closeModal('settings-modal')">Close / بستن</button>
+    </div>
+  </div>
+        </div>
+      </section>
+
+      <!-- ═══ Agents ═══ -->
+      <section class="tactical-op-view" id="op-view-agents">
+        <div class="ui-page-head">
+          <div class="ui-page-titles">
+            <div class="ui-eyebrow">Administration</div>
+            <h1 class="ui-title">Agents / نمایندگان</h1>
+            <p class="ui-subtitle">Resellers with their own traffic quota. Each agent signs in at /agent and only sees their own users.</p>
+          </div>
+          <div class="ui-actions"><a class="btn btn-outline btn-sm" href="/agent"><span class="material-symbols-outlined">support_agent</span>Agent panel</a></div>
+        </div>
+        <div id="agents-modal" class="ui-card ui-page-card ui-page-agents">
+<div class="settings-section">
+      <div class="settings-title">Create Agent</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="form-group"><label>Agent Name</label>
+          <input type="text" id="agent-add-name" placeholder="e.g. reseller1"></div>
+        <div class="form-group"><label>Password</label>
+          <input type="password" id="agent-add-pass" placeholder="12+ chars, mixed case, digit, symbol"></div>
+      </div>
+      <div class="form-group"><label>Traffic Quota (GB total)</label>
+        <input type="number" id="agent-add-quota" value="100" min="1" step="1"></div>
+      <div class="form-group"><label>Default Speed Limit (KB/s per user)</label>
+        <input type="number" id="agent-add-speed" value="0" min="0"></div>
+      <div class="form-group" style="display:flex;gap:10px;align-items:center">
+        <label class="toggle" style="margin:0"><input type="checkbox" id="agent-add-active" checked><span class="toggle-slider"></span></label>
+        <div><div class="settings-label" style="font-size:13px">Active / فعال</div>
+          <div class="settings-desc">The agent can sign in right away. Turn off to create the account disabled.</div></div>
+      </div>
+      <button class="btn btn-primary" onclick="doAddAgent()" style="width:100%;justify-content:center">Create Agent</button>
+    </div>
+
+    <div class="settings-section">
+      <div class="settings-title">Agents</div>
+      <div id="agents-list"></div>
+    </div>
+        </div>
+      </section>
+
+      <!-- ═══ Online Users ═══ -->
+      <section class="tactical-op-view" id="op-view-online">
+        <div class="ui-page-head">
+          <div class="ui-page-titles">
+            <div class="ui-eyebrow">Live</div>
+            <h1 class="ui-title">Online Users / کاربران آنلاین</h1>
+            <p class="ui-subtitle">Who is connected right now and from which IP addresses. Refreshes every 15 seconds.</p>
+          </div>
+          <div class="ui-actions"><button type="button" class="btn btn-outline btn-sm" onclick="fetchOnlineUsers()"><span class="material-symbols-outlined">refresh</span>Refresh</button></div>
+        </div>
+        <div id="online-modal" class="ui-card ui-page-card ui-page-online">
+<div id="online-users-content">
+      <div style="color:var(--t3);text-align:center;padding:30px">Loading...</div>
+    </div>
+        </div>
+      </section>
+
+      <!-- ═══ Backup ═══ -->
+      <section class="tactical-op-view" id="op-view-backup">
+        <div class="ui-page-head">
+          <div class="ui-page-titles">
+            <div class="ui-eyebrow">Data safety</div>
+            <h1 class="ui-title">Backup / پشتیبان‌گیری</h1>
+            <p class="ui-subtitle">Create a backup before you change settings or upgrade, and restore one if something goes wrong.</p>
+          </div>
+          <div class="ui-actions"><button type="button" class="btn btn-outline btn-sm" onclick="loadBackups()"><span class="material-symbols-outlined">refresh</span>Refresh list</button><button type="button" class="btn btn-primary btn-sm" onclick="createBackup()"><span class="material-symbols-outlined">backup</span>Create backup</button></div>
+        </div>
+        <div id="backup-modal" class="ui-card ui-page-card ui-page-backup">
+<div class="form-group" style="margin-bottom:16px">
+      <label>Cleanup backups older than (days):</label>
+      <div style="display:flex;gap:8px">
+        <input type="number" id="backup-retention" value="7" min="1" style="flex:1">
+        <button class="btn btn-orange" onclick="cleanupBackups()">Cleanup</button>
+      </div>
+    </div>
+    <h4 style="font-size:14px;color:var(--t0);margin-bottom:12px">Available Backups</h4>
+    <div id="backup-modal-list" class="activity-body" style="max-height:300px;overflow-y:auto"></div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="ui-footer">
+      <span>© Spiritus v2.1.0 · Censor-hardened VPN control plane</span>
+      <span class="ui-footer-meta"><span class="material-symbols-outlined">lock</span><span id="ui-transport">—</span></span>
+    </footer>
+  </div>
+</div>
+
+
+
+<div id="add-modal" class="modal-overlay" onclick="if(event.target===this)closeModal(this.id)">
+  <div class="modal">
+    <h3>New User / کاربر جدید</h3>
+    <div class="hint-box">
+      <span class="help-en">Pick a plan below or type your own values. After you create the user, open their card and send them the <b>subscription link</b>.</span>
+      <span class="help-fa" lang="fa">یک پلن را انتخاب کنید یا مقدار دلخواه بنویسید. بعد از ساخت کاربر، «لینک اشتراک» را از کارت او برایش بفرستید.</span>
+    </div>
+    <div class="preset-row">
+      <button type="button" class="btn btn-outline btn-sm" onclick="applyUserPreset(10,30)">10 GB / 30d</button>
+      <button type="button" class="btn btn-outline btn-sm" onclick="applyUserPreset(30,30)">30 GB / 30d</button>
+      <button type="button" class="btn btn-outline btn-sm" onclick="applyUserPreset(100,60)">100 GB / 60d</button>
+      <button type="button" class="btn btn-outline btn-sm" onclick="applyUserPreset(0,30)">Unlimited / نامحدود</button>
+    </div>
+    <div class="form-group"><label>Username / نام کاربری</label>
+      <input type="text" id="add-name" placeholder="e.g. ali"></div>
+    <div class="form-group"><label>Traffic (GB) / حجم <small class="field-hint">0 = unlimited / نامحدود</small></label>
+      <input type="number" id="add-traffic" value="10" min="0" step="0.1"></div>
+    <div class="form-group"><label>Duration (days) / مدت <small class="field-hint">days from today, 0 = never expires / روز از امروز، ۰ = بدون انقضا</small></label>
+      <input type="number" id="add-days" value="30" min="0"></div>
+    <div class="form-group" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div><label>Speed Down (KB/s) <small class="field-hint">0 = no limit</small></label>
+        <input type="number" id="add-speed-down" value="0" min="0"></div>
+      <div><label>Speed Up (KB/s) <small class="field-hint">0 = no limit</small></label>
+        <input type="number" id="add-speed-up" value="0" min="0"></div>
+    </div>
+    <div class="form-group"><label>Note</label>
+      <input type="text" id="add-note" placeholder="Optional note..." maxlength="500"></div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="doAddUser()">Create User</button>
+      <button class="btn btn-outline" onclick="closeModal('add-modal')">Cancel</button>
     </div>
   </div>
 </div>
+
+
+<div id="bulk-modal" class="modal-overlay" onclick="if(event.target===this)closeModal(this.id)">
+  <div class="modal modal-xl" style="max-height:calc(100vh - 40px);overflow-y:auto;-webkit-overflow-scrolling:touch">
+    <div class="bulk-modal-head">
+      <h3 style="margin:0">Bulk Configs (Group)</h3>
+      <button type="button" class="btn btn-green btn-sm bulk-zip-top" onclick="downloadBulkZip()" title="One .txt per user + ALL-CONFIGS.txt">Download ZIP</button>
+    </div>
+    <div style="padding:12px;background:var(--bg3);border-radius:var(--radius-sm);font-size:12px;color:var(--t2);line-height:1.6;margin-bottom:14px">
+      Default mode creates users <b style="color:var(--t1)">without applying to server</b>, so existing connected configs won't drop.
+      You can apply later via <b style="color:var(--t1)">Sync</b>.
+      <br><br>
+      Output uses <code style="color:var(--accent)">&lt;&lt;&lt;BEGIN:name&gt;&gt;&gt;</code> … <code style="color:var(--accent)">&lt;&lt;&lt;END:name&gt;&gt;&gt;</code> for one-block copy. Prefer <b style="color:var(--t1)">Download ZIP</b>: one <code>.txt</code> per user plus <code>ALL-CONFIGS.txt</code>, clearly spaced.
+    </div>
+    <div class="form-group"><label>Prefix (group name)</label>
+      <input type="text" id="bulk-prefix" value="group" placeholder="e.g. 1gig"></div>
+    <div class="form-group"><label>Count</label>
+      <input type="number" id="bulk-count" value="10" min="1" max="500"></div>
+    <div class="form-group"><label>Traffic per user (GB)</label>
+      <input type="number" id="bulk-traffic" value="1" min="0.1" step="0.1"></div>
+    <div class="form-group"><label>Duration (days)</label>
+      <input type="number" id="bulk-days" value="30" min="1"></div>
+    <div class="form-group" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div><label>Speed Down (KB/s)</label>
+        <input type="number" id="bulk-speed-down" value="0" min="0"></div>
+      <div><label>Speed Up (KB/s)</label>
+        <input type="number" id="bulk-speed-up" value="0" min="0"></div>
+    </div>
+    <div class="form-group" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div>
+        <label>Numbering</label>
+        <select id="bulk-numbered">
+          <option value="1" selected>Numbered (001, 002, 003...)</option>
+          <option value="0">Random suffix</option>
+        </select>
+      </div>
+      <div>
+        <label>Start number</label>
+        <input type="number" id="bulk-start" value="1" min="1">
+      </div>
+    </div>
+    <div class="form-group" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div>
+        <label>Pad digits</label>
+        <input type="number" id="bulk-pad" value="3" min="2" max="6">
+      </div>
+      <div style="padding-top:22px;color:var(--t3);font-size:11px;line-height:1.4">
+        Example: <b style="color:var(--t1)">prefix-1g-001</b>
+      </div>
+    </div>
+    <div class="form-group" style="display:flex;gap:10px;align-items:center">
+      <label class="toggle" style="margin:0"><input type="checkbox" id="bulk-apply"><span class="toggle-slider"></span></label>
+      <div>
+        <div class="settings-label" style="font-size:13px">Apply to server now</div>
+        <div class="settings-desc">May reload server config. Leave OFF to avoid any disruption.</div>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="doBulkCreate()">Create Bulk</button>
+      <button class="btn btn-danger" onclick="deleteBulkGroup()">Delete This Group</button>
+      <button class="btn btn-outline" onclick="closeModal('bulk-modal')">Close</button>
+    </div>
+
+    <div style="margin-top:14px;border-top:1px solid var(--border);padding-top:14px">
+      <div class="settings-title">Results</div>
+      <div id="bulk-tabs" class="bulk-tabs" style="display:none"></div>
+      <textarea id="bulk-output" rows="10" readonly class="code-ltr" style="width:100%;padding:12px;background:var(--bg1);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--t1);font-size:11px;font-family:var(--font-mono);resize:vertical;word-break:break-all"></textarea>
+      <div class="bulk-qr-section">
+        <div class="settings-title">QR codes (all in this group)</div>
+        <div id="bulk-qr-wrap" class="bulk-qr-wrap" style="display:none"></div>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap">
+        <button class="btn btn-primary btn-sm" onclick="downloadBulkZip()">Download ZIP</button>
+        <button class="btn btn-outline btn-sm" onclick="copyBulkOutput()">Copy</button>
+        <button class="btn btn-outline btn-sm" onclick="downloadBulkCSV()">Download CSV</button>
+        <button class="btn btn-outline btn-sm" onclick="openBulkInNewTab()">Open Tab</button>
+      </div>
+    </div>
+  </div>
 </div>
 
-<!-- ── Change Password Modal ── -->
+
+<div id="renew-modal" class="modal-overlay" onclick="if(event.target===this)closeModal(this.id)">
+  <div class="modal">
+    <h3>Renew: <span id="renew-name" style="color:var(--accent)"></span></h3>
+    <div class="form-group"><label>New Traffic (GB)</label>
+      <input type="number" id="renew-traffic" value="10" min="0.1" step="0.1"></div>
+    <div class="form-group"><label>Duration (days)</label>
+      <input type="number" id="renew-days" value="30" min="1"></div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="doRenewUser()">Renew</button>
+      <button class="btn btn-outline" onclick="closeModal('renew-modal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+
+<div id="config-modal" class="modal-overlay" onclick="if(event.target===this)closeModal(this.id)">
+  <div class="modal modal-lg" style="max-height:calc(100vh - 40px);overflow-y:auto;-webkit-overflow-scrolling:touch">
+    <h3>Config: <span id="config-name" style="color:var(--accent)"></span></h3>
+    <div class="config-tabs" id="config-tabs" style="flex-wrap:wrap;gap:4px">
+      <button class="config-tab tab-vmess active" onclick="switchConfigTab('vmess')">VMess</button>
+      <button class="config-tab tab-vless" onclick="switchConfigTab('vless')" id="ct-vless" style="display:none">VLESS</button>
+      <button class="config-tab tab-cdn" onclick="switchConfigTab('cdn')" id="ct-cdn" style="display:none">CDN</button>
+      <button class="config-tab tab-trojan" onclick="switchConfigTab('trojan')" id="ct-trojan" style="display:none">Trojan</button>
+      <button class="config-tab tab-grpc" onclick="switchConfigTab('grpc')" id="ct-grpc" style="display:none">gRPC</button>
+      <button class="config-tab tab-httpupgrade" onclick="switchConfigTab('httpupgrade')" id="ct-httpupgrade" style="display:none">HU</button>
+      <button class="config-tab tab-ss2022" onclick="switchConfigTab('ss2022')" id="ct-ss2022" style="display:none">SS2022</button>
+      <button class="config-tab tab-vless_ws" onclick="switchConfigTab('vless_ws')" id="ct-vless_ws" style="display:none">VLESS-WS</button>
+      <button class="config-tab tab-vless_xhttp" onclick="switchConfigTab('vless_xhttp')" id="ct-vless_xhttp" style="display:none">XHTTP</button>
+      <button class="config-tab tab-vless_vision" onclick="switchConfigTab('vless_vision')" id="ct-vless_vision" style="display:none">Vision</button>
+      <button class="config-tab tab-vless_reverse" onclick="switchConfigTab('vless_reverse')" id="ct-vless_reverse" style="display:none">Reverse</button>
+      <button class="config-tab tab-trojan_cdn" onclick="switchConfigTab('trojan_cdn')" id="ct-trojan_cdn" style="display:none">Trojan-CDN</button>
+      <button class="config-tab tab-hysteria2" onclick="switchConfigTab('hysteria2')" id="ct-hysteria2" style="display:none">Hy2</button>
+      <button class="config-tab tab-tuic" onclick="switchConfigTab('tuic')" id="ct-tuic" style="display:none">TUIC</button>
+      <button class="config-tab tab-shadowtls" onclick="switchConfigTab('shadowtls')" id="ct-shadowtls" style="display:none">STLS</button>
+      <button class="config-tab tab-mieru" onclick="switchConfigTab('mieru')" id="ct-mieru" style="display:none">Mieru</button>
+      <button class="config-tab tab-naiveproxy" onclick="switchConfigTab('naiveproxy')" id="ct-naiveproxy" style="display:none">Naive</button>
+      <button class="config-tab tab-wireguard" onclick="switchConfigTab('wireguard')" id="ct-wireguard" style="display:none">WG</button>
+    </div>
+    <div class="config-center">
+      <div class="qr-box" id="config-qr"></div>
+    </div>
+    <div class="vmess-box">
+      <label style="font-size:12px;color:var(--t3)" id="config-link-label">VMess Link</label>
+      <textarea id="config-vmess" rows="3" readonly style="word-break:break-all;overflow-wrap:break-word"></textarea>
+      <button class="btn btn-primary btn-sm" onclick="copyConfigLink()" style="width:100%;margin-top:8px">Copy Link</button>
+    </div>
+    <div class="config-grid" id="config-info"></div>
+    <div style="margin-top:14px;padding:12px;background:var(--bg3);border-radius:var(--radius-sm);display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span style="font-size:12px;color:var(--t3);flex-shrink:0">📄 Sub Page:</span>
+      <input type="text" id="config-sub-url" readonly style="flex:1;min-width:120px;padding:8px 10px;background:var(--bg1);border:1px solid var(--border);border-radius:8px;color:var(--green);font-size:11px;font-family:monospace">
+      <button class="btn btn-primary btn-sm" onclick="copySubUrl()" style="flex-shrink:0">Copy</button>
+      <a id="config-sub-open" href="#" target="_blank" class="btn btn-outline btn-sm" style="flex-shrink:0;text-decoration:none">Open</a>
+    </div>
+    <div class="config-sub-row">
+      <span class="config-sub-label" title="Hiddify, NekoBox, sing-box">sing-box</span>
+      <input type="text" id="config-sub-singbox" readonly>
+      <button class="btn btn-primary btn-sm" onclick="copySubUrl('config-sub-singbox')">Copy</button>
+    </div>
+    <div class="config-sub-row">
+      <span class="config-sub-label" title="Clash Meta / mihomo, Clash Verge, FlClash">Clash</span>
+      <input type="text" id="config-sub-clash" readonly>
+      <button class="btn btn-primary btn-sm" onclick="copySubUrl('config-sub-clash')">Copy</button>
+    </div>
+    <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
+      <button class="btn btn-outline" onclick="closeModal('config-modal')" style="width:100%;justify-content:center;padding:12px">Close</button>
+    </div>
+  </div>
+</div>
+
+
+<div id="activity-modal" class="modal-overlay" onclick="if(event.target===this)closeActivity()">
+  <div class="modal modal-lg" style="max-height:calc(100vh - 40px);overflow-y:auto;-webkit-overflow-scrolling:touch;max-width:640px">
+    <div class="activity-header">
+      <h3>Activity: <span id="activity-name" style="color:var(--accent)"></span></h3>
+      <span class="live-dot" id="activity-live">LIVE</span>
+    </div>
+    <div id="activity-alerts"></div>
+    <div class="activity-tabs">
+      <button class="activity-tab active" onclick="switchActivityTab('analysis')">Analysis</button>
+      <button class="activity-tab" onclick="switchActivityTab('sites')">Sites</button>
+      <button class="activity-tab" onclick="switchActivityTab('recent')">Recent</button>
+    </div>
+    <div id="activity-analysis" class="activity-body"></div>
+    <div id="activity-sites" class="activity-body" style="display:none"></div>
+    <div id="activity-recent" class="activity-body" style="display:none"></div>
+    <div class="activity-total" id="activity-total"></div>
+    <div style="margin-top:12px">
+      <button class="btn btn-outline" onclick="closeActivity()" style="width:100%;justify-content:center;padding:12px">Close</button>
+    </div>
+  </div>
+</div>
+
+
+
 <div id="pw-modal" class="modal-overlay" onclick="if(event.target===this)closeModal(this.id)">
   <div class="modal">
     <h3>Change Password</h3>
@@ -1870,38 +2413,8 @@
   </div>
 </div>
 
-<!-- ── Agents Modal ── -->
-<div id="agents-modal" class="modal-overlay" onclick="if(event.target===this)closeModal(this.id)">
-  <div class="modal modal-lg" style="max-height:calc(100vh - 40px);overflow-y:auto;-webkit-overflow-scrolling:touch">
-    <h3>Agent Management</h3>
 
-    <div class="settings-section">
-      <div class="settings-title">Create Agent</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-        <div class="form-group"><label>Agent Name</label>
-          <input type="text" id="agent-add-name" placeholder="e.g. reseller1"></div>
-        <div class="form-group"><label>Password</label>
-          <input type="password" id="agent-add-pass" placeholder="12+ chars, mixed case, digit, symbol"></div>
-      </div>
-      <div class="form-group"><label>Traffic Quota (GB total)</label>
-        <input type="number" id="agent-add-quota" value="100" min="1" step="1"></div>
-      <div class="form-group"><label>Default Speed Limit (KB/s per user)</label>
-        <input type="number" id="agent-add-speed" value="200" min="0"></div>
-      <button class="btn btn-primary btn-sm" onclick="doAddAgent()" style="width:100%">Create Agent</button>
-    </div>
 
-    <div class="settings-section">
-      <div class="settings-title">Agents</div>
-      <div id="agents-list" style="max-height:350px;overflow-y:auto"></div>
-    </div>
-
-    <div class="modal-actions">
-      <button class="btn btn-outline" onclick="closeModal('agents-modal')" style="width:100%;justify-content:center">Close</button>
-    </div>
-  </div>
-</div>
-
-<!-- ── Agent Edit Quota Modal ── -->
 <div id="agent-edit-modal" class="modal-overlay" onclick="if(event.target===this)closeModal(this.id)">
   <div class="modal">
     <h3>Edit Agent: <span id="agent-edit-name" style="color:var(--accent)"></span></h3>
@@ -1914,7 +2427,7 @@
   </div>
 </div>
 
-<!-- ── Agent Reset Password Modal ── -->
+
 <div id="agent-pw-modal" class="modal-overlay" onclick="if(event.target===this)closeModal(this.id)">
   <div class="modal">
     <h3>Reset Password: <span id="agent-pw-name" style="color:var(--accent)"></span></h3>
@@ -1927,7 +2440,7 @@
   </div>
 </div>
 
-<!-- ── System Monitor Modal ── -->
+
 <div id="sysmon-modal" class="modal-overlay" onclick="if(event.target===this)closeModal(this.id)">
   <div class="modal modal-lg" style="max-height:calc(100vh - 40px);overflow-y:auto;-webkit-overflow-scrolling:touch">
     <h3>📊 System Monitor</h3>
@@ -1975,21 +2488,8 @@
   </div>
 </div>
 
-<!-- ── Online Users Modal ── -->
-<div id="online-modal" class="modal-overlay" onclick="if(event.target===this)closeModal(this.id)">
-  <div class="modal modal-lg" style="max-height:calc(100vh - 40px);overflow-y:auto;-webkit-overflow-scrolling:touch">
-    <h3>🌐 Online Users & Connected IPs</h3>
-    <div id="online-users-content">
-      <div style="color:var(--t3);text-align:center;padding:30px">Loading...</div>
-    </div>
-    <div class="modal-actions" style="margin-top:16px">
-      <button class="btn btn-primary btn-sm" onclick="fetchOnlineUsers()">Refresh</button>
-      <button class="btn btn-outline" onclick="closeModal('online-modal')">Close</button>
-    </div>
-  </div>
-</div>
 
-<!-- ── Add Traffic Modal ── -->
+
 <div id="addtraffic-modal" class="modal-overlay" onclick="if(event.target===this)closeModal(this.id)">
   <div class="modal">
     <h3>Add Traffic: <span id="addtraffic-name" style="color:var(--accent)"></span></h3>
@@ -2004,7 +2504,7 @@
   </div>
 </div>
 
-<!-- ── Toast ── -->
+
 <div id="toast" class="toast"></div>
 
 <script nonce="{{ csp_nonce }}">
@@ -2045,7 +2545,7 @@ document.addEventListener('keydown', function(e) {
 });
 </script>
 
-<!-- Search Modal -->
+
 <div class="modal-overlay" id="search-modal">
   <div class="modal">
     <h3>🔍 Search Users</h3>
@@ -2060,7 +2560,7 @@ document.addEventListener('keydown', function(e) {
   </div>
 </div>
 
-<!-- Report Modal -->
+
 <div class="modal-overlay" id="report-modal">
   <div class="modal modal-lg">
     <h3>📊 Statistics Report</h3>
@@ -2080,7 +2580,7 @@ document.addEventListener('keydown', function(e) {
   </div>
 </div>
 
-<!-- Analytics Modal -->
+
 <div class="modal-overlay" id="analytics-modal">
   <div class="modal modal-lg">
     <h3>📈 Traffic Analytics</h3>
@@ -2102,30 +2602,9 @@ document.addEventListener('keydown', function(e) {
   </div>
 </div>
 
-<!-- Backup Modal -->
-<div class="modal-overlay" id="backup-modal">
-  <div class="modal modal-lg">
-    <h3>💾 Backup & Restore</h3>
-    <div class="modal-actions" style="margin-bottom:16px">
-      <button class="btn btn-primary" onclick="createBackup()">Create Backup</button>
-      <button class="btn btn-outline" onclick="loadBackups()">Refresh List</button>
-    </div>
-    <div class="form-group" style="margin-bottom:16px">
-      <label>Cleanup backups older than (days):</label>
-      <div style="display:flex;gap:8px">
-        <input type="number" id="backup-retention" value="7" min="1" style="flex:1">
-        <button class="btn btn-orange" onclick="cleanupBackups()">Cleanup</button>
-      </div>
-    </div>
-    <h4 style="font-size:14px;color:var(--t0);margin-bottom:12px">Available Backups</h4>
-    <div id="backup-modal-list" class="activity-body" style="max-height:300px;overflow-y:auto"></div>
-    <div class="modal-actions">
-      <button class="btn btn-outline" onclick="hideModal('backup-modal')">Close</button>
-    </div>
-  </div>
-</div>
 
 
+<script src="{{ url_for('static', filename='js/ui-sheets.js') }}?v={{ asset_v }}"></script>
 <script src="{{ url_for('static', filename='js/csp-events.js') }}?v={{ asset_v }}"></script>
 </body>
 </html>

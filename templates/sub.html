@@ -3,12 +3,29 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/png" href="{{ url_for('static', filename='img/logo-96.png') }}">
 <title>{{ user.name }} — {{ 'اشتراک VPN' if dir == 'rtl' else 'VPN Subscription' }}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Azeret+Mono:wght@400;500;600;700&family=Fira+Sans:wght@300;400;500;600;700;800&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+<script nonce="{{ csp_nonce }}">
+(function(){
+  var saved = localStorage.getItem('spiritus_theme') || 'obsidian';
+  document.documentElement.setAttribute('data-theme', saved);
+})();
+function cycleTheme() {
+  var cur = document.documentElement.getAttribute('data-theme') || 'obsidian';
+  var next = cur === 'obsidian' ? 'cyberops' : (cur === 'cyberops' ? 'midnight' : 'obsidian');
+  document.documentElement.setAttribute('data-theme', next);
+  localStorage.setItem('spiritus_theme', next);
+  var lbl = document.getElementById('sub-theme-label');
+  if (lbl) lbl.textContent = next.charAt(0).toUpperCase() + next.slice(1);
+}
+</script>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/panel.css') }}">
 <style nonce="{{ csp_nonce }}">
+.config-link.is-file { white-space: pre-wrap; }
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:var(--font-body);background:var(--bg0);color:var(--t1);
   min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:20px;
@@ -27,7 +44,7 @@ body{font-family:var(--font-body);background:var(--bg0);color:var(--t1);
   padding:22px;margin-bottom:16px}
 .card-title{font-size:13px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:16px}
 
-/* Status */
+
 .status-row{display:flex;align-items:center;gap:10px;margin-bottom:14px}
 .status-dot{width:12px;height:12px;border-radius:50%}
 .status-dot.active{background:var(--green);box-shadow:0 0 8px var(--green)}
@@ -36,20 +53,20 @@ body{font-family:var(--font-body);background:var(--bg0);color:var(--t1);
 .status-text.active{color:var(--green)}
 .status-text.inactive{color:var(--red)}
 
-/* Stats grid */
+
 .stats{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:6px}
 .stat{background:var(--bg3);border-radius:var(--radius-sm);padding:14px;text-align:center}
 .stat-val{display:block;font-size:22px;font-weight:700;color:var(--t0)}
 .stat-lbl{font-size:11px;color:var(--t3);margin-top:3px}
 
-/* Traffic bar */
+
 .traffic-bar{margin-top:16px}
 .bar-head{display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px}
 .bar-head .used{color:var(--t1);font-weight:600}.bar-head .limit{color:var(--t3)}
 .bar-track{height:10px;background:var(--bg4);border-radius:5px;overflow:hidden}
 .bar-fill{height:100%;border-radius:5px;transition:width .8s}
 
-/* Config links */
+
 .config-section{margin-top:4px}
 .config-item{margin-bottom:14px}
 .config-label{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;margin-bottom:6px}
@@ -66,7 +83,7 @@ body{font-family:var(--font-body);background:var(--bg0);color:var(--t1);
 .btn-copy:hover{background:var(--accent);transform:translateY(-1px)}
 .btn-copy.copied{background:var(--green)}
 
-/* QR */
+
 .qr-section{text-align:center;margin-top:8px}
 .qr-tabs{display:flex;gap:6px;justify-content:center;margin-bottom:14px}
 .qr-tab{padding:6px 14px;border-radius:16px;font-size:11px;font-weight:600;cursor:pointer;
@@ -75,14 +92,14 @@ body{font-family:var(--font-body);background:var(--bg0);color:var(--t1);
 .qr-box{background:#fff;border-radius:12px;padding:14px;display:inline-block;margin-bottom:10px}
 .qr-box svg{display:block}
 
-/* Sub link */
+
 .sub-section{margin-top:6px}
 .sub-box{display:flex;gap:8px;align-items:center}
 .sub-url{flex:1;padding:10px 12px;background:var(--bg1);border:1px solid var(--border);
   border-radius:var(--radius-sm);color:var(--green);font-size:11px;font-family:var(--font-mono);
   word-break:break-all;overflow:hidden}
 
-/* Apps */
+
 .apps-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .app-btn{display:flex;align-items:center;gap:10px;padding:14px;background:var(--bg3);
   border:1px solid var(--border);border-radius:var(--radius-sm);text-decoration:none;
@@ -92,21 +109,21 @@ body{font-family:var(--font-body);background:var(--bg0);color:var(--t1);
 .app-name{font-size:13px;font-weight:600;color:var(--t0)}
 .app-platform{font-size:11px;color:var(--t3)}
 
-/* Info rows */
+
 .info-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px}
 .info-row:last-child{border-bottom:none}
 .info-key{color:var(--t3)}.info-val{color:var(--t1);font-weight:500;direction:ltr;text-align:right}
 
 .footer{text-align:center;padding:20px 0;color:var(--t3);font-size:11px}
 
-/* Toast */
+
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(80px);
   padding:12px 24px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius-sm);
   color:var(--t0);font-size:13px;font-weight:500;z-index:999;transition:transform .3s;
   box-shadow:0 8px 24px rgba(0,0,0,.4)}
 .toast.show{transform:translateX(-50%) translateY(0)}
 
-/* Plain-language helpers */
+
 .banner{display:flex;gap:12px;align-items:flex-start;padding:14px 16px;border-radius:var(--radius);margin-bottom:16px;
   border:1px solid var(--border);background:var(--bg2);font-size:14px;line-height:1.6}
 .banner b{display:block;font-size:15px;margin-bottom:2px}
@@ -152,7 +169,7 @@ details.adv .adv-body{padding-top:16px}
 .muted-note{color:var(--t3)}
 .stat-val,.bar-head span,.info-val{direction:ltr;unicode-bidi:isolate}
 [dir=rtl] .bar-head{flex-direction:row-reverse}
-/* inline styles moved to classes (CSP forbids style attributes) */
+
 .st-d2c171b{margin-top:10px}
 .st-60d8405{margin-top:0;margin-bottom:0}
 .st-7f24e27{color:var(--green)}
@@ -206,17 +223,25 @@ details.adv .adv-body{padding-top:16px}
 
 {% set fa = (dir == 'rtl') %}
 {% set sub_url = request.url_root ~ 'sub-api/' ~ user.uuid %}
+{% set singbox_url = request.url_root ~ 'sub-singbox/' ~ user.uuid %}
+{% set clash_url = request.url_root ~ 'sub-clash/' ~ user.uuid %}
 {% set limit_gb = user.traffic_limit_gb or 0 %}
 {% set used_gb = user.traffic_used_gb or 0 %}
 <div class="container">
-  <!-- Header -->
+  
   <div class="header">
-    <div class="logo">V7LTHRONYX</div>
+    <div class="logo">SPIRITUS</div>
     <div class="user-tag">{{ 'کاربر:' if dir == 'rtl' else 'Account:' }} <b>{{ user.name }}</b></div>
-    <button class="btn btn-ghost btn-sm dir-toggle st-d2c171b" onclick="toggleDirection()" title="Toggle RTL/LTR">{{ 'RTL' if dir == 'ltr' else 'LTR' }}</button>
+    <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:10px">
+      <button class="btn btn-ghost btn-sm" id="sub-theme-btn" onclick="cycleTheme()" title="Switch Theme">
+        <span class="material-symbols-outlined" style="font-size:16px;vertical-align:middle">palette</span>
+        <span id="sub-theme-label">Theme</span>
+      </button>
+      <button class="btn btn-ghost btn-sm dir-toggle" onclick="toggleDirection()" title="Toggle RTL/LTR">{{ 'RTL' if dir == 'ltr' else 'LTR' }}</button>
+    </div>
   </div>
 
-  <!-- Plain-language account state -->
+  
   {% if state == 'expired' %}
   <div class="banner banner-bad" role="status"><span class="banner-ico">⛔</span><div>
     <b>{{ 'اشتراک شما تمام شده است' if fa else 'Your subscription has expired' }}</b>
@@ -244,7 +269,7 @@ details.adv .adv-body{padding-top:16px}
   </div></div>
   {% endif %}
 
-  <!-- Quick start -->
+  
   <div class="card" id="quick-start">
     <div class="card-title">{{ 'اتصال در ۳ قدم' if fa else 'Connect in 3 steps' }}</div>
     <ol class="steps">
@@ -259,12 +284,14 @@ details.adv .adv-body{padding-top:16px}
       <a class="cta" href="hiddify://import/{{ sub_url }}#{{ user.name|urlencode }}" rel="noopener">🔒 Hiddify</a>
       <a class="cta" href="v2rayng://install-config?url={{ sub_url|urlencode }}&amp;name={{ user.name|urlencode }}" rel="noopener">📱 V2RayNG</a>
       <a class="cta" href="streisand://import/{{ sub_url }}" rel="noopener">🍎 Streisand</a>
+      <a class="cta" href="clash://install-config?url={{ clash_url|urlencode }}&amp;name={{ user.name|urlencode }}" rel="noopener">🐱 Clash Meta</a>
+      <a class="cta" href="sing-box://import-remote-profile?url={{ singbox_url|urlencode }}#{{ user.name|urlencode }}" rel="noopener">📦 sing-box</a>
       <button class="cta alt" onclick="copyLink(event, 'sub')">📋 {{ 'کپی لینک اشتراک' if fa else 'Copy subscription link' }}</button>
     </div>
     <p class="hint">{{ 'برنامه هنوز نصب نیست؟ از بخش «دانلود برنامه» پایین همین صفحه نصب کنید.' if fa else 'App not installed yet? Get one from “Download Apps” further down this page.' }}</p>
   </div>
 
-  <!-- Status & Traffic -->
+  
   <div class="card">
     <div class="card-title">{{ 'وضعیت حساب' if fa else 'Account Status' }}</div>
     <div class="status-row">
@@ -310,7 +337,7 @@ details.adv .adv-body{padding-top:16px}
     </div>
   </div>
 
-  <!-- Live Speed -->
+  
   <div class="card">
     <div class="card-title">{{ 'اتصال زنده' if fa else 'Live Connection' }}</div>
     <div class="stats st-60d8405">
@@ -325,7 +352,7 @@ details.adv .adv-body{padding-top:16px}
     </div>
   </div>
 
-  <!-- Advanced: individual configs (collapsed by default) -->
+  
   <details class="adv">
     <summary>🛠 {{ 'پیشرفته: کانفیگ‌های تکی و QR' if fa else 'Advanced: individual configs & QR codes' }}</summary>
     <div class="adv-body">
@@ -336,7 +363,7 @@ details.adv .adv-body{padding-top:16px}
       <li>{{ ('<b>Hysteria2 / TUIC:</b> سریع‌تر، مناسب ویدیو و بازی؛ روی بعضی اینترنت‌ها (UDP) ممکن است بسته باشند.' if fa else '<b>Hysteria2 / TUIC:</b> faster, good for video and games; may be blocked on some networks (UDP).')|safe }}</li>
     </ul>
 
-  <!-- QR Codes -->
+  
   <div class="card">
     <div class="card-title">QR Code</div>
     <div class="qr-section">
@@ -367,7 +394,7 @@ details.adv .adv-body{padding-top:16px}
     </div>
   </div>
 
-  <!-- Config Links -->
+  
   <div class="card">
     <div class="card-title">Config Links</div>
     <div class="config-section">
@@ -546,7 +573,7 @@ details.adv .adv-body{padding-top:16px}
       <div class="config-item">
         <div class="config-label"><span class="config-badge st-92c0ced">WireGuard</span> UDP Tunnel</div>
         <div class="config-box">
-          <div class="config-link" id="link-wireguard">{{ links.wireguard }}</div>
+          <div class="config-link is-file" id="link-wireguard">{{ links.wireguard }}</div>
           <button class="btn-copy" onclick="copyLink(event, 'wireguard')">Copy</button>
         </div>
       </div>
@@ -563,7 +590,7 @@ details.adv .adv-body{padding-top:16px}
     </div>
   </div>
 
-  <!-- IPv6 Configs -->
+  
   {% if links.vmess_ipv6 or links.vless_ipv6 or links.vless_ws_ipv6 or links.vless_ws_plain_front_ipv6 or links.vless_xhttp_ipv6 or links.vless_vision_ipv6 %}
   <div class="card st-0c3e3c7">
     <div class="card-title st-a805525">IPv6 Configs</div>
@@ -584,7 +611,7 @@ details.adv .adv-body{padding-top:16px}
     </div>
   </details>
 
-  <!-- Subscription Link -->
+  
   <div class="card">
     <div class="card-title">{{ 'لینک اشتراک' if fa else 'Subscription Link' }}</div>
     <p class="st-1ddf086">
@@ -596,20 +623,34 @@ details.adv .adv-body{padding-top:16px}
     </div>
     <div class="st-56f4356">
       <p class="st-47771e1">
-        📦 JSON Config (includes Fragment + MUX + all protocols in one config):
+        📦 {{ 'کانفیگ JSON برای V2RayNG و Streisand (همهٔ پروتکل‌های Xray، با Fragment و MUX):' if fa else 'Xray JSON for V2RayNG and Streisand (every Xray protocol, with Fragment + MUX):' }}
       </p>
       <div class="sub-box">
         <div class="sub-url" id="sub-json-url">{{ request.url_root }}sub-json/{{ user.uuid }}</div>
         <button class="btn-copy" onclick="copyLink(event, 'sub_json')">Copy</button>
       </div>
+      <p class="st-47771e1">
+        🧩 {{ 'پروفایل sing-box برای Hiddify، NekoBox و برنامهٔ sing-box (شامل ShadowTLS و WireGuard):' if fa else 'sing-box profile for Hiddify, NekoBox and the sing-box apps (includes ShadowTLS and WireGuard):' }}
+      </p>
+      <div class="sub-box">
+        <div class="sub-url" id="sub-singbox-url">{{ singbox_url }}</div>
+        <button class="btn-copy" onclick="copyLink(event, 'sub_singbox')">Copy</button>
+      </div>
+      <p class="st-47771e1">
+        🐱 {{ 'پروفایل Clash Meta (mihomo) برای Clash Verge و FlClash (شامل ShadowTLS و Mieru):' if fa else 'Clash Meta (mihomo) profile for Clash Verge and FlClash (includes ShadowTLS and Mieru):' }}
+      </p>
+      <div class="sub-box">
+        <div class="sub-url" id="sub-clash-url">{{ clash_url }}</div>
+        <button class="btn-copy" onclick="copyLink(event, 'sub_clash')">Copy</button>
+      </div>
     </div>
   </div>
 
-  <!-- Download Apps -->
+  
   <div class="card">
     <div class="card-title">{{ 'دانلود برنامه' if fa else 'Download Apps' }}</div>
 
-    <!-- Dedicated App — Android -->
+    
     <a class="app-btn dedicated-app st-8471262" href="/download/app">
       <span class="app-icon st-b96a383">🚀</span>
       <div class="st-97445a8">
@@ -626,7 +667,7 @@ details.adv .adv-body{padding-top:16px}
       <span class="st-6ed2879">⬇</span>
     </a>
 
-    <!-- Dedicated App — Windows -->
+    
     <a class="app-btn dedicated-app st-763bcd2" href="/download/app-windows">
       <span class="app-icon st-b96a383">💻</span>
       <div class="st-97445a8">
@@ -644,8 +685,7 @@ details.adv .adv-body{padding-top:16px}
     </a>
 
     {% if mobile_profile %}
-    <!-- One-tap import into the dedicated app: QR (scan from another screen)
-         or direct v7l:// link (tap on the phone itself). -->
+    
     <div class="st-e20f4a4">
       <div lang="fa" class="st-e6a6978">
         بعد از نصب اپ اختصاصی، سرور و اشتراک شما با یک ضربه اضافه می‌شود:
@@ -690,7 +730,7 @@ details.adv .adv-body{padding-top:16px}
     </div>
   </div>
 
-  <!-- Troubleshooting -->
+  
   <div class="card faq">
     <div class="card-title">{{ 'مشکل دارید؟' if fa else 'Troubleshooting' }}</div>
     <details><summary>{{ 'وصل می‌شود ولی اینترنت ندارم' if fa else 'It connects but there is no internet' }}</summary>
@@ -703,7 +743,7 @@ details.adv .adv-body{padding-top:16px}
       <p>{{ 'با فروشنده یا پشتیبان خود تماس بگیرید. بعد از تمدید همین لینک کار می‌کند و نیازی به تنظیم دوباره نیست.' if fa else 'Contact your provider. After renewal the same link keeps working; no new setup is needed.' }}</p></details>
   </div>
 
-  <!-- Connection Details -->
+  
   <div class="card">
     <div class="card-title">{{ 'مشخصات اتصال' if fa else 'Connection Details' }}</div>
     <div class="info-row"><span class="info-key">Server</span><span class="info-val">{{ server_ip }}</span></div>
@@ -740,7 +780,7 @@ const LINKS = JSON.parse(document.getElementById('data-links').textContent);
 const MOBILE_PROFILE = {{ (mobile_profile or '') | tojson }};
 let activeQr = 'vmess';
 
-/* Mobile-app import QR (v7l://import…) */
+
 (function () {
   const box = document.getElementById('mobile-import-qr');
   if (!box || !MOBILE_PROFILE || typeof qrcode !== 'function') return;
@@ -750,7 +790,7 @@ let activeQr = 'vmess';
   } catch (e) { box.innerHTML = '<small class="muted-note">QR Error</small>'; }
 })();
 
-/* Apply traffic bar styles */
+
 (function(){
   const bf = document.getElementById('traffic-bar-fill');
   if(bf) {
@@ -759,7 +799,7 @@ let activeQr = 'vmess';
   }
 })();
 
-/* Days left: value is computed server-side (same clock as the banner); only colour it here */
+
 (function(){
   const el = document.getElementById('s-days');
   const d = parseInt(el.getAttribute('data-days'), 10);
@@ -767,7 +807,7 @@ let activeQr = 'vmess';
   el.style.color = d <= 3 ? 'var(--red)' : d <= 7 ? 'var(--yellow)' : 'var(--green)';
 })();
 
-/* QR */
+
 function showQr(type) {
   activeQr = type;
   document.querySelectorAll('.qr-tab').forEach(t => t.classList.remove('active'));
@@ -790,7 +830,7 @@ function showQr(type) {
 }
 showQr('vmess');
 
-/* Copy */
+
 function _copyText(text) {
   if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(text);
   const ta = document.createElement('textarea');
@@ -809,6 +849,10 @@ function copyLink(ev, type) {
     text = MOBILE_PROFILE;
   } else if (type === 'sub_json') {
     text = document.getElementById('sub-json-url').textContent.trim();
+  } else if (type === 'sub_singbox') {
+    text = document.getElementById('sub-singbox-url').textContent.trim();
+  } else if (type === 'sub_clash') {
+    text = document.getElementById('sub-clash-url').textContent.trim();
   } else {
     text = LINKS[type] || '';
   }

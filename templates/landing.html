@@ -1,0 +1,979 @@
+<!DOCTYPE html>
+
+<html class="dark scroll-smooth" lang="en"><head><title>Spiritus | Next-Generation Anti-Censorship &amp; VPN Management Panel</title><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/><link rel="icon" type="image/png" href="{{ url_for('static', filename='img/logo-96.png') }}"><meta content="web_standard" name="shell-type"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/><link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;family=Space+Grotesk:wght@600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><style nonce="{{ csp_nonce }}">@layer base{html,body{margin:0;padding:0;overflow-x:clip;}html{scrollbar-width:thin;scrollbar-color:#334155 transparent;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{width:8px;height:8px;}::-webkit-scrollbar-track{background:transparent;}::-webkit-scrollbar-thumb{background:#334155;border-radius:4px;}
+[data-theme="cyberops"] body, body[data-theme="cyberops"] { background-color: #090f12 !important; color: #edffe8 !important; }
+[data-theme="cyberops"] .bg-surface-base { background-color: #090f12 !important; }
+[data-theme="cyberops"] .bg-surface-card { background-color: #0e1418 !important; }
+[data-theme="cyberops"] .bg-surface-elevated { background-color: #161c20 !important; }
+[data-theme="cyberops"] .bg-surface-container { background-color: #1a2024 !important; }
+[data-theme="cyberops"] .bg-surface-container-lowest { background-color: #05080a !important; }
+[data-theme="cyberops"] .bg-surface-container-high { background-color: #252b2f !important; }
+[data-theme="cyberops"] .bg-primary-container { background-color: #00ff66 !important; color: #090f12 !important; }
+[data-theme="cyberops"] .bg-primary { background-color: #00ff66 !important; color: #090f12 !important; }
+[data-theme="cyberops"] .text-primary { color: #00ff66 !important; }
+[data-theme="cyberops"] .text-neon-teal { color: #7df4ff !important; }
+[data-theme="cyberops"] .text-tertiary { color: #00ff66 !important; }
+[data-theme="cyberops"] .text-text-primary { color: #edffe8 !important; }
+[data-theme="cyberops"] .text-text-muted { color: #b9ccb5 !important; }
+[data-theme="cyberops"] .border-border-subtle { border-color: #252b2f !important; }
+[data-theme="cyberops"] .text-on-primary-container { color: #090f12 !important; }
+[data-theme="midnight"] body, body[data-theme="midnight"] { background-color: #090D16 !important; color: #F8FAFC !important; }
+[data-theme="midnight"] .bg-surface-base { background-color: #090D16 !important; }
+[data-theme="midnight"] .bg-surface-card { background-color: #131C31 !important; }
+[data-theme="midnight"] .bg-surface-elevated { background-color: #0F172A !important; }
+[data-theme="midnight"] .bg-surface-container { background-color: #182238 !important; }
+[data-theme="midnight"] .bg-surface-container-lowest { background-color: #05070e !important; }
+[data-theme="midnight"] .bg-surface-container-high { background-color: #1E293B !important; }
+[data-theme="midnight"] .bg-primary-container { background-color: #06B6D4 !important; color: #090D16 !important; }
+[data-theme="midnight"] .bg-primary { background-color: #06B6D4 !important; color: #090D16 !important; }
+[data-theme="midnight"] .text-primary { color: #06B6D4 !important; }
+[data-theme="midnight"] .text-neon-teal { color: #818CF8 !important; }
+[data-theme="midnight"] .text-tertiary { color: #10B981 !important; }
+[data-theme="midnight"] .text-text-primary { color: #F8FAFC !important; }
+[data-theme="midnight"] .text-text-muted { color: #94A3B8 !important; }
+[data-theme="midnight"] .border-border-subtle { border-color: #1E293B !important; }
+[data-theme="midnight"] .text-on-primary-container { color: #090D16 !important; }
+[data-theme="obsidian"] body, body[data-theme="obsidian"] { background-color: #0f131c !important; color: #dfe2ef !important; }
+[data-theme="obsidian"] .bg-surface-base { background-color: #0f131c !important; }
+[data-theme="obsidian"] .bg-surface-card { background-color: #181c24 !important; }
+[data-theme="obsidian"] .bg-surface-elevated { background-color: #1c2028 !important; }
+[data-theme="obsidian"] .bg-surface-container { background-color: #262a33 !important; }
+[data-theme="obsidian"] .bg-surface-container-lowest { background-color: #0a0e17 !important; }
+[data-theme="obsidian"] .bg-surface-container-high { background-color: #31353e !important; }
+[data-theme="obsidian"] .bg-primary-container { background-color: #c0c1ff !important; color: #1000a9 !important; }
+[data-theme="obsidian"] .bg-primary { background-color: #c0c1ff !important; color: #1000a9 !important; }
+[data-theme="obsidian"] .text-primary { color: #c0c1ff !important; }
+[data-theme="obsidian"] .text-neon-teal { color: #8083ff !important; }
+[data-theme="obsidian"] .text-tertiary { color: #4edea3 !important; }
+[data-theme="obsidian"] .text-text-primary { color: #dfe2ee !important; }
+[data-theme="obsidian"] .text-text-muted { color: #908fa0 !important; }
+[data-theme="obsidian"] .border-border-subtle { border-color: #262a33 !important; }
+</style>
+<script nonce="{{ csp_nonce }}">
+(function(){
+  var orig = document.createElement;
+  document.createElement = function(tag, opt) {
+    var el = orig.call(document, tag, opt);
+    if (tag && tag.toLowerCase() === 'style') {
+      var n = '{{ csp_nonce }}';
+      if (n) el.setAttribute('nonce', n);
+    }
+    return el;
+  };
+})();
+</script>
+<script src="{{ url_for('static', filename='js/csp-events.js') }}"></script>
+<script src="{{ url_for('static', filename='js/tailwind.min.js') }}"></script><script nonce="{{ csp_nonce }}" id="tailwind-config">tailwind.config={darkMode:"class",theme:{extend:{"colors":{"inverse-surface":"#dfe2ef","on-primary-container":"#00424f","secondary-fixed":"#e1e0ff","surface-card":"#131C31","border-subtle":"#1E293B","status-purple":"#8B5CF6","primary":"#4cd7f6","on-secondary":"#1000a9","on-error-container":"#ffdad6","surface-elevated":"#0F172A","on-secondary-fixed":"#07006c","tertiary":"#4edea3","on-secondary-fixed-variant":"#2f2ebe","secondary":"#c0c1ff","status-danger":"#EF4444","on-error":"#690005","surface-tint":"#4cd7f6","outline-variant":"#3d494c","error-container":"#93000a","surface-container":"#1c1f29","surface-container-lowest":"#0a0e17","primary-container":"#06b6d4","surface-container-low":"#181b25","surface-bright":"#353943","text-muted":"#94A3B8","surface-container-highest":"#31353f","primary-fixed":"#acedff","on-background":"#dfe2ef","status-warning":"#F59E0B","primary-fixed-dim":"#4cd7f6","surface":"#0f131c","inverse-primary":"#00687a","status-online":"#10B981","inverse-on-surface":"#2c303a","surface-container-high":"#262a34","secondary-fixed-dim":"#c0c1ff","secondary-container":"#3131c0","background":"#0f131c","on-primary-fixed-variant":"#004e5c","outline":"#869397","on-tertiary":"#003824","on-secondary-container":"#b0b2ff","text-primary":"#F8FAFC","on-primary-fixed":"#001f26","on-tertiary-fixed":"#002113","on-surface-variant":"#bcc9cd","text-dim":"#475569","surface-variant":"#31353f","on-tertiary-container":"#00452e","on-primary":"#003640","tertiary-fixed":"#6ffbbe","border-active":"#334155","error":"#ffb4ab","tertiary-container":"#1bbd85","surface-base":"#090D16","on-tertiary-fixed-variant":"#005236","neon-teal":"#14B8A6","border-highlight":"#06B6D4","surface-dim":"#0f131c","on-surface":"#dfe2ef","tertiary-fixed-dim":"#4edea3"},"borderRadius":{"DEFAULT":"0.125rem","lg":"0.25rem","xl":"0.5rem","full":"0.75rem"},"spacing":{"gutter-desktop":"1.5rem","margin-desktop":"2.5rem","margin-tablet":"1.5rem","space-md":"0.75rem","space-2xl":"3rem","space-xl":"2rem","space-lg":"1.25rem","margin":"1rem","space-sm":"0.5rem","space-xs":"0.25rem","gutter":"1rem"},"fontFamily":{"body-sm":["Inter"],"label-code-sm":["JetBrains Mono"],"display-hero":["Space Grotesk"],"headline-md":["Space Grotesk"],"headline-lg":["Space Grotesk"],"headline-sm":["Space Grotesk"],"label-code-md":["JetBrains Mono"],"body-md":["Inter"],"display-hero-mobile":["Space Grotesk"],"label-badge":["Inter"],"body-lg":["Inter"]},"fontSize":{"body-sm":["12px",{"lineHeight":"18px","fontWeight":"400"}],"label-code-sm":["11px",{"lineHeight":"16px","letterSpacing":"0.04em","fontWeight":"500"}],"display-hero":["40px",{"lineHeight":"48px","letterSpacing":"-0.03em","fontWeight":"700"}],"headline-md":["22px",{"lineHeight":"30px","letterSpacing":"-0.015em","fontWeight":"600"}],"headline-lg":["28px",{"lineHeight":"36px","letterSpacing":"-0.02em","fontWeight":"600"}],"headline-sm":["18px",{"lineHeight":"24px","letterSpacing":"-0.01em","fontWeight":"600"}],"label-code-md":["13px",{"lineHeight":"18px","fontWeight":"500"}],"body-md":["14px",{"lineHeight":"20px","fontWeight":"400"}],"display-hero-mobile":["30px",{"lineHeight":"38px","letterSpacing":"-0.02em","fontWeight":"700"}],"label-badge":["11px",{"lineHeight":"14px","letterSpacing":"0.05em","fontWeight":"600"}],"body-lg":["16px",{"lineHeight":"24px","fontWeight":"400"}]}}}}</script></head><body class="bg-surface-base font-body-md text-on-surface antialiased selection:bg-primary-container selection:text-on-primary-container min-h-screen flex flex-col justify-between"><header class="fixed top-0 w-full z-50 bg-surface-elevated/85 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.4)]"><div class="h-20 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-3"><div class="flex items-center gap-4 min-w-0"><a class="flex items-center gap-2 group flex-shrink-0" data-path="overview" href="#"><img alt="Spiritus Shield Logo" class="h-8 w-auto object-contain" src="{{ url_for('static', filename='img/logo-96.png') }}"/><span class="font-headline-sm text-headline-sm text-text-primary tracking-tight uppercase group-hover:text-primary transition-colors">Spiritus</span></a><span class="h-4 w-[1px] bg-border-subtle hidden lg:block"></span><nav class="hidden lg:flex items-center gap-1" data-active-classes="bg-primary-container text-on-primary-container font-headline-sm rounded-lg"><a aria-current="page" class="px-2.5 py-1 transition-all bg-primary-container text-on-primary-container font-headline-sm rounded-lg" data-path="overview" href="#">Overview</a><a class="px-2.5 py-1 font-body-md text-body-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-all" data-path="protocols-and-engines" href="#protocols-matrix">Protocols</a><a class="px-2.5 py-1 font-body-md text-body-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-all" data-path="security-and-dpi" href="#architecture">Security</a><a class="px-2.5 py-1 font-body-md text-body-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-all" data-path="multi-tenant-resellers" href="#ecosystem">Resellers</a><a class="px-2.5 py-1 font-body-md text-body-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-all" href="#quick-install">Deploy</a><a class="px-2.5 py-1 font-body-md text-body-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-all" data-path="docs-and-github" href="https://github.com/v74all/Spiritus" target="_blank" rel="noopener noreferrer">Docs</a></nav></div><div class="flex items-center gap-2 sm:gap-3 flex-shrink-0"><div class="hidden 2xl:flex items-center gap-space-xs px-space-sm py-1 bg-surface-container rounded-full shadow-[0_0_12px_rgba(16,185,129,0.1)]"><span class="w-2 h-2 rounded-full bg-status-online animate-pulse"></span><span class="font-label-code-sm text-label-code-sm text-status-online">Online</span></div><div class="hidden xl:flex items-center gap-1.5 px-space-sm py-1 bg-surface-container rounded-lg font-label-code-sm text-label-code-sm text-text-muted hover:text-text-primary hover:bg-surface-container-high transition-colors cursor-pointer"><span class="text-status-warning">★</span><span class="text-text-primary font-semibold">6 Stars</span><span class="text-text-dim">/</span><span class="text-neon-teal">v2.1.0</span></div><button id="themeToggleBtn" type="button" onclick="cycleTheme()" title="Switch Theme (Obsidian / CyberOps / Midnight)" class="flex items-center gap-1.5 px-space-sm py-1.5 bg-surface-container hover:bg-surface-container-high text-primary rounded-lg font-label-code-sm transition-all border border-border-subtle cursor-pointer flex-shrink-0"><span class="material-symbols-outlined text-[18px]">palette</span><span id="landingThemeLabel" class="hidden sm:inline font-mono text-[11px] uppercase">Theme</span></button><a class="flex items-center gap-1.5 px-3 py-1.5 bg-primary-container hover:bg-primary font-body-md text-body-md text-on-primary-container hover:text-on-primary font-semibold rounded-lg shadow-[0_0_14px_rgba(6,182,212,0.3)] transition-all flex-shrink-0" href="#quick-install">Deploy Now</a><a href="/" title="Admin panel / ورود به پنل" aria-label="Admin panel" class="w-8 h-8 rounded-full bg-primary flex items-center justify-center flex-shrink-0 hover:opacity-90 transition-opacity"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></a></div></div></header><main class="w-full pt-20 bg-surface-base flex-1"><div class="flex flex-col w-full text-on-surface">
+
+<section class="relative w-full overflow-hidden px-gutter-desktop py-space-xl lg:py-space-2xl bg-surface-base">
+
+<div class="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[720px] h-[360px] bg-primary/10 rounded-full blur-[140px] pointer-events-none"></div>
+<div class="absolute top-1/2 right-10 w-[300px] h-[300px] bg-tertiary/5 rounded-full blur-[100px] pointer-events-none"></div>
+<div class="relative max-w-7xl mx-auto flex flex-col items-center text-center">
+
+<div class="inline-flex items-center gap-space-sm px-space-md py-1.5 rounded-full bg-surface-card border-none shadow-[0_0_24px_rgba(6,182,212,0.18)] mb-space-lg">
+<img alt="Spiritus Logo" class="w-5 h-5 object-contain" src="{{ url_for('static', filename='img/logo-96.png') }}"/>
+<span class="w-1.5 h-1.5 rounded-full bg-status-online animate-pulse"></span>
+<span class="font-label-code-sm text-label-code-sm text-text-primary tracking-wide">
+          Release <span class="text-primary font-bold">v2.1.0</span> • Python 3.13 • FastAPI • <span class="text-tertiary font-medium">0 Known CVEs</span> • 16 Protocols Active
+        </span>
+</div>
+
+<h1 class="font-display-hero text-display-hero text-text-primary max-w-4xl tracking-tight leading-tight mb-space-md">
+        Next-Generation <span class="text-transparent bg-clip-text bg-gradient-to-r from-primary via-neon-teal to-tertiary">Anti-Censorship</span> &amp; VPN Management Panel
+      </h1>
+
+<p class="font-body-lg text-body-lg text-text-muted max-w-3xl leading-relaxed mb-space-xl">
+        Architected for severe DPI-throttled networks, multi-tenant reseller operations, and low-latency micro-routing across <span class="text-text-primary font-medium">Xray-core</span>, <span class="text-text-primary font-medium">sing-box</span>, and <span class="text-text-primary font-medium">WireGuard</span>.
+      </p>
+
+<div class="flex flex-wrap items-center justify-center gap-space-md mb-space-2xl">
+<a class="flex items-center gap-space-sm px-space-xl py-3 rounded-lg bg-primary-container text-on-primary-container font-headline-sm text-headline-sm hover:brightness-110 shadow-[0_0_22px_rgba(6,182,212,0.4)] transition-all" href="/">
+<span class="material-symbols-outlined text-[20px]">bolt</span>
+<span>Deploy Server Instance</span>
+</a>
+<a class="flex items-center gap-space-sm px-space-xl py-3 rounded-lg bg-surface-card text-text-primary font-headline-sm text-headline-sm hover:bg-surface-elevated hover:text-primary shadow-md transition-all" href="#protocols-matrix">
+<span class="material-symbols-outlined text-[20px] text-neon-teal">device_hub</span>
+<span>Explore Protocols &amp; Architecture</span>
+</a>
+</div>
+
+<div class="w-full max-w-4xl rounded-xl bg-surface-card shadow-2xl p-space-md sm:p-space-lg text-left relative scroll-mt-28" id="quick-install">
+<div class="flex items-center justify-between pb-space-sm mb-space-md">
+<div class="flex items-center gap-space-sm">
+<span class="w-3 h-3 rounded-full bg-status-danger/80 inline-block"></span>
+<span class="w-3 h-3 rounded-full bg-status-warning/80 inline-block"></span>
+<span class="w-3 h-3 rounded-full bg-status-online/80 inline-block"></span>
+<span class="font-label-code-sm text-label-code-sm text-text-muted ml-2">bash / spiritus-automated-deploy</span>
+</div>
+<span class="font-label-code-sm text-label-code-sm px-2 py-0.5 rounded bg-surface-base text-primary">curl &gt; /opt/v7lthronyx</span>
+</div>
+<div class="relative bg-surface-container-lowest rounded-lg p-space-md flex flex-col md:flex-row items-start md:items-center justify-between gap-space-md shadow-inner">
+<div class="flex items-center gap-space-sm overflow-x-auto w-full md:w-auto py-1">
+<span class="text-tertiary font-label-code-md font-bold select-none">$</span>
+<code class="font-label-code-md text-label-code-md text-text-primary whitespace-nowrap" id="installCommand">sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/v74all/Spiritus/main/install.sh)"</code>
+</div>
+<button class="flex-shrink-0 flex items-center gap-1.5 px-space-md py-2 rounded-lg bg-primary hover:bg-neon-teal text-surface-base font-label-code-sm text-label-code-sm font-bold shadow-md transition-all active:scale-95" id="copySnippetBtn" onclick="copySnippet()">
+<span class="material-symbols-outlined text-[16px]">content_copy</span>
+<span id="copySnippetText">Copy Command</span>
+</button>
+</div>
+
+<div class="mt-space-md pt-space-sm flex flex-wrap items-center justify-between gap-space-sm text-text-muted font-label-code-sm text-label-code-sm">
+<div class="flex items-center gap-space-xs flex-wrap">
+<span class="text-text-dim">CLI Switches:</span>
+<button class="px-2 py-0.5 rounded bg-surface-elevated hover:bg-surface-base text-text-primary hover:text-primary transition-colors" onclick="appendFlag('--port 8080')">--port 8080</button>
+<button class="px-2 py-0.5 rounded bg-surface-elevated hover:bg-surface-base text-text-primary hover:text-primary transition-colors" onclick="appendFlag('--reset-password')">--reset-password</button>
+<button class="px-2 py-0.5 rounded bg-surface-elevated hover:bg-surface-base text-status-danger transition-colors" onclick="appendFlag('uninstall --purge')">uninstall --purge</button>
+</div>
+<div class="flex items-center gap-1 text-text-dim">
+<span class="material-symbols-outlined text-[14px] text-tertiary">check_circle</span>
+<span>Debian 12 &amp; Ubuntu 22.04+ Verified</span>
+</div>
+</div>
+<ol class="mt-space-md grid gap-space-sm sm:grid-cols-3 font-body-sm text-body-sm text-text-muted list-none p-0">
+<li class="rounded-lg bg-surface-container-lowest p-space-sm"><span class="font-label-code-sm text-tertiary">01</span> Run the command on your server as root. <strong class="text-text-primary">No domain needed</strong>: press Enter when asked.</li>
+<li class="rounded-lg bg-surface-container-lowest p-space-sm"><span class="font-label-code-sm text-tertiary">02</span> Open the panel address it prints, sign in with the password shown, then change it.</li>
+<li class="rounded-lg bg-surface-container-lowest p-space-sm"><span class="font-label-code-sm text-tertiary">03</span> Add a user and send the subscription link. REALITY works without a domain, and clients never need "allow insecure".</li>
+</ol>
+</div>
+
+<div class="w-full max-w-7xl mt-space-2xl grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-space-md">
+<div class="bg-surface-card/90 backdrop-blur-md rounded-xl p-space-lg text-left shadow-lg relative overflow-hidden group hover:bg-surface-card transition-all">
+<div class="flex items-center justify-between mb-space-sm">
+<span class="font-label-code-sm text-label-code-sm text-neon-teal uppercase tracking-wider">Engine Protocol Stack</span>
+<span class="material-symbols-outlined text-primary text-[20px]">hub</span>
+</div>
+<div class="font-headline-lg text-headline-lg text-text-primary font-bold">16 Protocols</div>
+<p class="font-body-sm text-body-sm text-text-muted mt-space-xs">VLESS, REALITY, Hysteria2, TUIC v5, AmneziaWG 2.0</p>
+<div class="w-full bg-surface-container h-1 rounded-full mt-space-md overflow-hidden">
+<div class="bg-primary h-full w-[100%]"></div>
+</div>
+</div>
+<div class="bg-surface-card/90 backdrop-blur-md rounded-xl p-space-lg text-left shadow-lg relative overflow-hidden group hover:bg-surface-card transition-all">
+<div class="flex items-center justify-between mb-space-sm">
+<span class="font-label-code-sm text-label-code-sm text-tertiary uppercase tracking-wider">Supply Chain Audit</span>
+<span class="material-symbols-outlined text-tertiary text-[20px]">verified</span>
+</div>
+<div class="font-headline-lg text-headline-lg text-text-primary font-bold">0 Known CVEs</div>
+<p class="font-body-sm text-body-sm text-text-muted mt-space-xs">pip-audit verified, bandit strict, tamper-evident hash-chain</p>
+<div class="w-full bg-surface-container h-1 rounded-full mt-space-md overflow-hidden">
+<div class="bg-tertiary h-full w-[100%]"></div>
+</div>
+</div>
+<div class="bg-surface-card/90 backdrop-blur-md rounded-xl p-space-lg text-left shadow-lg relative overflow-hidden group hover:bg-surface-card transition-all">
+<div class="flex items-center justify-between mb-space-sm">
+<span class="font-label-code-sm text-label-code-sm text-primary uppercase tracking-wider">Kernel Interconnect</span>
+<span class="material-symbols-outlined text-primary text-[20px]">speed</span>
+</div>
+<div class="font-headline-lg text-headline-lg text-text-primary font-bold">&lt; 1ms Latency</div>
+<p class="font-body-sm text-body-sm text-text-muted mt-space-xs">mTLS-pinned daemon IPC via privileged service helper</p>
+<div class="w-full bg-surface-container h-1 rounded-full mt-space-md overflow-hidden">
+<div class="bg-neon-teal h-full w-[94%]"></div>
+</div>
+</div>
+<div class="bg-surface-card/90 backdrop-blur-md rounded-xl p-space-lg text-left shadow-lg relative overflow-hidden group hover:bg-surface-card transition-all">
+<div class="flex items-center justify-between mb-space-sm">
+<span class="font-label-code-sm text-label-code-sm text-secondary uppercase tracking-wider">Hierarchy Tier</span>
+<span class="material-symbols-outlined text-secondary text-[20px]">domain</span>
+</div>
+<div class="font-headline-lg text-headline-lg text-text-primary font-bold">Multi-Tenant</div>
+<p class="font-body-sm text-body-sm text-text-muted mt-space-xs">Superadmins, Quota Agents, Resellers &amp; Commission engine</p>
+<div class="w-full bg-surface-container h-1 rounded-full mt-space-md overflow-hidden">
+<div class="bg-secondary h-full w-[88%]"></div>
+</div>
+</div>
+</div>
+</div>
+</section>
+
+<section class="w-full px-gutter-desktop py-space-2xl bg-surface-elevated/40 scroll-mt-24" id="architecture">
+<div class="max-w-7xl mx-auto">
+<div class="flex flex-col md:flex-row md:items-end justify-between mb-space-xl gap-space-md">
+<div>
+<span class="font-label-code-sm text-label-code-sm text-primary uppercase tracking-widest font-semibold flex items-center gap-1.5 mb-1">
+<span class="material-symbols-outlined text-[16px]">shield_lock</span>
+            System Defense Matrix
+          </span>
+<h2 class="font-headline-lg text-headline-lg text-text-primary font-bold">Hardened Anti-Censorship Core Architecture</h2>
+</div>
+<p class="font-body-md text-body-md text-text-muted max-w-md">
+          Engineered explicitly for aggressive firewalls, active packet probing, and resilient commercial proxy fleets.
+        </p>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-space-lg">
+
+<div class="bg-surface-card rounded-xl p-space-xl shadow-lg flex flex-col justify-between group hover:bg-surface-container-high transition-all">
+<div>
+<div class="w-12 h-12 rounded-lg bg-primary-container/15 text-primary flex items-center justify-center mb-space-lg shadow-sm">
+<span class="material-symbols-outlined text-[28px]">radar</span>
+</div>
+<div class="flex items-center gap-2 mb-space-xs">
+<h3 class="font-headline-sm text-headline-sm text-text-primary font-semibold">Built-in DPI Evasion</h3>
+<span class="px-2 py-0.5 rounded-full bg-status-online/10 text-status-online font-label-code-sm text-label-code-sm font-medium">Bypass Level 5</span>
+</div>
+<p class="font-body-md text-body-md text-text-muted mb-space-md">
+              Dynamic TLS client hello fragmentation, noise injection padding, REALITY domain-fronting, rotating target SNIs, and instant emergency-relay tunnel failover.
+            </p>
+</div>
+<div class="pt-space-md bg-surface-base/50 rounded-lg p-space-md font-label-code-sm text-label-code-sm text-neon-teal">
+<code>xray.transport.fragment: { packets: "1-3", length: "100-200" }</code>
+</div>
+</div>
+
+<div class="bg-surface-card rounded-xl p-space-xl shadow-lg flex flex-col justify-between group hover:bg-surface-container-high transition-all">
+<div>
+<div class="w-12 h-12 rounded-lg bg-tertiary-container/15 text-tertiary flex items-center justify-center mb-space-lg shadow-sm">
+<span class="material-symbols-outlined text-[28px]">lock</span>
+</div>
+<div class="flex items-center gap-2 mb-space-xs">
+<h3 class="font-headline-sm text-headline-sm text-text-primary font-semibold">Security-Hardened by Design</h3>
+<span class="px-2 py-0.5 rounded-full bg-tertiary/10 text-tertiary font-label-code-sm text-label-code-sm font-medium">Zero-Trust</span>
+</div>
+<p class="font-body-md text-body-md text-text-muted mb-space-md">
+              Strict CSP with per-request nonces, HSTS preload, double-submit cookie CSRF, pinned HS256 JWT validation, Argon2id passwords, and TOTP 2FA.
+            </p>
+</div>
+<div class="pt-space-md bg-surface-base/50 rounded-lg p-space-md font-label-code-sm text-label-code-sm text-text-muted">
+<span class="text-tertiary font-bold">ALLOWED_HOSTS</span> strict verification against HTTP BadHost injection.
+          </div>
+</div>
+
+<div class="bg-surface-card rounded-xl p-space-xl shadow-lg flex flex-col justify-between group hover:bg-surface-container-high transition-all">
+<div>
+<div class="w-12 h-12 rounded-lg bg-secondary-container/15 text-secondary flex items-center justify-center mb-space-lg shadow-sm">
+<span class="material-symbols-outlined text-[28px]">account_tree</span>
+</div>
+<div class="flex items-center gap-2 mb-space-xs">
+<h3 class="font-headline-sm text-headline-sm text-text-primary font-semibold">Multi-Tenant Reseller Engine</h3>
+<span class="px-2 py-0.5 rounded-full bg-secondary/15 text-secondary font-label-code-sm text-label-code-sm font-medium">B2B Ready</span>
+</div>
+<p class="font-body-md text-body-md text-text-muted mb-space-md">
+              Granular access role hierarchy: Admin, Quota Agent, and Commissioned Reseller. Automated usage metering, bandwidth throttles, and custom branded portals.
+            </p>
+</div>
+<div class="pt-space-md bg-surface-base/50 rounded-lg p-space-md font-label-code-sm text-label-code-sm text-secondary">
+<span>Isolated quotas with automated sub-balance debits &amp; API billing</span>
+</div>
+</div>
+
+<div class="bg-surface-card rounded-xl p-space-xl shadow-lg flex flex-col justify-between group hover:bg-surface-container-high transition-all">
+<div>
+<div class="w-12 h-12 rounded-lg bg-status-purple/15 text-status-purple flex items-center justify-center mb-space-lg shadow-sm">
+<span class="material-symbols-outlined text-[28px]">phone_android</span>
+</div>
+<div class="flex items-center gap-2 mb-space-xs">
+<h3 class="font-headline-sm text-headline-sm text-text-primary font-semibold">Native Mobile Client (Kotlin)</h3>
+<span class="px-2 py-0.5 rounded-full bg-status-purple/15 text-status-purple font-label-code-sm text-label-code-sm font-medium">Android Jetpack</span>
+</div>
+<p class="font-body-md text-body-md text-text-muted mb-space-md">
+              Bundles Xray, sing-box, and tun2socks directly into a slick Jetpack Compose client. Native split-tunneling, kill-switch, and one-tap camera QR import.
+            </p>
+</div>
+<div class="pt-space-md bg-surface-base/50 rounded-lg p-space-md font-label-code-sm text-label-code-sm text-status-purple">
+<span>ARM64 / ARMv7 / x86_64 native binaries with battery optimization</span>
+</div>
+</div>
+
+<div class="bg-surface-card rounded-xl p-space-xl shadow-lg flex flex-col justify-between group hover:bg-surface-container-high transition-all">
+<div>
+<div class="w-12 h-12 rounded-lg bg-status-warning/15 text-status-warning flex items-center justify-center mb-space-lg shadow-sm">
+<span class="material-symbols-outlined text-[28px]">verified_user</span>
+</div>
+<div class="flex items-center gap-2 mb-space-xs">
+<h3 class="font-headline-sm text-headline-sm text-text-primary font-semibold">Tamper-Evident Audit Chain</h3>
+<span class="px-2 py-0.5 rounded-full bg-status-warning/15 text-status-warning font-label-code-sm text-label-code-sm font-medium">HMAC SHA-256</span>
+</div>
+<p class="font-body-md text-body-md text-text-muted mb-space-md">
+              Every system mutation links to previous state hash. Verifiable in real-time via cryptographic challenge. Automated Fernet 0600 encrypted database snapshots.
+            </p>
+</div>
+<div class="pt-space-md bg-surface-base/50 rounded-lg p-space-md font-label-code-sm text-label-code-sm text-text-muted">
+<span class="text-status-warning font-semibold">GET /api/security/audit/verify</span> → HTTP 200 CHAIN_VALID
+          </div>
+</div>
+
+<div class="bg-surface-card rounded-xl p-space-xl shadow-lg flex flex-col justify-between group hover:bg-surface-container-high transition-all">
+<div>
+<div class="w-12 h-12 rounded-lg bg-primary/15 text-primary flex items-center justify-center mb-space-lg shadow-sm">
+<span class="material-symbols-outlined text-[28px]">query_stats</span>
+</div>
+<div class="flex items-center gap-2 mb-space-xs">
+<h3 class="font-headline-sm text-headline-sm text-text-primary font-semibold">Enterprise Observability</h3>
+<span class="px-2 py-0.5 rounded-full bg-primary/15 text-primary font-label-code-sm text-label-code-sm font-medium">Prometheus / Bot</span>
+</div>
+<p class="font-body-md text-body-md text-text-muted mb-space-md">
+              First-class Prometheus exporter with Grafana dashboards, systemd telemetry watchdogs, and an integrated Telegram alerting bot with secret HMAC tokens.
+            </p>
+</div>
+<div class="pt-space-md bg-surface-base/50 rounded-lg p-space-md font-label-code-sm text-label-code-sm text-primary">
+<span>Real-time alert dispatch for node degradation &amp; honey-tokens</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+
+<section class="w-full px-gutter-desktop py-space-2xl bg-surface-base scroll-mt-24" id="protocols-matrix">
+<div class="max-w-7xl mx-auto">
+<div class="flex flex-col lg:flex-row lg:items-end justify-between mb-space-xl gap-space-md">
+<div>
+<span class="font-label-code-sm text-label-code-sm text-neon-teal uppercase tracking-widest font-semibold flex items-center gap-1.5 mb-1">
+<span class="material-symbols-outlined text-[16px]">tune</span>
+            Routing Compatibility
+          </span>
+<h2 class="font-headline-lg text-headline-lg text-text-primary font-bold">16 Supported Inbound &amp; Outbound Protocols</h2>
+<p class="font-body-md text-body-md text-text-muted mt-space-xs">
+            Filter protocols by kernel engine. Standardized output for Base64, JSON, and dynamic QR distribution.
+          </p>
+</div>
+
+<div class="flex items-center gap-space-xs overflow-x-auto pb-1" id="filterContainer">
+<button class="proto-filter-btn px-space-md py-1.5 rounded-lg font-label-code-sm text-label-code-sm bg-primary-container text-on-primary-container font-semibold transition-all" data-filter="all" onclick="filterProtocols('all')">All (16)</button>
+<button class="proto-filter-btn px-space-md py-1.5 rounded-lg font-label-code-sm text-label-code-sm bg-surface-card text-text-muted hover:text-text-primary hover:bg-surface-elevated transition-all" data-filter="xray" onclick="filterProtocols('xray')">Xray-core</button>
+<button class="proto-filter-btn px-space-md py-1.5 rounded-lg font-label-code-sm text-label-code-sm bg-surface-card text-text-muted hover:text-text-primary hover:bg-surface-elevated transition-all" data-filter="sing-box" onclick="filterProtocols('sing-box')">sing-box</button>
+<button class="proto-filter-btn px-space-md py-1.5 rounded-lg font-label-code-sm text-label-code-sm bg-surface-card text-text-muted hover:text-text-primary hover:bg-surface-elevated transition-all" data-filter="wireguard" onclick="filterProtocols('wireguard')">WireGuard</button>
+<button class="proto-filter-btn px-space-md py-1.5 rounded-lg font-label-code-sm text-label-code-sm bg-surface-card text-text-muted hover:text-text-primary hover:bg-surface-elevated transition-all" data-filter="standalone" onclick="filterProtocols('standalone')">Standalone Obfuscated</button>
+</div>
+</div>
+
+<div class="w-full bg-surface-card rounded-xl overflow-hidden shadow-2xl">
+<div class="overflow-x-auto">
+<table class="w-full text-left font-body-sm text-body-sm">
+<thead>
+<tr class="bg-surface-container-high/60 text-text-muted font-label-code-sm text-label-code-sm tracking-wider uppercase">
+<th class="py-space-md px-space-lg">Engine Core</th>
+<th class="py-space-md px-space-lg">Protocol Spec</th>
+<th class="py-space-md px-space-lg">Transport / Flow Mechanism</th>
+<th class="py-space-md px-space-lg">TLS Camouflage</th>
+<th class="py-space-md px-space-lg">CDN Fronting</th>
+<th class="py-space-md px-space-lg text-right">Status</th>
+</tr>
+</thead>
+<tbody class="divide-none divide-y-0" id="protocolsTableBody">
+
+<tr class="proto-row hover:bg-surface-container/70 transition-colors" data-engine="xray">
+<td class="py-space-md px-space-lg">
+<span class="px-2 py-0.5 rounded font-label-code-sm text-label-code-sm bg-status-warning/15 text-status-warning font-bold">Xray-core</span>
+</td>
+<td class="py-space-md px-space-lg font-headline-sm text-headline-sm text-text-primary font-semibold">
+                  VLESS + XHTTP + REALITY
+                </td>
+<td class="py-space-md px-space-lg font-label-code-sm text-text-muted">
+                  XHTTP (Chunked multiplexing), relay-domain fronting
+                </td>
+<td class="py-space-md px-space-lg">
+<span class="px-2 py-0.5 rounded-full font-label-code-sm text-label-code-sm bg-neon-teal/15 text-neon-teal font-medium">REALITY SNI</span>
+</td>
+<td class="py-space-md px-space-lg text-text-dim font-label-code-sm">—</td>
+<td class="py-space-md px-space-lg text-right">
+<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-label-code-sm text-label-code-sm bg-status-online/15 text-status-online">
+<span class="w-1.5 h-1.5 rounded-full bg-status-online"></span> Production
+                  </span>
+</td>
+</tr>
+
+<tr class="proto-row hover:bg-surface-container/70 transition-colors" data-engine="xray">
+<td class="py-space-md px-space-lg">
+<span class="px-2 py-0.5 rounded font-label-code-sm text-label-code-sm bg-status-warning/15 text-status-warning font-bold">Xray-core</span>
+</td>
+<td class="py-space-md px-space-lg font-headline-sm text-headline-sm text-text-primary font-semibold">
+                  VLESS + REALITY + Vision
+                </td>
+<td class="py-space-md px-space-lg font-label-code-sm text-text-muted">
+                  XTLS-Vision (Zero-overhead stream filter)
+                </td>
+<td class="py-space-md px-space-lg">
+<span class="px-2 py-0.5 rounded-full font-label-code-sm text-label-code-sm bg-neon-teal/15 text-neon-teal font-medium">REALITY SNI</span>
+</td>
+<td class="py-space-md px-space-lg text-text-dim font-label-code-sm">—</td>
+<td class="py-space-md px-space-lg text-right">
+<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-label-code-sm text-label-code-sm bg-status-online/15 text-status-online">
+<span class="w-1.5 h-1.5 rounded-full bg-status-online"></span> Production
+                  </span>
+</td>
+</tr>
+
+<tr class="proto-row hover:bg-surface-container/70 transition-colors" data-engine="xray">
+<td class="py-space-md px-space-lg">
+<span class="px-2 py-0.5 rounded font-label-code-sm text-label-code-sm bg-status-warning/15 text-status-warning font-bold">Xray-core</span>
+</td>
+<td class="py-space-md px-space-lg font-headline-sm text-headline-sm text-text-primary font-semibold">
+                  VLESS-Reverse-REALITY
+                </td>
+<td class="py-space-md px-space-lg font-label-code-sm text-text-muted">
+                  Backhaul internal bridge / rathole tunnel
+                </td>
+<td class="py-space-md px-space-lg">
+<span class="px-2 py-0.5 rounded-full font-label-code-sm text-label-code-sm bg-neon-teal/15 text-neon-teal font-medium">REALITY SNI</span>
+</td>
+<td class="py-space-md px-space-lg text-text-dim font-label-code-sm">—</td>
+<td class="py-space-md px-space-lg text-right">
+<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-label-code-sm text-label-code-sm bg-status-online/15 text-status-online">
+<span class="w-1.5 h-1.5 rounded-full bg-status-online"></span> Active
+                  </span>
+</td>
+</tr>
+
+<tr class="proto-row hover:bg-surface-container/70 transition-colors" data-engine="sing-box">
+<td class="py-space-md px-space-lg">
+<span class="px-2 py-0.5 rounded font-label-code-sm text-label-code-sm bg-primary/20 text-primary font-bold">sing-box</span>
+</td>
+<td class="py-space-md px-space-lg font-headline-sm text-headline-sm text-text-primary font-semibold">
+                  Hysteria 2
+                </td>
+<td class="py-space-md px-space-lg font-label-code-sm text-text-muted">
+                  Custom QUIC + Salamander Obfs + Port-Hopping
+                </td>
+<td class="py-space-md px-space-lg">
+<span class="inline-flex items-center gap-1 font-label-code-sm text-label-code-sm text-tertiary">
+<span class="material-symbols-outlined text-[16px]">check_circle</span> TLS 1.3
+                  </span>
+</td>
+<td class="py-space-md px-space-lg text-text-dim font-label-code-sm">—</td>
+<td class="py-space-md px-space-lg text-right">
+<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-label-code-sm text-label-code-sm bg-status-online/15 text-status-online">
+<span class="w-1.5 h-1.5 rounded-full bg-status-online"></span> Extreme UDP
+                  </span>
+</td>
+</tr>
+
+<tr class="proto-row hover:bg-surface-container/70 transition-colors" data-engine="sing-box">
+<td class="py-space-md px-space-lg">
+<span class="px-2 py-0.5 rounded font-label-code-sm text-label-code-sm bg-primary/20 text-primary font-bold">sing-box</span>
+</td>
+<td class="py-space-md px-space-lg font-headline-sm text-headline-sm text-text-primary font-semibold">
+                  TUIC v5
+                </td>
+<td class="py-space-md px-space-lg font-label-code-sm text-text-muted">
+                  BBR Congestion QUIC (0-RTT Handshake)
+                </td>
+<td class="py-space-md px-space-lg">
+<span class="inline-flex items-center gap-1 font-label-code-sm text-label-code-sm text-tertiary">
+<span class="material-symbols-outlined text-[16px]">check_circle</span> TLS 1.3
+                  </span>
+</td>
+<td class="py-space-md px-space-lg text-text-dim font-label-code-sm">—</td>
+<td class="py-space-md px-space-lg text-right">
+<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-label-code-sm text-label-code-sm bg-status-online/15 text-status-online">
+<span class="w-1.5 h-1.5 rounded-full bg-status-online"></span> Low RTT
+                  </span>
+</td>
+</tr>
+
+<tr class="proto-row hover:bg-surface-container/70 transition-colors" data-engine="wireguard">
+<td class="py-space-md px-space-lg">
+<span class="px-2 py-0.5 rounded font-label-code-sm text-label-code-sm bg-status-purple/20 text-status-purple font-bold">WireGuard</span>
+</td>
+<td class="py-space-md px-space-lg font-headline-sm text-headline-sm text-text-primary font-semibold">
+                  AmneziaWG 2.0
+                </td>
+<td class="py-space-md px-space-lg font-label-code-sm text-text-muted">
+                  Obfuscated UDP Header Padding (Jc/Jmin/Jmax/H1-H4)
+                </td>
+<td class="py-space-md px-space-lg text-text-dim font-label-code-sm">Custom Magic Junk</td>
+<td class="py-space-md px-space-lg text-text-dim font-label-code-sm">—</td>
+<td class="py-space-md px-space-lg text-right">
+<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-label-code-sm text-label-code-sm bg-status-online/15 text-status-online">
+<span class="w-1.5 h-1.5 rounded-full bg-status-online"></span> Anti-ISP Reset
+                  </span>
+</td>
+</tr>
+
+<tr class="proto-row hover:bg-surface-container/70 transition-colors" data-engine="standalone">
+<td class="py-space-md px-space-lg">
+<span class="px-2 py-0.5 rounded font-label-code-sm text-label-code-sm bg-surface-elevated text-text-primary font-bold">Standalone</span>
+</td>
+<td class="py-space-md px-space-lg font-headline-sm text-headline-sm text-text-primary font-semibold">
+                  NaiveProxy
+                </td>
+<td class="py-space-md px-space-lg font-label-code-sm text-text-muted">
+                  Chromium Network Stack HTTP/2 CONNECT
+                </td>
+<td class="py-space-md px-space-lg">
+<span class="inline-flex items-center gap-1 font-label-code-sm text-label-code-sm text-tertiary">
+<span class="material-symbols-outlined text-[16px]">check_circle</span> Chrome Fingerprint
+                  </span>
+</td>
+<td class="py-space-md px-space-lg">
+<span class="inline-flex items-center gap-1 font-label-code-sm text-label-code-sm text-primary">
+<span class="material-symbols-outlined text-[16px]">verified</span> Cloudflare/Fastly
+                  </span>
+</td>
+<td class="py-space-md px-space-lg text-right">
+<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-label-code-sm text-label-code-sm bg-status-online/15 text-status-online">
+<span class="w-1.5 h-1.5 rounded-full bg-status-online"></span> Stealth Pro
+                  </span>
+</td>
+</tr>
+
+<tr class="proto-row hover:bg-surface-container/70 transition-colors" data-engine="standalone">
+<td class="py-space-md px-space-lg">
+<span class="px-2 py-0.5 rounded font-label-code-sm text-label-code-sm bg-surface-elevated text-text-primary font-bold">Standalone</span>
+</td>
+<td class="py-space-md px-space-lg font-headline-sm text-headline-sm text-text-primary font-semibold">
+                  Mieru
+                </td>
+<td class="py-space-md px-space-lg font-label-code-sm text-text-muted">
+                  ChaCha20-Poly1305 Obfuscated TCP/UDP
+                </td>
+<td class="py-space-md px-space-lg text-text-dim font-label-code-sm">Custom Cipher Replay Filter</td>
+<td class="py-space-md px-space-lg text-text-dim font-label-code-sm">—</td>
+<td class="py-space-md px-space-lg text-right">
+<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-label-code-sm text-label-code-sm bg-status-online/15 text-status-online">
+<span class="w-1.5 h-1.5 rounded-full bg-status-online"></span> Active
+                  </span>
+</td>
+</tr>
+
+<tr class="proto-row hover:bg-surface-container/70 transition-colors" data-engine="xray">
+<td class="py-space-md px-space-lg">
+<span class="px-2 py-0.5 rounded font-label-code-sm text-label-code-sm bg-status-warning/15 text-status-warning font-bold">Xray-core</span>
+</td>
+<td class="py-space-md px-space-lg font-headline-sm text-headline-sm text-text-primary font-semibold">
+                  VLESS + WS / gRPC
+                </td>
+<td class="py-space-md px-space-lg font-label-code-sm text-text-muted">
+                  HTTPUpgrade, gRPC Multiplex, Early Data
+                </td>
+<td class="py-space-md px-space-lg">
+<span class="inline-flex items-center gap-1 font-label-code-sm text-label-code-sm text-tertiary">
+<span class="material-symbols-outlined text-[16px]">check_circle</span> Automated Let's Encrypt
+                  </span>
+</td>
+<td class="py-space-md px-space-lg">
+<span class="inline-flex items-center gap-1 font-label-code-sm text-label-code-sm text-primary">
+<span class="material-symbols-outlined text-[16px]">verified</span> Any Edge CDN
+                  </span>
+</td>
+<td class="py-space-md px-space-lg text-right">
+<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-label-code-sm text-label-code-sm bg-status-online/15 text-status-online">
+<span class="w-1.5 h-1.5 rounded-full bg-status-online"></span> Unlimited CDN
+                  </span>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+
+<div class="px-space-lg py-space-md bg-surface-container-high/40 flex flex-col sm:flex-row items-center justify-between text-text-dim font-label-code-sm text-label-code-sm gap-2">
+<span>Serving endpoints: <code class="text-primary font-medium">/sub-api/{uuid}</code>, <code class="text-neon-teal font-medium">/sub-json/{uuid}</code>, <code class="text-secondary font-medium">/sub/{uuid}</code></span>
+<span>Standards compliant: <strong class="text-text-muted">Subscription-Userinfo: upload=...; download=...; total=...</strong></span>
+</div>
+</div>
+</div>
+</section>
+
+<section class="w-full px-gutter-desktop py-space-2xl bg-surface-elevated/30 scroll-mt-24" id="ecosystem">
+<div class="max-w-7xl mx-auto">
+<div class="text-center max-w-3xl mx-auto mb-space-xl">
+<span class="font-label-code-sm text-label-code-sm text-primary uppercase tracking-widest font-semibold">Integrated Ecosystem</span>
+<h2 class="font-headline-lg text-headline-lg text-text-primary font-bold mt-1">Operational Views &amp; Client Surface</h2>
+<p class="font-body-md text-body-md text-text-muted mt-space-xs">
+          Inspect how operators supervise nodes, how end-users receive their configuration links, and how the core orchestrates requests.
+        </p>
+
+<div class="inline-flex items-center p-1 rounded-lg bg-surface-card mt-space-lg shadow-inner gap-1">
+<button class="preview-tab-btn px-space-md py-1.5 rounded font-label-code-sm text-label-code-sm bg-primary-container text-on-primary-container font-semibold transition-all" id="tabBtn-dashboard" onclick="switchPreview('dashboard')">
+            Admin Telemetry Console
+          </button>
+<button class="preview-tab-btn px-space-md py-1.5 rounded font-label-code-sm text-label-code-sm text-text-muted hover:text-text-primary transition-all" id="tabBtn-mobile" onclick="switchPreview('mobile')">
+            Subscriber Client &amp; QR
+          </button>
+<button class="preview-tab-btn px-space-md py-1.5 rounded font-label-code-sm text-label-code-sm text-text-muted hover:text-text-primary transition-all" id="tabBtn-architecture" onclick="switchPreview('architecture')">
+            Kernel IPC Architecture
+          </button>
+</div>
+</div>
+
+<div class="preview-panel w-full bg-surface-card rounded-2xl p-space-lg sm:p-space-xl shadow-2xl" id="preview-dashboard">
+<div class="flex flex-col lg:flex-row items-start lg:items-center justify-between pb-space-lg mb-space-lg gap-space-md">
+<div class="flex items-center gap-space-md">
+<div class="w-10 h-10 rounded-lg bg-primary-container/20 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined">dashboard</span>
+</div>
+<div>
+<div class="flex items-center gap-space-xs">
+<h3 class="font-headline-md text-headline-md text-text-primary font-bold">Node-01-Frankfurt-DE</h3>
+<span class="px-2 py-0.5 rounded-full bg-status-online/15 text-status-online font-label-code-sm text-label-code-sm font-semibold">REALITY Online</span>
+</div>
+<p class="font-body-sm text-body-sm text-text-dim">Xray-core v1.8.24 • Sing-box v1.13 • mTLS Helper ACTIVE</p>
+</div>
+</div>
+<div class="flex items-center gap-space-sm font-label-code-sm text-label-code-sm">
+<span class="px-space-md py-1 bg-surface-container rounded-lg text-text-muted">Total Bandwidth: <strong class="text-text-primary">14.82 TB</strong></span>
+<span class="px-space-md py-1 bg-surface-container rounded-lg text-text-muted">Active Tunnels: <strong class="text-neon-teal">428</strong></span>
+</div>
+</div>
+
+<div class="grid grid-cols-1 md:grid-cols-3 gap-space-md mb-space-xl">
+<div class="bg-surface-container-low rounded-xl p-space-md shadow-sm">
+<div class="flex justify-between items-center mb-space-xs">
+<span class="font-label-code-sm text-label-code-sm text-text-muted uppercase">CPU Core Usage</span>
+<span class="font-label-code-md text-label-code-md text-primary font-bold">24.6%</span>
+</div>
+
+<svg class="w-full h-12 text-primary" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 100 30">
+<path d="M0,25 Q15,10 30,18 T60,8 T80,15 T100,6"></path>
+</svg>
+<div class="text-right font-label-code-sm text-label-code-sm text-text-dim mt-1">4 Cores AMD EPYC</div>
+</div>
+<div class="bg-surface-container-low rounded-xl p-space-md shadow-sm">
+<div class="flex justify-between items-center mb-space-xs">
+<span class="font-label-code-sm text-label-code-sm text-text-muted uppercase">RAM Memory Allocated</span>
+<span class="font-label-code-md text-label-code-md text-tertiary font-bold">1.42 / 8.00 GB</span>
+</div>
+
+<svg class="w-full h-12 text-tertiary" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 100 30">
+<path d="M0,20 Q20,20 40,16 T70,12 T85,15 T100,14"></path>
+</svg>
+<div class="text-right font-label-code-sm text-label-code-sm text-text-dim mt-1">Redis + Postgres Cache Active</div>
+</div>
+<div class="bg-surface-container-low rounded-xl p-space-md shadow-sm">
+<div class="flex justify-between items-center mb-space-xs">
+<span class="font-label-code-sm text-label-code-sm text-text-muted uppercase">Egress Throughput</span>
+<span class="font-label-code-md text-label-code-md text-neon-teal font-bold">894.2 Mbps</span>
+</div>
+
+<svg class="w-full h-12 text-neon-teal" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 100 30">
+<path d="M0,28 Q10,12 25,22 T50,5 T75,18 T100,8"></path>
+</svg>
+<div class="text-right font-label-code-sm text-label-code-sm text-text-dim mt-1">10 Gbps Port Carrier</div>
+</div>
+</div>
+
+<div class="w-full rounded-xl bg-surface-container-lowest overflow-hidden shadow-inner p-space-md">
+<div class="flex items-center justify-between pb-space-sm mb-space-sm text-text-muted font-label-code-sm text-label-code-sm">
+<span>Live Node Subscribers (Sub-Quota Engine)</span>
+<span class="text-tertiary">Real-time Accounting: ON</span>
+</div>
+<div class="space-y-2">
+<div class="flex flex-col sm:flex-row sm:items-center justify-between p-space-sm rounded-lg bg-surface-container-low gap-space-xs">
+<div class="flex items-center gap-space-sm">
+<span class="w-2.5 h-2.5 rounded-full bg-status-online"></span>
+<span class="font-label-code-md text-label-code-md text-text-primary font-bold">client_arash_teh_01</span>
+<span class="px-1.5 py-0.5 rounded text-[10px] font-label-code-sm bg-surface-elevated text-primary">REALITY-Vision</span>
+</div>
+<div class="flex items-center gap-space-md font-label-code-sm text-label-code-sm text-text-muted">
+<span>Usage: <strong class="text-text-primary">48.2 GB</strong> / 80 GB</span>
+<span>Ping: <strong class="text-tertiary">28ms</strong></span>
+<span class="text-status-online">Active 4s ago</span>
+</div>
+</div>
+<div class="flex flex-col sm:flex-row sm:items-center justify-between p-space-sm rounded-lg bg-surface-container-low gap-space-xs">
+<div class="flex items-center gap-space-sm">
+<span class="w-2.5 h-2.5 rounded-full bg-status-online"></span>
+<span class="font-label-code-md text-label-code-md text-text-primary font-bold">reseller_agent_morteza_sub39</span>
+<span class="px-1.5 py-0.5 rounded text-[10px] font-label-code-sm bg-surface-elevated text-secondary">Hysteria 2 UDP</span>
+</div>
+<div class="flex items-center gap-space-md font-label-code-sm text-label-code-sm text-text-muted">
+<span>Usage: <strong class="text-text-primary">189.4 GB</strong> / 500 GB</span>
+<span>Ping: <strong class="text-tertiary">42ms</strong></span>
+<span class="text-status-online">Active 12s ago</span>
+</div>
+</div>
+<div class="flex flex-col sm:flex-row sm:items-center justify-between p-space-sm rounded-lg bg-surface-container-low gap-space-xs">
+<div class="flex items-center gap-space-sm">
+<span class="w-2.5 h-2.5 rounded-full bg-status-warning"></span>
+<span class="font-label-code-md text-label-code-md text-text-primary font-bold">sub_mobile_vpn_amnezia_99</span>
+<span class="px-1.5 py-0.5 rounded text-[10px] font-label-code-sm bg-surface-elevated text-status-purple">AmneziaWG 2.0</span>
+</div>
+<div class="flex items-center gap-space-md font-label-code-sm text-label-code-sm text-text-muted">
+<span>Usage: <strong class="text-status-warning">99.8 GB</strong> / 100 GB</span>
+<span>Ping: <strong class="text-text-dim">110ms</strong></span>
+<span class="text-status-warning">Quota Nearing</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<div class="preview-panel hidden w-full bg-surface-card rounded-2xl p-space-lg sm:p-space-xl shadow-2xl" id="preview-mobile">
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-space-xl items-center">
+<div class="lg:col-span-7 space-y-space-md">
+<span class="px-2.5 py-1 rounded bg-neon-teal/15 text-neon-teal font-label-code-sm text-label-code-sm font-semibold uppercase">
+              Bilingual RTL &amp; LTR Ready
+            </span>
+<h3 class="font-headline-lg text-headline-lg text-text-primary font-bold">
+              Branded, Plain-Language Subscription Terminal
+            </h3>
+<p class="font-body-md text-body-md text-text-muted">
+              Subscribers receive a zero-friction, encrypted web page (served via <code class="text-primary">/sub/{uuid}</code>) with auto-detecting Farsi/English support. One tap imports configurations directly into v2rayNG, sing-box, Streisand, Clash, or the native Spiritus Android app.
+            </p>
+
+<div class="bg-surface-container-lowest rounded-lg p-space-md shadow-inner space-y-space-xs">
+<div class="flex items-center justify-between text-text-dim font-label-code-sm text-label-code-sm">
+<span>Base64 Subscription Feed</span>
+<span class="text-tertiary">Header: Subscription-Userinfo</span>
+</div>
+<div class="flex items-center justify-between gap-space-sm bg-surface-base p-2 rounded">
+<code class="font-label-code-sm text-label-code-sm text-primary truncate max-w-md">https://panel.spiritus.internal/sub-api/8f9b23c-41e9-4e01-92cb-0d84a7192bc</code>
+<button class="px-2.5 py-1 rounded bg-surface-container hover:bg-surface-elevated text-text-primary font-label-code-sm text-label-code-sm flex items-center gap-1 transition-colors" onclick="navigator.clipboard.writeText('https://panel.spiritus.internal/sub-api/8f9b23c-41e9-4e01-92cb-0d84a7192bc')">
+<span class="material-symbols-outlined text-[14px]">content_copy</span>
+<span>Copy</span>
+</button>
+</div>
+</div>
+
+<div class="p-space-md rounded-lg bg-surface-container-low text-right font-body-sm text-body-sm text-text-muted" dir="rtl">
+<span class="text-text-primary font-bold">پشتیبانی کامل از زبان فارسی:</span> صفحه اشتراک اختصاصی با نمایش دقیق ترافیک باقی‌مانده، تاریخ انقضا و دکمه اتصال مستقیم به برنامه‌های V2Ray و Sing-box همراه با کانفیگ‌های ضدفیلتر REALITY.
+            </div>
+</div>
+
+<div class="lg:col-span-5 flex justify-center">
+<div class="w-full max-w-[320px] rounded-3xl bg-surface-container-lowest p-4 shadow-2xl space-y-4">
+
+<div class="flex items-center justify-between pb-2">
+<div class="flex items-center gap-1.5">
+<img alt="Spiritus Logo" class="w-4 h-4 object-contain" src="{{ url_for('static', filename='img/logo-96.png') }}"/>
+<span class="font-headline-sm text-headline-sm text-text-primary text-[14px] font-bold">Spiritus VIP</span>
+</div>
+<span class="w-2 h-2 rounded-full bg-status-online"></span>
+</div>
+
+<div class="bg-surface-base rounded-2xl p-4 flex flex-col items-center justify-center shadow-inner">
+
+<svg class="w-36 h-36 text-primary" fill="currentColor" viewbox="0 0 100 100">
+
+<rect fill="none" height="28" rx="3" stroke="currentColor" stroke-width="4" width="28" x="5" y="5"></rect>
+<rect height="12" rx="1" width="12" x="13" y="13"></rect>
+
+<rect fill="none" height="28" rx="3" stroke="currentColor" stroke-width="4" width="28" x="67" y="5"></rect>
+<rect height="12" rx="1" width="12" x="75" y="13"></rect>
+
+<rect fill="none" height="28" rx="3" stroke="currentColor" stroke-width="4" width="28" x="5" y="67"></rect>
+<rect height="12" rx="1" width="12" x="13" y="75"></rect>
+
+<rect height="6" width="6" x="40" y="8"></rect>
+<rect height="6" width="6" x="50" y="8"></rect>
+<rect height="6" width="6" x="40" y="20"></rect>
+<rect height="6" width="6" x="52" y="24"></rect>
+<rect height="6" width="6" x="10" y="42"></rect>
+<rect height="6" width="6" x="22" y="42"></rect>
+<rect height="8" width="8" x="38" y="38"></rect>
+<rect height="6" width="6" x="54" y="40"></rect>
+<rect height="6" width="6" x="70" y="42"></rect>
+<rect height="6" width="6" x="84" y="42"></rect>
+<rect height="6" width="6" x="42" y="54"></rect>
+<rect height="6" width="6" x="54" y="54"></rect>
+<rect height="6" width="6" x="74" y="54"></rect>
+<rect height="6" width="6" x="40" y="70"></rect>
+<rect height="6" width="6" x="50" y="76"></rect>
+<rect height="6" width="6" x="40" y="86"></rect>
+<rect height="6" width="6" x="68" y="72"></rect>
+<rect height="6" width="6" x="80" y="76"></rect>
+<rect height="6" width="6" x="72" y="86"></rect>
+<rect height="6" width="6" x="84" y="86"></rect>
+</svg>
+<span class="font-label-code-sm text-[11px] text-text-muted mt-2">Scan with Spiritus Android</span>
+</div>
+
+<div class="bg-surface-card rounded-xl p-3 text-left space-y-2">
+<div class="flex justify-between font-label-code-sm text-[11px]">
+<span class="text-text-muted">Subscription Status</span>
+<span class="text-tertiary font-bold">24 Days Left</span>
+</div>
+<div class="w-full bg-surface-container h-1.5 rounded-full overflow-hidden">
+<div class="bg-gradient-to-r from-primary to-tertiary h-full w-[65%]"></div>
+</div>
+<div class="flex justify-between font-label-code-sm text-[10px] text-text-dim">
+<span>Used: 32.5 GB</span>
+<span>Total: 50.0 GB</span>
+</div>
+</div>
+
+<button class="w-full py-2.5 rounded-xl bg-primary hover:bg-neon-teal text-surface-base font-headline-sm text-[13px] font-bold shadow-md transition-all">
+                One-Click Import Profile
+              </button>
+</div>
+</div>
+</div>
+</div>
+
+<div class="preview-panel hidden w-full bg-surface-card rounded-2xl p-space-lg sm:p-space-xl shadow-2xl" id="preview-architecture">
+<div class="max-w-4xl mx-auto space-y-space-lg">
+<div class="text-center space-y-1">
+<h3 class="font-headline-md text-headline-md text-text-primary font-bold">Least-Privilege mTLS Interconnect Architecture</h3>
+<p class="font-body-sm text-body-sm text-text-muted">
+              Web workers run as non-root user <code class="text-primary font-medium">spiritus</code>, communicating strictly via bilateral mTLS with a detached privileged system helper.
+            </p>
+</div>
+
+<div class="grid grid-cols-1 md:grid-cols-3 gap-space-md items-center py-space-md">
+
+<div class="bg-surface-container-low rounded-xl p-space-md text-center space-y-space-sm shadow-md">
+<span class="material-symbols-outlined text-primary text-[32px]">devices</span>
+<div class="font-headline-sm text-headline-sm text-text-primary font-bold">Client Ingress</div>
+<p class="font-body-sm text-body-sm text-text-muted">Browser Admin Console, Android Jetpack App, Reseller API requests</p>
+<div class="px-2 py-0.5 rounded bg-surface-elevated text-primary font-label-code-sm text-label-code-sm">TLS 1.3 / Strict Nonce CSP</div>
+</div>
+
+<div class="bg-surface-elevated rounded-xl p-space-md text-center space-y-space-sm shadow-xl relative">
+<span class="material-symbols-outlined text-neon-teal text-[32px]">hub</span>
+<div class="font-headline-sm text-headline-sm text-text-primary font-bold">Spiritus FastAPI Core</div>
+<p class="font-body-sm text-body-sm text-text-muted">Argon2id, HS256 JWT, Rate-limit (Redis), Tamper Audit (Postgres)</p>
+<div class="px-2 py-0.5 rounded bg-surface-container text-tertiary font-label-code-sm text-label-code-sm">User: non-root (0600)</div>
+
+<div class="text-neon-teal font-label-code-sm text-label-code-sm mt-1">mTLS Socket ↓</div>
+</div>
+
+<div class="bg-surface-container-low rounded-xl p-space-md text-center space-y-space-sm shadow-md">
+<span class="material-symbols-outlined text-status-warning text-[32px]">shield</span>
+<div class="font-headline-sm text-headline-sm text-text-primary font-bold">Privileged Kernels</div>
+<p class="font-body-sm text-body-sm text-text-muted">Xray-core, sing-box, WireGuard, eBPF &amp; iptables NAT routing</p>
+<div class="px-2 py-0.5 rounded bg-surface-elevated text-status-warning font-label-code-sm text-label-code-sm">v7l-privileged-helper</div>
+</div>
+</div>
+
+<div class="bg-surface-container-lowest rounded-xl p-space-md grid grid-cols-1 sm:grid-cols-3 gap-space-sm text-center font-label-code-sm text-label-code-sm">
+<div class="text-text-muted">SSRF-Safe Custom DNS Resolver</div>
+<div class="text-text-muted">Automated acme.sh Certificate Renewal</div>
+<div class="text-text-muted">Fail2Ban Jails on Active Honey-tokens</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+
+<section class="w-full px-gutter-desktop py-space-2xl bg-surface-base relative overflow-hidden">
+
+<div class="absolute bottom-0 right-1/4 w-[500px] h-[300px] bg-primary/10 rounded-full blur-[140px] pointer-events-none"></div>
+<div class="max-w-6xl mx-auto rounded-3xl bg-gradient-to-r from-surface-card via-surface-elevated to-surface-card p-space-xl sm:p-space-2xl shadow-2xl relative">
+<div class="flex flex-col lg:flex-row items-center justify-between gap-space-xl">
+<div class="space-y-space-md max-w-2xl text-left">
+<div class="inline-flex items-center gap-2 px-space-sm py-1 rounded bg-status-online/10 text-status-online font-label-code-sm text-label-code-sm">
+<span class="material-symbols-outlined text-[16px]">verified</span>
+<span>Production Ready • Debian &amp; Ubuntu Tested</span>
+</div>
+<h2 class="font-display-hero text-display-hero text-text-primary font-bold tracking-tight">
+            Ready to harden your perimeter and bypass aggressive DPI filters?
+          </h2>
+<p class="font-body-lg text-body-lg text-text-muted">
+            Launch your high-performance node fleet in minutes with full multi-tenant reseller capabilities, native Android integration, and tamper-evident auditing.
+          </p>
+
+<div class="flex items-center gap-space-sm pt-space-xs text-text-dim font-label-code-sm text-label-code-sm">
+<span class="text-primary font-bold">EN / FA</span>
+<span>•</span>
+<span>Bilingual Console (پشتیبانی کامل از زبان فارسی)</span>
+<span>•</span>
+<span>MIT License Open Source</span>
+</div>
+</div>
+<div class="flex flex-col sm:flex-row lg:flex-col gap-space-md w-full lg:w-auto flex-shrink-0">
+<a class="flex items-center justify-center gap-space-sm px-space-xl py-3.5 rounded-xl bg-primary text-surface-base font-headline-sm text-headline-sm font-bold shadow-[0_0_24px_rgba(6,182,212,0.4)] hover:brightness-110 transition-all text-center" href="/">
+<span class="material-symbols-outlined text-[20px]">terminal</span>
+<span>One-Line Installer</span>
+</a>
+<a class="flex items-center justify-center gap-space-sm px-space-xl py-3.5 rounded-xl bg-surface-container hover:bg-surface-container-high text-text-primary font-headline-sm text-headline-sm font-semibold shadow-md transition-all text-center" href="https://github.com/v74all/Spiritus" rel="noopener noreferrer" target="_blank">
+<span class="material-symbols-outlined text-[20px]">code</span>
+<span>View Source on GitHub</span>
+</a>
+</div>
+</div>
+</div>
+</section>
+</div>
+<script nonce="{{ csp_nonce }}">
+  // navigator.clipboard exists only on HTTPS (and localhost); a panel opened
+  // as http://IP:port needs the textarea fallback.
+  function copyText(text) {
+    if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(text);
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.className = "fixed -left-[9999px] top-0 opacity-0";
+    document.body.appendChild(ta);
+    ta.select();
+    let ok = false;
+    try { ok = document.execCommand("copy"); } catch (e) {}
+    ta.remove();
+    return ok ? Promise.resolve() : Promise.reject(new Error("copy failed"));
+  }
+
+  function copySnippet() {
+    const text = document.getElementById("installCommand").innerText;
+    const btnText = document.getElementById("copySnippetText");
+    copyText(text).then(() => {
+      btnText.innerText = "Copied to Clipboard!";
+    }).catch(() => {
+      btnText.innerText = "Select the command and copy it";
+    }).finally(() => {
+      setTimeout(() => { btnText.innerText = "Copy Command"; }, 2500);
+    });
+  }
+
+  // bash -c takes the script's own arguments after a name for $0.
+  function appendFlag(flag) {
+    const base = 'sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/v74all/Spiritus/main/install.sh)" install.sh';
+    document.getElementById("installCommand").innerText = base + " " + flag;
+  }
+
+  function filterProtocols(engine) {
+    const buttons = document.querySelectorAll(".proto-filter-btn");
+    buttons.forEach(btn => {
+      if (btn.getAttribute("data-filter") === engine) {
+        btn.classList.add("bg-primary-container", "text-on-primary-container", "font-semibold");
+        btn.classList.remove("bg-surface-card", "text-text-muted");
+      } else {
+        btn.classList.remove("bg-primary-container", "text-on-primary-container", "font-semibold");
+        btn.classList.add("bg-surface-card", "text-text-muted");
+      }
+    });
+
+    const rows = document.querySelectorAll(".proto-row");
+    rows.forEach(row => {
+      const rowEngine = row.getAttribute("data-engine");
+      if (engine === "all" || rowEngine === engine) {
+        row.style.display = "";
+      } else {
+        row.style.display = "none";
+      }
+    });
+  }
+
+  function switchPreview(tabId) {
+    const panels = document.querySelectorAll(".preview-panel");
+    panels.forEach(p => p.classList.add("hidden"));
+
+    const target = document.getElementById("preview-" + tabId);
+    if (target) {
+      target.classList.remove("hidden");
+    }
+
+    const tabBtns = document.querySelectorAll(".preview-tab-btn");
+    tabBtns.forEach(btn => {
+      btn.classList.remove("bg-primary-container", "text-on-primary-container", "font-semibold");
+      btn.classList.add("text-text-muted");
+    });
+
+    const activeBtn = document.getElementById("tabBtn-" + tabId);
+    if (activeBtn) {
+      activeBtn.classList.add("bg-primary-container", "text-on-primary-container", "font-semibold");
+      activeBtn.classList.remove("text-text-muted");
+    }
+  }
+
+  function switchTheme(theme) {
+    if (!['obsidian', 'cyberops', 'midnight'].includes(theme)) theme = 'obsidian';
+    document.documentElement.setAttribute('data-theme', theme);
+    document.body.setAttribute('data-theme', theme);
+    localStorage.setItem('spiritus_theme', theme);
+    const lbl = document.getElementById('landingThemeLabel');
+    if (lbl) {
+      lbl.textContent = theme.charAt(0).toUpperCase() + theme.slice(1);
+    }
+  }
+
+  function cycleTheme() {
+    const current = document.documentElement.getAttribute('data-theme') || 'obsidian';
+    const next = current === 'obsidian' ? 'cyberops' : (current === 'cyberops' ? 'midnight' : 'obsidian');
+    switchTheme(next);
+  }
+
+  document.addEventListener('DOMContentLoaded', function() {
+    const saved = localStorage.getItem('spiritus_theme') || 'obsidian';
+    switchTheme(saved);
+  });
+</script></main><footer class="w-full bg-surface-container-lowest shadow-[0_-1px_8px_rgba(0,0,0,0.5)] z-40"><div class="w-full px-gutter-desktop py-space-md flex flex-col md:flex-row items-center justify-between gap-space-md font-body-sm text-body-sm text-text-muted"><div class="flex items-center gap-space-md flex-wrap"><div class="flex items-center gap-space-xs text-text-primary"><span class="material-symbols-outlined text-neon-teal text-[16px]">verified_user</span><span>Spiritus Core: Hardened Active</span></div><span class="hidden sm:inline text-text-dim">•</span><div class="flex items-center gap-1.5 font-label-code-sm text-label-code-sm"><span class="w-1.5 h-1.5 rounded-full bg-status-online"></span><span>eBPF Firewall Shield: Enforced</span></div><span class="hidden sm:inline text-text-dim">•</span><span class="text-text-dim">Released under MIT License</span></div><div class="flex items-center gap-space-md font-label-code-sm text-label-code-sm"><div class="flex items-center gap-1 px-space-xs py-0.5 bg-surface-container rounded hover:bg-surface-container-high transition-colors text-text-muted hover:text-text-primary cursor-pointer"><span class="material-symbols-outlined text-[14px] text-primary">fingerprint</span><span>SHA256: 8f2c...41e9</span></div><div class="flex items-center gap-1 text-primary hover:text-neon-teal transition-colors cursor-pointer"><span class="material-symbols-outlined text-[14px]">gavel</span><span>Cryptographic Audit Verify [0x9B]</span></div></div></div></footer></body></html>

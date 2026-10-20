@@ -11,6 +11,7 @@ from ...auth import (
     revoke_token,
     validate_password_strength,
 )
+from ...user_runtime import ACTIVE, DISABLED, EXPIRED, QUOTA, refresh_status, status_name
 from ._core import *  # noqa: F403
 from .legacy_users import (
     BulkCreateRequest,
@@ -18,6 +19,7 @@ from .legacy_users import (
     LegacyAddTrafficRequest,
     LegacyRenewRequest,
     LegacyUserCreate,
+    _fill_online_ips,
     legacy_bulk_export_zip,
 )
 from .monitor import legacy_server_info
@@ -33,7 +35,10 @@ class LegacyAgentCreate(BaseModel):
     name: str
     password: str
     traffic_quota_gb: float = 100
-    speed_limit_default: int = 200
+    speed_limit_default: int = 0  # KB/s, 0 = unlimited
+    # A new agent can sign in straight away unless the admin opts out;
+    # "offline" is what makes /agent/login refuse the account.
+    active: bool = True
 
 
 def _agent_to_legacy(a: Agent, user_count: int = 0) -> dict[str, Any]:
@@ -225,7 +230,7 @@ async def legacy_create_agent(
         agent = Agent(
             name=agent_name,
             backend=AgentBackend.xray,
-            status=AgentStatus.offline,
+            status=AgentStatus.online if body.active else AgentStatus.offline,
             address="127.0.0.1",
             api_port=10085,
             api_key=get_password_hash(body.password),
@@ -558,7 +563,9 @@ async def legacy_agent_users(
         .order_by(VpnUser.active.desc(), VpnUser.name)
     )
     server_ip = _request_config_host(request)
-    return [_user_to_legacy(u, server_ip=server_ip) for u in result.scalars().all()]
+    out = [_user_to_legacy(u, server_ip=server_ip) for u in result.scalars().all()]
+    await _fill_online_ips(out)
+    return out
 
 
 @router.post("/agent/users")
@@ -740,9 +747,13 @@ async def legacy_agent_toggle_user(
     user = result.scalar_one_or_none()
     if user is None:
         return {"ok": False, "error": "User not found or not yours"}
-    user.active = 0 if user.active else 1
+    if user.active == DISABLED:
+        user.active = ACTIVE
+        refresh_status(user)
+    else:
+        user.active = DISABLED
     await db.commit()
-    return {"ok": True, "active": bool(user.active)}
+    return {"ok": True, "active": user.active == ACTIVE, "status": status_name(user.active)}
 
 
 @router.post("/agent/users/{name}/renew")
@@ -766,9 +777,9 @@ async def legacy_agent_renew_user(
     if quota_error:
         return {"ok": False, "error": quota_error}
     user.traffic_limit = int(body.traffic * (1024**3))
-    user.traffic_used = 0
-    user.expire_at = _utcnow() + timedelta(days=body.days)
-    user.active = 1
+    user.traffic_used = user.traffic_upload = user.traffic_download = 0
+    user.expire_at = _utcnow() + timedelta(days=body.days) if body.days else None
+    user.active = ACTIVE
     await db.commit()
     return {"ok": True}
 
@@ -790,13 +801,23 @@ async def legacy_agent_add_traffic(
     if user is None:
         return {"ok": False, "error": "User not found or not yours"}
     user.traffic_limit = (user.traffic_limit or 0) + int(body.gb * (1024**3))
+    refresh_status(user)
     await db.commit()
     return {"ok": True, "traffic_limit_gb": (user.traffic_limit or 0) / (1024**3)}
 
 
 @router.get("/agent/live")
-async def legacy_agent_live(agent: Agent = Depends(_get_current_agent_cookie)):
-    return {}
+async def legacy_agent_live(
+    agent: Agent = Depends(_get_current_agent_cookie),
+    db: AsyncSession = Depends(get_async_db),
+):
+    """Live counters of this agent's users only."""
+    from .monitor import _note_activity, _query_xray_stats
+
+    names = set((await db.execute(select(VpnUser.name).where(VpnUser.agent_id == agent.id))).scalars().all())
+    stats = await asyncio.to_thread(_query_xray_stats, reset=False)
+    _note_activity(stats)
+    return {k: v for k, v in stats.items() if k in names}
 
 
 @router.get("/agent/server-info")
@@ -812,22 +833,17 @@ async def legacy_agent_sync(
     agent: Agent = Depends(_get_current_agent_cookie),
     db: AsyncSession = Depends(get_async_db),
 ):
-    now = _utcnow()
     result = await db.execute(
-        select(VpnUser).where(
-            VpnUser.agent_id == agent.id,
-            VpnUser.expire_at.is_not(None),
-            VpnUser.active == 1,
-        )
+        select(VpnUser).where(VpnUser.agent_id == agent.id, VpnUser.active.in_((ACTIVE, EXPIRED, QUOTA)))
     )
-    disabled = 0
+    changed = 0
     for u in result.scalars().all():
-        if u.expire_at and u.expire_at < now:
-            u.active = 0
-            disabled += 1
-    if disabled:
+        before = u.active
+        if refresh_status(u) != before:
+            changed += 1
+    if changed:
         await db.commit()
-    return {"ok": True, "disabled": disabled}
+    return {"ok": True, "disabled": changed}
 
 
 @router.get("/agent/groups")

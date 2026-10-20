@@ -16,6 +16,10 @@ from typing import Any
 
 from .config import settings
 
+# Same cap as privileged_helper_daemon.MAX_REQUEST: a full Xray config lists
+# every user on every inbound (~1.5 KB per user).
+MAX_REQUEST = 32 * 1024 * 1024
+
 
 class PrivilegedHelperError(RuntimeError):
     pass
@@ -52,8 +56,8 @@ async def helper_request(
         {"operation": operation, "payload": dict(payload or {})},
         separators=(",", ":"),
     ).encode("utf-8") + b"\n"
-    if len(request) > 1_048_576:
-        raise PrivilegedHelperError("helper request exceeds 1 MiB")
+    if len(request) > MAX_REQUEST:
+        raise PrivilegedHelperError("helper request exceeds 32 MiB")
 
     try:
         reader, writer = await asyncio.wait_for(
@@ -82,8 +86,8 @@ def helper_request_sync(
         {"operation": operation, "payload": dict(payload or {})},
         separators=(",", ":"),
     ).encode("utf-8") + b"\n"
-    if len(request) > 1_048_576:
-        raise PrivilegedHelperError("helper request exceeds 1 MiB")
+    if len(request) > MAX_REQUEST:
+        raise PrivilegedHelperError("helper request exceeds 32 MiB")
 
     client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     client.settimeout(timeout)
@@ -96,7 +100,7 @@ def helper_request_sync(
             if not chunk:
                 break
             chunks.extend(chunk)
-            if len(chunks) > 1_048_576:
+            if len(chunks) > MAX_REQUEST:
                 raise PrivilegedHelperError("invalid privileged helper response")
     except (OSError, TimeoutError) as exc:
         raise PrivilegedHelperError("privileged helper unavailable") from exc

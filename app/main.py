@@ -157,18 +157,34 @@ async def lifespan(app: FastAPI):
     # of the box. This runs after DB init so the settings row is available.
     try:
         from .api.compat import _load_legacy_settings, _schedule_xray_sync
+        from .api.compat.panel_settings import ensure_reality_keys, ensure_ss2022_key
         from .database import AsyncSessionLocal
         async with AsyncSessionLocal() as _db:
             await _load_legacy_settings(_db)
+            await ensure_reality_keys(_db)
+            await ensure_ss2022_key(_db)
+            from .traffic_control import retire_unenforced_default_limits
+
+            await retire_unenforced_default_limits(_db)
         _schedule_xray_sync()
         logger.info("Xray config bootstrap: settings loaded, sync scheduled")
     except Exception as _xray_exc:
         logger.warning("Xray config bootstrap failed (non-fatal): %s", _xray_exc)
 
+    # Users reach the engines live, traffic is counted and quotas / expiry
+    # enforced (app/user_runtime.py; importing it installs the DB hook).
+    from . import user_runtime
+
+    _runtime_task = None
+    if settings.user_runtime_sync:
+        _runtime_task = asyncio.create_task(user_runtime.run_forever())
+
     yield
 
     # Shutdown
     logger.info("Shutting down V7LTHRONYX VPN Panel...")
+    if _runtime_task:
+        _runtime_task.cancel()
     await shutdown_db()
     await close_redis()
     logger.info("Shutdown complete")
@@ -356,10 +372,14 @@ from .api.users import router as users_router
 # handlers win over the bearer-token resource routers on shared paths.
 app.include_router(compat_router, prefix="/api")
 from .api.honeypot import router as honeypot_router
+from .api.ops import probe_router as ops_probe_router
+from .api.ops import router as ops_router
 from .api.telegram import router as telegram_router
 
 app.include_router(honeypot_router)
 app.include_router(telegram_router, prefix="/api")
+app.include_router(ops_router, prefix="/api")
+app.include_router(ops_probe_router, prefix="/api")
 app.include_router(auth_router, prefix="/api")
 app.include_router(mobile_auth_router, prefix="/api")
 app.include_router(mobile_session_router, prefix="/api")
@@ -604,13 +624,39 @@ async def serve_agent_panel(request: Request):
 
     template = _jinja_env.get_template("agent-panel.html")
     apk_path = os.path.join(os.getcwd(), "static", "downloads", "app-release.apk")
+    try:
+        _css_path = os.path.join(os.path.dirname(_templates_dir), "static", "css", "ui.css")
+        asset_v = str(int(os.path.getmtime(_css_path)))
+    except Exception:
+        asset_v = "0"
     html = template.render(
         dir=_detect_direction(request),
+        asset_v=asset_v,
         server_ip=settings.host if settings.host != "0.0.0.0" else "",
         server_port=settings.web_port,
         sni_host=settings.vless_ws_host,
         ws_path=settings.vless_ws_path,
         apk_available=os.path.isfile(apk_path),
+        csp_nonce=getattr(request.state, "csp_nonce", ""),
+    )
+    return HTMLResponse(content=html)
+
+
+@app.get("/landing", response_class=HTMLResponse)
+@app.get("/intro", response_class=HTMLResponse)
+@app.get("/about", response_class=HTMLResponse)
+async def serve_landing(request: Request):
+    template = _jinja_env.get_template("landing.html")
+    try:
+        _js_path = os.path.join(os.path.dirname(_templates_dir), "static", "js", "tailwind.min.js")
+        asset_v = str(int(os.path.getmtime(_js_path)))
+    except Exception:
+        asset_v = "0"
+    html = template.render(
+        dir=_detect_direction(request),
+        server_ip=settings.host if settings.host != "0.0.0.0" else "",
+        server_port=settings.web_port,
+        asset_v=asset_v,
         csp_nonce=getattr(request.state, "csp_nonce", ""),
     )
     return HTMLResponse(content=html)
@@ -707,25 +753,60 @@ async def _subscription_user(user_uuid: str, db: AsyncSession) -> VpnUser:
     return user
 
 
-async def _subscription_links(user: VpnUser, request: Request, db: AsyncSession) -> dict:
-    from .api.compat import _load_legacy_settings, _user_to_legacy
+# Share-link key -> protocol key used by the probes (app.api.ops). Links with
+# no probe equivalent (CDN-fronted) keep their default place.
+_SUB_LINK_ORDER = (
+    "vmess", "vless", "vless_ws", "vless_ws_plain_front",
+    "vless_xhttp", "vless_vision", "vless_reverse",
+    "cdn_vmess", "trojan", "trojan_cdn",
+    "grpc_vmess", "httpupgrade_vmess", "ss2022",
+    "hysteria2", "tuic", "naiveproxy", "mieru",
+)
+_SUB_LINK_PROTOCOLS = {
+    "vmess": "vmess", "vless": "vless_reality", "vless_ws": "vless_ws",
+    "vless_ws_plain_front": "vless_ws_plain_front", "vless_xhttp": "vless_xhttp_reality",
+    "vless_vision": "vless_vision_reality", "vless_reverse": "vless_reverse_reality",
+    "trojan": "trojan", "trojan_cdn": "trojan_cdn", "grpc_vmess": "grpc",
+    "httpupgrade_vmess": "httpupgrade", "ss2022": "ss2022",
+    "hysteria2": "hysteria2", "tuic": "tuic", "naiveproxy": "naiveproxy", "mieru": "mieru",
+}
+# /sub-json outbound tag label ("{prefix}-<label>-{user}") -> probe protocol key.
+_SUB_OUTBOUND_PROTOCOLS = {
+    "VMess": "vmess", "VLESS": "vless_reality", "Trojan": "trojan", "gRPC": "grpc",
+    "HU": "httpupgrade", "VLESS-WS": "vless_ws", "VLESS-XHTTP": "vless_xhttp_reality",
+    "VLESS-Vision": "vless_vision_reality", "VLESS-Reverse": "vless_reverse_reality",
+    "Trojan-CDN": "trojan_cdn", "SS2022": "ss2022",
+}
+
+
+async def _subscription_links(user: VpnUser, request: Request, db: AsyncSession,
+                              with_wireguard: bool = False) -> dict:
+    from .api.compat import _load_legacy_settings, _settings_state, _user_to_legacy
 
     await _load_legacy_settings(db)
     server_ip = _public_server_ip(request)
     # Return ALL non-empty links including IPv6 variants and VLESS Plain
     legacy = _user_to_legacy(user, server_ip=server_ip)
-    _link_keys = {
-        "vmess", "vless", "vless_ws", "vless_ws_plain_front",
-        "vless_xhttp", "vless_vision", "vless_reverse",
-        "cdn_vmess", "trojan", "trojan_cdn",
-        "grpc_vmess", "httpupgrade_vmess", "ss2022",
-        "hysteria2", "tuic",
-    }
-    links = {k: legacy.get(k, "") for k in _link_keys if legacy.get(k)}
-    # Include IPv6 variants
-    for k, v in legacy.items():
-        if k.endswith("_ipv6") and v:
-            links[k] = v
+    # Default order (a tuple: this used to be a set, so the order changed
+    # with every process restart). Each IPv6 twin follows its IPv4 link.
+    ordered = []
+    for k in _SUB_LINK_ORDER:
+        ordered.append(k)
+        ordered.append(k + "_ipv6")
+    ordered += sorted(k for k in legacy if k.endswith("_ipv6") and k not in ordered)
+    keys = [k for k in ordered if legacy.get(k)]
+    if _settings_state.get("auto_protocol_order_enabled", True):
+        from .api.ops import protocol_rank, rank_sort_key
+
+        rank = await protocol_rank(db)
+        keys.sort(key=lambda k: rank_sort_key(
+            _SUB_LINK_PROTOCOLS.get(k.removesuffix("_ipv6")), rank, ordered.index(k)
+        ))
+    links = {k: legacy[k] for k in keys}
+    # The WireGuard .conf is a file, not a one-line URI: it never goes into
+    # the base64 list, only onto the page (QR / copy).
+    if with_wireguard and legacy.get("wireguard"):
+        links["wireguard"] = legacy["wireguard"]
     return links
 
 
@@ -753,7 +834,8 @@ async def subscription_page(
             csp_nonce=getattr(request.state, "csp_nonce", ""),
         )
         return HTMLResponse(content=html, status_code=404)
-    links = await _subscription_links(user, request, db)
+    links = await _subscription_links(user, request, db, with_wireguard=True)
+    from .api.compat import _settings_state as _vmess_state
     from .api.users import build_import_uri
 
     mobile_profile = await build_import_uri(request, db, role="subscriber", uuid=user.uuid)
@@ -769,9 +851,10 @@ async def subscription_page(
         live_down=0,
         online_ips=[],
         server_ip=_public_server_ip(request),
-        server_port=settings.web_port,
-        sni_host=settings.vless_ws_host,
-        ws_path=settings.vless_ws_path,
+        # The VMess connection the details card describes (not the panel's port).
+        server_port=_vmess_state.get("vmess_port") or 443,
+        sni_host=_vmess_state.get("vmess_sni") or "",
+        ws_path=_vmess_state.get("vmess_ws_path") or "/api/v1/stream",
         settings=settings,
         apk_available=os.path.isfile(os.path.join(os.getcwd(), "static", "downloads", "app-release.apk")),
         csp_nonce=getattr(request.state, "csp_nonce", ""),
@@ -855,6 +938,7 @@ def _subscription_json_config(
     user: VpnUser,
     server_ip: str,
     panel_settings: dict,
+    protocol_rank: dict | None = None,
 ) -> dict:
     outbounds = []
     prefix = panel_settings.get("config_prefix") or "Proxy"
@@ -866,6 +950,23 @@ def _subscription_json_config(
     _actual_server = server_ip
     if panel_settings.get("emergency_relay_enabled") and panel_settings.get("emergency_relay_address"):
         server_ip = panel_settings.get("emergency_relay_address", "").strip() or server_ip
+
+    # Xray removed allowInsecure: say how to verify our certificate instead
+    # (pin a self-signed one, or check a public one against the name it was
+    # issued for). CDN outbounds see the CDN's public certificate: nothing to add.
+    from .tls_trust import load_cert_info, trust_for
+
+    _cert = load_cert_info()
+
+    def _tls(server_name: str, ours: bool = True) -> dict:
+        ts = {"serverName": server_name, "fingerprint": fp}
+        if ours:
+            t = trust_for(server_name, _actual_server, _cert)
+            if t.pcs:
+                ts["pinnedPeerCertSha256"] = t.pcs
+            if t.vcn:
+                ts["verifyPeerCertByName"] = t.vcn
+        return ts
 
     outbounds.append({
         "tag": f"{prefix}-VMess-{user.name}",
@@ -884,7 +985,7 @@ def _subscription_json_config(
                 "path": panel_settings.get("vmess_ws_path") or "/api/v1/stream",
                 "headers": {"Host": sni},
             },
-            "tlsSettings": {"serverName": sni, "fingerprint": fp, "allowInsecure": True},
+            "tlsSettings": _tls(sni),
         },
     })
 
@@ -903,7 +1004,7 @@ def _subscription_json_config(
                 "network": "tcp",
                 "security": "reality",
                 "realitySettings": {
-                    "serverNames": [panel_settings.get("reality_sni") or "chat.deepseek.com"],
+                    "serverName": panel_settings.get("reality_sni") or "chat.deepseek.com",
                     "fingerprint": fp,
                     "publicKey": panel_settings.get("reality_public_key"),
                     "shortId": panel_settings.get("reality_short_id") or "",
@@ -930,7 +1031,7 @@ def _subscription_json_config(
                     "path": panel_settings.get("cdn_ws_path") or "/cdn-ws",
                     "headers": {"Host": cdn_domain},
                 },
-                "tlsSettings": {"serverName": cdn_domain, "fingerprint": fp, "allowInsecure": True},
+                "tlsSettings": _tls(cdn_domain, ours=False),
             },
         })
 
@@ -948,7 +1049,7 @@ def _subscription_json_config(
             "streamSettings": {
                 "network": "tcp",
                 "security": "tls",
-                "tlsSettings": {"serverName": sni, "fingerprint": fp, "allowInsecure": True},
+                "tlsSettings": _tls(sni),
             },
         })
 
@@ -967,7 +1068,7 @@ def _subscription_json_config(
                 "network": "grpc",
                 "security": "tls",
                 "grpcSettings": {"serviceName": panel_settings.get("grpc_service_name") or "GunService"},
-                "tlsSettings": {"serverName": sni, "fingerprint": fp, "allowInsecure": True},
+                "tlsSettings": _tls(sni),
             },
         })
 
@@ -989,7 +1090,7 @@ def _subscription_json_config(
                     "path": panel_settings.get("httpupgrade_path") or "/httpupgrade",
                     "host": sni,
                 },
-                "tlsSettings": {"serverName": sni, "fingerprint": fp, "allowInsecure": True},
+                "tlsSettings": _tls(sni),
             },
         })
 
@@ -1011,7 +1112,7 @@ def _subscription_json_config(
                     "path": panel_settings.get("vless_ws_path") or "/vless-ws",
                     "headers": {"Host": sni},
                 },
-                "tlsSettings": {"serverName": sni, "fingerprint": fp, "allowInsecure": True},
+                "tlsSettings": _tls(sni),
             },
         })
 
@@ -1031,7 +1132,8 @@ def _subscription_json_config(
                 "vnext": [{
                     "address": server_ip,
                     "port": _xhttp_port,
-                    "users": [{"id": uid, "encryption": "none", "flow": "xtls-rprx-vision"}],
+                    # No Vision flow: it only runs over raw TCP, not XHTTP.
+                    "users": [{"id": uid, "encryption": "none"}],
                 }],
             },
             "streamSettings": {
@@ -1097,7 +1199,7 @@ def _subscription_json_config(
                 "network": "tcp",
                 "security": "reality",
                 "realitySettings": {
-                    "serverNames": [rev_reality_sni],
+                    "serverName": rev_reality_sni,
                     "fingerprint": fp,
                     "publicKey": rev_reality_pk,
                     "shortId": rev_reality_sid,
@@ -1126,7 +1228,7 @@ def _subscription_json_config(
                     "path": panel_settings.get("trojan_cdn_ws_path") or "/trojan-ws",
                     "headers": {"Host": trojan_cdn_domain},
                 },
-                "tlsSettings": {"serverName": trojan_cdn_sni, "fingerprint": fp, "allowInsecure": True},
+                "tlsSettings": _tls(trojan_cdn_sni, ours=False),
             },
         })
 
@@ -1148,12 +1250,15 @@ def _subscription_json_config(
                 "network": "grpc",
                 "security": "tls",
                 "grpcSettings": {"serviceName": panel_settings.get("trojan_cdn_grpc_service") or "TrojanService"},
-                "tlsSettings": {"serverName": trojan_cdn_sni, "fingerprint": fp, "allowInsecure": True},
+                "tlsSettings": _tls(trojan_cdn_sni, ours=False),
             },
         })
 
     # ShadowSocks 2022
     if panel_settings.get("ss2022_enabled") and panel_settings.get("ss2022_server_key"):
+        from .protocol_engine import ss2022_user_key
+
+        ss_method = panel_settings.get("ss2022_method") or "2022-blake3-aes-128-gcm"
         outbounds.append({
             "tag": f"{prefix}-SS2022-{user.name}",
             "protocol": "shadowsocks",
@@ -1161,33 +1266,62 @@ def _subscription_json_config(
                 "servers": [{
                     "address": server_ip,
                     "port": int(panel_settings.get("ss2022_port") or 2056),
-                    "method": panel_settings.get("ss2022_method") or "2022-blake3-aes-128-gcm",
-                    "password": panel_settings.get("ss2022_server_key") + ":" + uid,
+                    "method": ss_method,
+                    "password": panel_settings.get("ss2022_server_key") + ":" + ss2022_user_key(uid, ss_method),
                 }],
-            },
-            "streamSettings": {
-                "network": "tcp",
-                "security": "tls",
-                "tlsSettings": {"serverName": sni, "fingerprint": fp, "allowInsecure": True},
             },
         })
 
+    if protocol_rank:
+        # The first outbound is the client's default route: put the protocol
+        # that probes in Iran show working best there.
+        from .api.ops import rank_sort_key
+
+        head, tail = f"{prefix}-", f"-{user.name}"
+
+        def _proto(tag: str) -> str | None:
+            if tag.startswith(head) and tag.endswith(tail):
+                return _SUB_OUTBOUND_PROTOCOLS.get(tag[len(head):len(tag) - len(tail)])
+            return None
+
+        outbounds = [o for _, o in sorted(
+            enumerate(outbounds), key=lambda io: rank_sort_key(_proto(io[1].get("tag", "")), protocol_rank, io[0])
+        )]
+
+    # Fragment and noise live on a freedom outbound that every proxy dials
+    # through (sockopt.dialerProxy). Xray has no sockopt.fragment: settings
+    # written there are ignored and the ClientHello goes out whole.
+    fragment_outbound = None
     if panel_settings.get("fragment_enabled") or panel_settings.get("noise_enabled"):
+        frag_settings: dict = {}
+        if panel_settings.get("fragment_enabled"):
+            frag_settings["fragment"] = {
+                "packets": panel_settings.get("fragment_packets") or "tlshello",
+                "length": panel_settings.get("fragment_length") or "100-200",
+                "interval": panel_settings.get("fragment_interval") or "10-20",
+            }
+        if panel_settings.get("noise_enabled"):
+            # "rand:50-100" is type:packet. Xray sends noise ahead of UDP only.
+            ntype, sep, npacket = (panel_settings.get("noise_packet") or "rand:50-100").partition(":")
+            if not sep:
+                ntype, npacket = "rand", ntype
+            frag_settings["noises"] = [{
+                "type": ntype,
+                "packet": npacket,
+                "delay": panel_settings.get("noise_delay") or "10-20",
+            }]
+        fragment_outbound = {"tag": "fragment", "protocol": "freedom", "settings": frag_settings}
         for outbound in outbounds:
-            stream_settings = outbound.setdefault("streamSettings", {})
-            sockopt = stream_settings.setdefault("sockopt", {})
-            if panel_settings.get("fragment_enabled"):
-                sockopt["fragment"] = {
-                    "packets": panel_settings.get("fragment_packets") or "tlshello",
-                    "length": panel_settings.get("fragment_length") or "100-200",
-                    "interval": panel_settings.get("fragment_interval") or "10-20",
-                }
-            if panel_settings.get("noise_enabled"):
-                sockopt["noisePacket"] = panel_settings.get("noise_packet") or "rand:50-100"
-                sockopt["noiseDelay"] = panel_settings.get("noise_delay") or "10-20"
+            outbound.setdefault("streamSettings", {}).setdefault("sockopt", {})["dialerProxy"] = "fragment"
 
     if panel_settings.get("mux_enabled"):
         for outbound in outbounds:
+            # Xray cannot mux a Vision-flow connection, and Mux.Cool over
+            # XHTTP (which multiplexes itself) fails outright.
+            if any(u.get("flow") for v in outbound.get("settings", {}).get("vnext", []) for u in v.get("users", [])):
+                continue
+            if outbound.get("streamSettings", {}).get("network") == "xhttp":
+                continue
             outbound["mux"] = {
                 "enabled": True,
                 "concurrency": int(panel_settings.get("mux_concurrency") or 8),
@@ -1209,10 +1343,12 @@ def _subscription_json_config(
         ss = outbound.get("streamSettings", {})
         network = ss.get("network", "tcp")
 
-        # TCP Keepalive
+        # TCP Keepalive (Xray takes idle/interval seconds; it has no
+        # boolean tcpKeepAlive field and would silently ignore one)
         if panel_settings.get("dpi_tcp_keepalive"):
             sockopt = ss.setdefault("sockopt", {})
-            sockopt["tcpKeepAlive"] = True
+            sockopt["tcpKeepAliveIdle"] = 30
+            sockopt["tcpKeepAliveInterval"] = 15
 
         # HTTP Host Spoofing: replace Host header on WS/HTTPUpgrade
         if host_spoof_domain:
@@ -1252,34 +1388,13 @@ def _subscription_json_config(
             front_domain = panel_settings.get("dpi_cdn_front")
             if "tlsSettings" in ss and outbound.get("tag", "").startswith(prefix + "-CDN"):
                 ss["tlsSettings"]["serverName"] = front_domain
-                ss["tlsSettings"]["allowInsecure"] = True
 
-    # ── DNS / ICMP Tunneling (server-assisted) ──
-    # These require agent-side tunnel binaries (dnstt, icmptunnel).
-    # When enabled, add a loopback outbound that the local tunnel routes into.
-    _tunnel_active = panel_settings.get("dpi_dns_tunnel") or panel_settings.get("dpi_icmp_tunnel")
-    if _tunnel_active:
-        tunnel_outbounds = []
-        _tunnel_types = []
-        if panel_settings.get("dpi_dns_tunnel"):
-            _tunnel_types.append("dns")
-            tunnel_outbounds.append({
-                "tag": f"tunnel-dns-{user.name}",
-                "protocol": "freedom",
-                "settings": {"domainStrategy": "UseIP", "redirect": "127.0.0.1:5353"},
-            })
-        if panel_settings.get("dpi_icmp_tunnel"):
-            _tunnel_types.append("icmp")
-            tunnel_outbounds.append({
-                "tag": f"tunnel-icmp-{user.name}",
-                "protocol": "freedom",
-                "settings": {"domainStrategy": "UseIP", "redirect": "127.0.0.1:9999"},
-            })
-        # Insert tunnel outbounds before direct
-        direct_idx = next((i for i, o in enumerate(outbounds) if o.get("tag") == "direct"), len(outbounds))
-        for t in reversed(tunnel_outbounds):
-            outbounds.insert(direct_idx, t)
-
+    if fragment_outbound:
+        # With dialerProxy this outbound opens the real socket, so the
+        # keepalive has to be set here too.
+        if panel_settings.get("dpi_tcp_keepalive"):
+            fragment_outbound["streamSettings"] = {"sockopt": {"tcpKeepAliveIdle": 30, "tcpKeepAliveInterval": 15}}
+        outbounds.append(fragment_outbound)
     outbounds.append({"tag": "direct", "protocol": "freedom"})
     outbounds.append({"tag": "block", "protocol": "blackhole"})
     return {
@@ -1319,12 +1434,63 @@ async def subscription_json(
     from .api.compat import _load_legacy_settings
 
     panel_settings = await _load_legacy_settings(db)
+    rank = None
+    if panel_settings.get("auto_protocol_order_enabled", True):
+        from .api.ops import protocol_rank
+
+        rank = await protocol_rank(db)
     return JSONResponse(
-        content=_subscription_json_config(user, _public_server_ip(request), panel_settings),
+        content=_subscription_json_config(user, _public_server_ip(request), panel_settings, rank),
         headers={"Content-Disposition": "inline; filename={}.json".format(
             re.sub(r"[^\w\-.]", "_", user.name)
         )},
     )
+
+
+async def _profile_inputs(user_uuid: str, request: Request, db: AsyncSession):
+    from .api.compat import _settings_state
+    from .tls_trust import load_cert_info
+
+    user = await _subscription_user(user_uuid, db)
+    if not user.active:
+        raise HTTPException(status_code=404, detail="Not found")
+    links = await _subscription_links(user, request, db)
+    cert = load_cert_info()
+    return user, links, dict(_settings_state), cert
+
+
+def _profile_headers(user: VpnUser, ext: str) -> dict:
+    return {
+        "Content-Disposition": "inline; filename={}.{}".format(re.sub(r"[^\w\-.]", "_", user.name), ext),
+        "Profile-Update-Interval": "6",
+        "Subscription-Userinfo": _subscription_userinfo_header(user),
+    }
+
+
+@app.get("/sub-singbox/{user_uuid}")
+async def subscription_singbox(user_uuid: str, request: Request, db: AsyncSession = Depends(get_async_db)):
+    """sing-box profile (Hiddify, NekoBox, sing-box apps), incl. ShadowTLS."""
+    from .client_profiles import singbox_profile
+
+    user, links, state, cert = await _profile_inputs(user_uuid, request, db)
+    # Without a publicly trusted certificate Naive runs on its own short-lived
+    # one (standalone_engines.naive_certificate); the profile trusts exactly it.
+    cert_pem = state.get("naive_cert_pem", "") if (cert is None or cert.self_signed) else ""
+    profile = singbox_profile(user, _public_server_ip(request), links, state,
+                              cert.spki_sha256 if cert else "", cert_pem)
+    return JSONResponse(content=profile, headers=_profile_headers(user, "json"))
+
+
+@app.get("/sub-clash/{user_uuid}")
+async def subscription_clash(user_uuid: str, request: Request, db: AsyncSession = Depends(get_async_db)):
+    """Clash Meta / mihomo profile, incl. ShadowTLS and Mieru. JSON is valid YAML."""
+    from .client_profiles import clash_profile
+
+    user, links, state, cert = await _profile_inputs(user_uuid, request, db)
+    profile = clash_profile(user, _public_server_ip(request), links, state, cert.sha256 if cert else "")
+    return Response(content=json.dumps(profile, indent=2, ensure_ascii=False),
+                    media_type="text/yaml; charset=utf-8", headers=_profile_headers(user, "yaml"))
+
 
 def _generate_xray_server_config(panel_settings: dict) -> dict:
     """Generate the server-side Xray config with inbounds for all enabled protocols.
@@ -1625,27 +1791,12 @@ async def sync_xray_config(
     await _load_legacy_settings(db)
 
     # Fetch active users for client authentication (in async context)
-    result = await db.execute(
-        select(VpnUser).where(VpnUser.active == 1)
-    )
-    users = result.scalars().all()
-    vmess_clients = [{"id": u.uuid, "alterId": 0, "email": u.name} for u in users]
-    vless_clients = [{"id": u.uuid, "email": u.name} for u in users]
-    trojan_clients = [{"password": u.uuid, "email": u.name} for u in users]
+    # Same config the live user sync works from (Vision flow, SS-2022 keys,
+    # speed-limit outbounds): app/user_runtime.py.
+    from .user_runtime import _desired_xray_config
 
-    # Generate server config (uses settings from compat _settings_state)
-    from .api.compat import _generate_xray_server_config as _gen
-    config = _gen()
-
-    # Override client lists with actually fetched users
-    for inbound in config.get("inbounds", []):
-        proto = inbound.get("protocol", "")
-        if proto == "vmess":
-            inbound.setdefault("settings", {})["clients"] = vmess_clients
-        elif proto == "vless":
-            inbound.setdefault("settings", {})["clients"] = vless_clients
-        elif proto == "trojan":
-            inbound.setdefault("settings", {})["clients"] = trojan_clients
+    config, n_users = await _desired_xray_config(db)
+    vmess_clients = [None] * n_users
 
     try:
         installed = await helper_request(

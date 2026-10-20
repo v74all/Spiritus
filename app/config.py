@@ -63,6 +63,9 @@ class Settings(BaseSettings):
     port: int = 38471
     web_port: int = Field(38471, env="VPN_WEB_PORT")
     api_port: int = Field(10085, env="VPN_API_PORT")
+    # Push user changes to the running engines (Xray API, sing-box, mita)
+    # and run traffic accounting in the panel. Off in the test suite.
+    user_runtime_sync: bool = Field(True, env="USER_RUNTIME_SYNC")
 
     # Database — MUST be set via DATABASE_URL env var
     database_url: str = Field(

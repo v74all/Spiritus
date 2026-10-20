@@ -97,6 +97,7 @@ _EXEMPT_PATH_PREFIXES: tuple[str, ...] = (
     "/api/payments/callback/",    # signed webhooks
     "/api/payments/webhook",
     "/api/telegram/webhook",       # authenticated by Telegram secret-token header
+    "/api/probe/report",          # probe's own token (hashed in probe_agents), no cookie session
     "/sub/", "/sub-api/", "/sub-json/",
     # /api/direction is a pure UI preference (LTR/RTL) — no security value
     # in CSRF-protecting it, and gating it behind a cookie that's not yet

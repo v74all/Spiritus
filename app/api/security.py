@@ -15,7 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..audit import verify_chain
-from ..auth import User, create_access_token, get_current_admin
+from ..auth import User, create_access_token, get_current_admin, get_current_admin_cookie
 from ..config import settings
 from ..database import get_async_db
 from ..models import Admin, AuditLog
@@ -290,7 +290,7 @@ async def list_audit_log(
     limit: int = 100,
     offset: int = 0,
     action: str | None = None,
-    admin: User = Depends(get_current_admin),
+    admin: User = Depends(get_current_admin_cookie),
     db: AsyncSession = Depends(get_async_db),
 ):
     from sqlalchemy import select
@@ -319,7 +319,7 @@ async def list_audit_log(
 
 @router.get("/audit/verify")
 async def verify_audit_log(
-    admin: User = Depends(get_current_admin),
+    admin: User = Depends(get_current_admin_cookie),
     db: AsyncSession = Depends(get_async_db),
 ):
     """Re-compute the audit hash chain; ``ok=false`` means the log was tampered with."""

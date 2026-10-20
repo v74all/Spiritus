@@ -11,6 +11,9 @@ Tables:
 - reseller_users  Users created by resellers
 - settings        Key-value app settings
 - audit_log       Immutable audit trail
+- edge_nodes      Other servers monitored for reachability/RTT
+- probe_agents    Probes run inside Iran that report protocol reachability
+- probe_reports   One protocol test result from a probe
 """
 
 import enum
@@ -20,6 +23,7 @@ from sqlalchemy import (
     BigInteger,
     Boolean,
     Column,
+    Date,
     DateTime,
     Enum,
     Float,
@@ -133,7 +137,7 @@ class VpnUser(Base):
     traffic_upload = Column(BigInteger, default=0)
     traffic_download = Column(BigInteger, default=0)
 
-    # Speed (Mbps, 0 = unlimited)
+    # Speed limit in KB/s, 0 = unlimited (enforced by app/traffic_control.py)
     speed_limit_up = Column(Integer, default=0)
     speed_limit_down = Column(Integer, default=0)
 
@@ -436,3 +440,85 @@ class Fail2banBan(Base):
     ban_count = Column(Integer, default=1)
     banned_until = Column(DateTime, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
+
+
+# ═══════════════════════════════════════════════════════════════
+#  Edge nodes & in-country probes (ops panel)
+# ═══════════════════════════════════════════════════════════════
+
+class EdgeNode(Base):
+    """Another server watched from this one: TCP reachability and RTT only.
+
+    Deliberately separate from ``Agent``: nothing here is pushed configs or
+    users, so a monitored node can never be picked up by the orchestrator.
+    """
+
+    __tablename__ = "edge_nodes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), nullable=False)
+    address = Column(String(255), nullable=False)
+    port = Column(Integer, nullable=False, default=443)
+    location = Column(String(100), nullable=True)
+    reachable = Column(Boolean, nullable=True)  # NULL = never checked
+    rtt_ms = Column(Float, nullable=True)
+    last_error = Column(String(120), nullable=True)
+    last_checked_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
+
+
+class ProbeAgent(Base):
+    """A probe script run by a trusted operator inside an Iranian network.
+
+    Only a SHA-256 of the token is stored. The probe's IP is never stored;
+    only the carrier it resolved to.
+    """
+
+    __tablename__ = "probe_agents"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), nullable=False)
+    token_hash = Column(String(64), nullable=False, unique=True, index=True)
+    token_prefix = Column(String(8), nullable=False)
+    active = Column(Boolean, default=True, nullable=False)
+    last_seen_at = Column(DateTime, nullable=True)
+    last_carrier = Column(String(100), nullable=True)
+    last_asn = Column(String(20), nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
+
+
+class ProbeReport(Base):
+    __tablename__ = "probe_reports"
+    __table_args__ = (
+        Index("ix_probe_reports_created_at", "created_at"),
+        Index("ix_probe_reports_probe_id", "probe_id"),
+    )
+
+    id = Column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True)
+    probe_id = Column(Integer, ForeignKey("probe_agents.id", ondelete="CASCADE"), nullable=False)
+    carrier = Column(String(100), nullable=False)
+    asn = Column(String(20), nullable=True)
+    protocol = Column(String(40), nullable=False)
+    method = Column(String(10), nullable=False)  # tcp | tls
+    ok = Column(Boolean, nullable=False)
+    latency_ms = Column(Float, nullable=True)
+    error = Column(String(120), nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
+
+
+class TrafficDaily(Base):
+    """Bytes each user moved per day (UTC), written by the traffic collector
+    (app/user_runtime.py). Kept when the user is deleted (user_id NULL) so
+    the server's totals stay right."""
+
+    __tablename__ = "traffic_daily"
+    __table_args__ = (
+        UniqueConstraint("day", "user_id", name="uq_traffic_daily_day_user"),
+        Index("ix_traffic_daily_day", "day"),
+    )
+
+    id = Column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True)
+    day = Column(Date, nullable=False)
+    user_id = Column(Integer, ForeignKey("vpn_users.id", ondelete="SET NULL"), nullable=True)
+    upload = Column(BigInteger, nullable=False, default=0)
+    download = Column(BigInteger, nullable=False, default=0)

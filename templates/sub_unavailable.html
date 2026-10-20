@@ -3,23 +3,45 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/png" href="{{ url_for('static', filename='img/logo-96.png') }}">
 <meta name="robots" content="noindex">
 <title>{{ 'لینک در دسترس نیست' if fa else 'Link unavailable' }}</title>
 <link rel="stylesheet" href="/static/css/panel.css">
 <style nonce="{{ csp_nonce }}">
-body{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;background:var(--bg0);color:var(--t1);font-family:var(--font-body)}
-.box{max-width:460px;text-align:center;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:32px}
-.ico{font-size:44px;margin-bottom:12px}
-h1{font-size:20px;color:var(--t0);margin-bottom:12px}
-p{font-size:14px;line-height:1.8;color:var(--t2);margin-bottom:10px}
+body{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;background:var(--bg0);color:var(--t1);font-family:var(--font-body);transition:background-color .25s ease,color .25s ease}
+.box{max-width:500px;width:100%;text-align:center;background:var(--bg1);border:1px solid var(--border);box-shadow:var(--shadow);border-radius:var(--radius-lg);padding:40px 32px;position:relative;overflow:hidden}
+.box::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--accent),var(--green),var(--purple))}
+.ico-wrap{width:72px;height:72px;border-radius:var(--radius-full);background:var(--bg2);border:1px solid var(--border2);display:inline-flex;align-items:center;justify-content:center;font-size:32px;margin-bottom:20px;box-shadow:0 0 20px var(--border-glow)}
+h1{font-family:var(--font-display);font-size:22px;font-weight:700;color:var(--t0);margin-bottom:14px;letter-spacing:-0.01em}
+p{font-size:14px;line-height:1.8;color:var(--t2);margin-bottom:12px}
+.theme-pill{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:var(--radius-full);background:var(--bg2);border:1px solid var(--border);color:var(--accent);font-size:12px;font-family:var(--font-mono);cursor:pointer;margin-top:24px;transition:var(--transition)}
+.theme-pill:hover{border-color:var(--accent);box-shadow:0 0 12px var(--accent-glow)}
 </style>
+<script nonce="{{ csp_nonce }}">
+(function(){
+  var saved=localStorage.getItem('spiritus_theme')||'obsidian';
+  document.documentElement.setAttribute('data-theme',saved);
+})();
+function cycleTheme(){
+  var current=document.documentElement.getAttribute('data-theme')||'obsidian';
+  var next=current==='obsidian'?'cyberops':(current==='cyberops'?'midnight':'obsidian');
+  document.documentElement.setAttribute('data-theme',next);
+  localStorage.setItem('spiritus_theme',next);
+  var lbl=document.getElementById('sub-theme-lbl');
+  if(lbl)lbl.textContent=next.charAt(0).toUpperCase()+next.slice(1);
+}
+</script>
 </head>
 <body>
 <main class="box">
-  <div class="ico">🔗</div>
+  <div class="ico-wrap">🔗</div>
   <h1>{{ 'این لینک اشتراک در دسترس نیست' if fa else 'This subscription link is not available' }}</h1>
   <p>{{ 'ممکن است لینک را اشتباه کپی کرده باشید، یا اشتراک شما غیرفعال شده باشد.' if fa else 'The link may have been copied incorrectly, or the account may have been disabled.' }}</p>
   <p>{{ 'لینک کامل را دوباره از فروشندهٔ خود بگیرید؛ اگر اشتراک شما تمام شده، برای تمدید با او تماس بگیرید.' if fa else 'Ask your provider for the full link again. If your subscription ended, contact them to renew.' }}</p>
+  <button type="button" class="theme-pill" onclick="cycleTheme()" title="Switch Theme">
+    <span>🎨</span>
+    <span id="sub-theme-lbl">{{ 'تغییر تم' if fa else 'Theme' }}</span>
+  </button>
 </main>
 </body>
 </html>

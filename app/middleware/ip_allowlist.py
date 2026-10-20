@@ -27,6 +27,8 @@ _PUBLIC_PREFIXES: tuple[str, ...] = (
     "/api/telegram/webhook",
     "/api/agent/",
     "/api/direction",
+    # In-country probes report from Iranian networks; they carry their own token.
+    "/api/probe/",
 )
 
 _LOOPBACK = (ipaddress.ip_network("127.0.0.0/8"), ipaddress.ip_network("::1/128"))

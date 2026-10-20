@@ -20,7 +20,7 @@ BANNER='
 REPO_URL="https://github.com/v74all/Spiritus.git"
 INSTALL_DIR="/opt/v7lthronyx"
 SERVICE_NAME="spiritus"
-VERSION="1.0.0"
+VERSION="2.1.0"
 
 # Web panel port. Override with `--port N` or WEB_PORT=N env. Persisted
 # to .env as VPN_WEB_PORT so the app and the systemd unit agree.
@@ -63,9 +63,9 @@ install_dependencies() {
 
     if [[ "$PKG_MANAGER" == "apt" ]]; then
         apt update -y
-        apt install -y git ca-certificates openssl cron sudo python3 python3-pip python3-venv curl wget unzip postgresql postgresql-contrib redis-server fail2ban
+        apt install -y git ca-certificates openssl cron sudo python3 python3-pip python3-venv curl wget unzip socat postgresql postgresql-contrib redis-server fail2ban nftables iproute2
     elif [[ "$PKG_MANAGER" == "yum" ]]; then
-        yum install -y git ca-certificates openssl cronie sudo python3 python3-pip curl wget unzip postgresql-server redis fail2ban
+        yum install -y git ca-certificates openssl cronie sudo python3 python3-pip curl wget unzip socat postgresql-server redis fail2ban nftables iproute-tc
     fi
 
     print_success "System dependencies installed"
@@ -130,6 +130,19 @@ install_xray() {
     print_info "Installing Xray..."
     bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install
     print_success "Xray installed"
+}
+
+setup_traffic_modules() {
+    # Speed limits and per-user byte counts (app/traffic_kernel.py) use tc
+    # (htb, fw, an ifb device for downloads) and nftables. The helper runs
+    # with ProtectKernelModules, so it cannot load them on demand: load
+    # them now and on every boot.
+    local mods="ifb sch_htb sch_fq_codel sch_ingress cls_fw cls_matchall act_connmark act_mirred nf_tables nft_ct nf_nat"
+    : > /etc/modules-load.d/spiritus.conf
+    for m in $mods; do
+        modprobe "$m" 2>/dev/null && echo "$m" >> /etc/modules-load.d/spiritus.conf
+    done
+    print_success "Traffic control modules loaded (speed limits, per-user counting)"
 }
 
 install_singbox() {
@@ -535,8 +548,8 @@ while True:
         _env_set VPN_WEB_PORT "$WEB_PORT"
     fi
 
-    # Server's primary IP (best-effort autodetect; can be overridden).
-    local server_ip; server_ip=$(hostname -I | awk '{print $1}')
+    # Server's public IP (best-effort autodetect; can be overridden).
+    local server_ip; server_ip="${PUBLIC_IP:-$(detect_public_ip)}"
     if [[ -n "$server_ip" ]] && [[ "$(_env_get VPN_SERVER_IP)" == "" || "$(_env_get VPN_SERVER_IP)" == "your-server-ip" ]]; then
         _env_set VPN_SERVER_IP "$server_ip"
     fi
@@ -565,6 +578,99 @@ while True:
     print_success "Environment configuration ready (.env)"
 }
 
+# Public IPv4 of this server. `hostname -I` gives a private address on NAT'd
+# and most cloud VPSes, and links built on it can never be reached.
+detect_public_ip() {
+    local ip url
+    for url in https://api.ipify.org https://ipv4.icanhazip.com https://ifconfig.me/ip; do
+        ip=$(curl -4 -fsS --max-time 5 "$url" 2>/dev/null | tr -d '[:space:]')
+        if [[ "$ip" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+            echo "$ip"; return 0
+        fi
+    done
+    hostname -I 2>/dev/null | awk '{print $1}'
+}
+
+# A real certificate without a domain: Let's Encrypt issues 6-day
+# certificates for IP addresses. With one, clients verify the server like any
+# HTTPS site. Without it the panel pins the self-signed certificate in every
+# link instead (current Xray clients no longer have "allow insecure"), and the
+# REALITY protocols need no certificate at all.
+setup_ip_certificate() {
+    if [[ -n "${PANEL_DOMAIN:-}" ]]; then return 0; fi
+    local ip="${PUBLIC_IP:-}"
+    if ! [[ "$ip" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+        print_warning "No public IPv4 found; keeping the self-signed certificate."
+        return 0
+    fi
+    if ! command -v acme.sh &>/dev/null; then
+        print_warning "acme.sh is missing; keeping the self-signed certificate."
+        return 0
+    fi
+    if ss -ltnH '( sport = :80 )' 2>/dev/null | grep -q .; then
+        print_warning "Port 80 is in use, so Let's Encrypt cannot check this server; keeping the self-signed certificate."
+        return 0
+    fi
+    open_firewall_port 80
+
+    local home=/etc/v7lthronyx/acme
+    local tls_dir="${INSTALL_DIR}/tls"
+    local log=/var/log/spiritus-acme.log
+    mkdir -p "$home" "$tls_dir"
+    print_info "Requesting a Let's Encrypt certificate for ${ip} (no domain needed)..."
+    local issue=(acme.sh --home "$home" --issue --server letsencrypt -d "$ip"
+                 --standalone --httpport 80 --keylength ec-256 --days 3)
+    # acme.sh has spelled the profile option both ways; try both.
+    "${issue[@]}" --cert-profile shortlived >"$log" 2>&1 \
+        || "${issue[@]}" --certificate-profile shortlived >>"$log" 2>&1 || true
+    if [[ ! -s "${home}/${ip}_ecc/fullchain.cer" ]]; then
+        print_warning "Let's Encrypt did not issue a certificate for ${ip} (details: ${log})."
+        print_warning "Keeping the self-signed certificate: links pin it, and REALITY needs none."
+        return 0
+    fi
+
+    cat > /usr/local/sbin/spiritus-cert-reload <<RELOAD
+#!/bin/sh
+# Run by acme.sh after it renews this server's IP certificate.
+chown ${PANEL_USER:-vpnpanel} "${tls_dir}/spiritus.crt" "${tls_dir}/spiritus.key" 2>/dev/null
+chmod 644 "${tls_dir}/spiritus.crt"
+chmod 640 "${tls_dir}/spiritus.key"
+# On start-up the panel copies the certificate to Xray and restarts it.
+systemctl try-restart ${SERVICE_NAME}
+systemctl try-restart sing-box 2>/dev/null || true
+RELOAD
+    chmod 755 /usr/local/sbin/spiritus-cert-reload
+    acme.sh --home "$home" --install-cert -d "$ip" --ecc \
+        --fullchain-file "${tls_dir}/spiritus.crt" --key-file "${tls_dir}/spiritus.key" \
+        --reloadcmd /usr/local/sbin/spiritus-cert-reload >>"$log" 2>&1 || true
+
+    cat > /etc/systemd/system/spiritus-acme.service <<UNIT
+[Unit]
+Description=Renew the Spiritus IP certificate (Let's Encrypt)
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/acme.sh --cron --home ${home}
+UNIT
+    cat > /etc/systemd/system/spiritus-acme.timer <<UNIT
+[Unit]
+Description=Check the Spiritus IP certificate twice a day
+
+[Timer]
+OnCalendar=*-*-* 00,12:00:00
+RandomizedDelaySec=1h
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+UNIT
+    systemctl daemon-reload
+    systemctl enable --now spiritus-acme.timer >/dev/null 2>&1 || true
+    CERT_KIND="Let's Encrypt certificate for ${ip} (renews itself)"
+    print_success "Let's Encrypt certificate for ${ip} installed; it renews itself."
+}
+
 setup_tls_cert() {
     # Generate a self-signed cert so Xray's TLS-bearing inbounds boot on a
     # fresh server. Operators are expected to swap this for a real cert
@@ -576,11 +682,15 @@ setup_tls_cert() {
     mkdir -p "${TLS_DIR}"
     if [[ ! -s "${CERT}" || ! -s "${KEY}" ]]; then
         print_info "Generating self-signed TLS cert at ${TLS_DIR}/ (10-year validity)..."
-        # SAN includes hostname + a wildcard so it works for IP-only access too.
+        # SAN carries the public IP, so clients that check the name (Naive,
+        # sing-box with a pinned certificate) accept it when reached by IP.
+        local san="DNS:$(hostname || echo localhost),DNS:localhost,IP:127.0.0.1"
+        local pub_ip="${PUBLIC_IP:-$(detect_public_ip)}"
+        [[ "${pub_ip}" =~ ^[0-9.]+$|^[0-9a-fA-F:]+$ ]] && san="${san},IP:${pub_ip}"
         openssl req -x509 -newkey rsa:2048 -nodes -days 3650 \
             -keyout "${KEY}" -out "${CERT}" \
             -subj "/CN=$(hostname || echo spiritus)" \
-            -addext "subjectAltName=DNS:$(hostname || echo localhost),DNS:localhost,IP:127.0.0.1" \
+            -addext "subjectAltName=${san}" \
             >/dev/null 2>&1 || {
                 print_warning "openssl missing? Skipping self-signed cert generation."
                 return 0
@@ -831,6 +941,8 @@ RuntimeDirectory=v7lthronyx
 # the panel process failed with EACCES before even reaching the
 # daemon's own SO_PEERCRED check.
 RuntimeDirectoryMode=0751
+# /var/lib/v7lthronyx: Mieru byte counts between reads (app/traffic_kernel.py).
+StateDirectory=v7lthronyx
 PrivateTmp=true
 PrivateDevices=true
 ProtectHome=true
@@ -1051,7 +1163,7 @@ show_info() {
 
     echo ""
     echo -e "${CYAN}═══════════════════════════════════════════════════════════${NC}"
-    echo -e "${GREEN}  V7LTHRONYX VPN Panel v2.0 - Installation Complete!${NC}"
+    echo -e "${GREEN}  Spiritus VPN Panel v${VERSION} - installation complete${NC}"
     echo -e "${CYAN}═══════════════════════════════════════════════════════════${NC}"
     echo ""
     HEALTH_STATUS=$(cat /tmp/vpn_panel_health_status 2>/dev/null || echo "Failed")
@@ -1061,10 +1173,18 @@ show_info() {
         HEALTH_MSG="${RED}✖ Web Application Failed to Start (Check logs)${NC}"
     fi
 
-    echo -e "  ${YELLOW}Panel URL:${NC}     http://$(hostname -I | awk '{print $1}'):${WEB_PORT}"
-    echo -e "  ${YELLOW}API Docs:${NC}     http://$(hostname -I | awk '{print $1}'):${WEB_PORT}/api/docs"
-    echo -e "  ${YELLOW}Username:${NC}     admin"
-    echo -e "  ${YELLOW}Password:${NC}     ${PANEL_PASSWORD}"
+    local panel_host="${PUBLIC_IP:-$(detect_public_ip)}"
+    echo -e "  ${YELLOW}Open in your browser:${NC} http://${panel_host}:${WEB_PORT}"
+    echo -e "  ${YELLOW}Username:${NC}             admin"
+    echo -e "  ${YELLOW}Password:${NC}             ${PANEL_PASSWORD}"
+    echo -e "  ${YELLOW}TLS certificate:${NC}      ${CERT_KIND:-self-signed (links pin it; no 'allow insecure' needed)}"
+    echo ""
+    echo -e "  ${GREEN}Next steps${NC}"
+    echo -e "    1. Sign in and change the password (Settings → System)."
+    echo -e "    2. Users → Add user, then send the user's subscription link."
+    echo -e "    3. They paste it into v2rayNG, Hiddify, Streisand or v2rayN and connect."
+    echo -e "       REALITY configs need no domain and no certificate."
+    echo -e "  ${BLUE}Forgot the password?${NC}  sudo bash install.sh reset-password"
     echo ""
     echo -e "  ${RED}IMPORTANT:${NC} after first login, change the password in the panel,"
     echo -e "             then remove ADMIN_BOOTSTRAP_PASSWORD from .env and restart."
@@ -1133,6 +1253,9 @@ uninstall() {
 
     # Remove the daily auto-update cron/timer if present.
     rm -f /etc/cron.d/spiritus-update /etc/systemd/system/spiritus-update.* 2>/dev/null || true
+    # IP-certificate renewal (setup_ip_certificate).
+    systemctl disable --now spiritus-acme.timer 2>/dev/null || true
+    rm -f /etc/systemd/system/spiritus-acme.* /usr/local/sbin/spiritus-cert-reload 2>/dev/null || true
     systemctl daemon-reload 2>/dev/null || true
 
     if [[ $purge_data -eq 1 ]]; then
@@ -1191,12 +1314,15 @@ main() {
     
     echo -e "${CYAN}[1/13]${NC} Installing system dependencies..."
     install_dependencies
+    PUBLIC_IP=$(detect_public_ip)
+    print_info "Public IP: ${PUBLIC_IP:-unknown}"
     
     echo -e "${CYAN}[2/13]${NC} Installing Xray..."
     install_xray
     install_singbox
     install_mieru
     install_acme
+    setup_traffic_modules
 
     echo -e "${CYAN}[3/13]${NC} Downloading V7LTHRONYX..."
     clone_or_update
@@ -1218,6 +1344,7 @@ main() {
 
     echo -e "${CYAN}[9a/13]${NC} Prompting for domain (optional)..."
     prompt_domain || true
+    setup_ip_certificate || true
 
     echo -e "${CYAN}[9/13]${NC} Setting up environment config..."
     setup_env

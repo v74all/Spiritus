@@ -122,6 +122,8 @@ function getKillSwitchValue() {
 
 /* ── Auth ── */
 async function doLogin() {
+  const userEl = document.getElementById('login-user');
+  const user = userEl ? userEl.value.trim() : 'admin';
   const pw = document.getElementById('login-pass').value;
   const totpEl = document.getElementById('login-totp');
   const totp = totpEl ? totpEl.value.trim() : '';
@@ -129,10 +131,16 @@ async function doLogin() {
   const btn = document.getElementById('login-submit');
   if (!btn) return;
   errEl.textContent = '';
+  if (!pw) {
+    // An empty submit would still count as a failed attempt (and toward fail2ban).
+    errEl.textContent = 'Enter your password';
+    document.getElementById('login-pass').focus();
+    return;
+  }
   btn.disabled = true;
   btn.textContent = 'Signing in...';
   try {
-    const body = { password: pw };
+    const body = { username: user || 'admin', password: pw };
     if (totp) body.totp_code = totp;
     const r = await fetch(API + '/login', {
       method: 'POST',
@@ -146,27 +154,29 @@ async function doLogin() {
     } catch (e) {
       errEl.textContent = 'Invalid server response';
       btn.disabled = false;
-      btn.textContent = 'Sign In';
+      btn.textContent = 'Authenticate';
       return;
     }
     if (r.ok && d.ok) {
       document.getElementById('login-screen').style.display = 'none';
       document.getElementById('panel').style.display = 'block';
+      switchOperationTab('tenants');
       startPolling();
       btn.disabled = false;
-      btn.textContent = 'Sign In';
+      btn.textContent = 'Authenticate';
       return;
     }
     // Password accepted, second factor required: reveal the TOTP field and
     // let the operator submit again with the code.
     if (d.totp_required) {
       if (totpEl) {
-        totpEl.style.display = '';
+        const field = document.getElementById('login-totp-field');
+        if (field) field.hidden = false;
         totpEl.focus();
       }
       errEl.textContent = 'Enter your 2FA code';
       btn.disabled = false;
-      btn.textContent = 'Sign In';
+      btn.textContent = 'Authenticate';
       return;
     }
     errEl.textContent = d.error || 'Error';
@@ -175,19 +185,19 @@ async function doLogin() {
       btn.textContent = 'Locked';
       setTimeout(() => {
         btn.disabled = false;
-        btn.textContent = 'Sign In';
+        btn.textContent = 'Authenticate';
         errEl.textContent = '';
       }, 60000);
       return;
     }
     btn.disabled = false;
-    btn.textContent = 'Sign In';
+    btn.textContent = 'Authenticate';
     document.getElementById('login-pass').value = '';
     document.getElementById('login-pass').focus();
   } catch (e) {
     errEl.textContent = 'Connection error';
     btn.disabled = false;
-    btn.textContent = 'Sign In';
+    btn.textContent = 'Authenticate';
   }
 }
 
@@ -277,6 +287,8 @@ function startPolling() {
   setInterval(fetchLive, 3000);
   setInterval(fetchServerInfo, 30000);
   setInterval(fetchSystemMonitor, 15000);
+  refreshOpsStatus();
+  setInterval(refreshOpsStatus, 30000);
 }
 
 function switchMainView(view) {
@@ -384,18 +396,6 @@ function updateProtoBar() {
       hsEl.textContent = 'Host Spoof: ' + spoofHosts.join(' | ');
     }
   }
-  // DNS/ICMP Tunneling
-  const tnEl = document.getElementById('pb-dpi-tunnel');
-  if (tnEl) {
-    const tunnelActive = serverInfo.dpi_dns_tunnel || serverInfo.dpi_icmp_tunnel;
-    tnEl.style.display = tunnelActive ? '' : 'none';
-    if (tunnelActive) {
-      const tunnels = [];
-      if (serverInfo.dpi_dns_tunnel) tunnels.push('DNS');
-      if (serverInfo.dpi_icmp_tunnel) tunnels.push('ICMP');
-      tnEl.textContent = 'Tunnel: ' + tunnels.join('+');
-    }
-  }
   // Domain/CDN Fronting
   const ftEl = document.getElementById('pb-dpi-front');
   if (ftEl) {
@@ -479,6 +479,17 @@ document.addEventListener('click', e => {
 });
 
 /* ── Rendering ── */
+
+// active / disabled / expired / limited (quota used): only "active" is served.
+const STATUS_PILL = {
+  active: ['online', 'Active'], disabled: ['muted', 'Disabled'],
+  expired: ['warning', 'Expired'], limited: ['danger', 'Quota used'],
+};
+function statusPill(u) {
+  const [cls, text] = STATUS_PILL[u.status] || (u.active ? STATUS_PILL.active : STATUS_PILL.disabled);
+  return `<span class="status-pill ${cls}">${text}</span>`;
+}
+
 function renderUsers() {
   const grid = document.getElementById('users-grid');
   const filtered = getFilteredUsers();
@@ -502,48 +513,54 @@ function renderUsers() {
     grid.innerHTML = '<div class="empty"><div class="empty-icon">🔍</div><div class="empty-text">No users match this filter</div></div>';
     return;
   }
-  grid.innerHTML = filtered.map(u => {
-    const spd = speeds[u.name] || {up:0, down:0};
-    const online = isOnline(u.name);
-    const pct = Math.max(0, Math.min(100, Number(u.traffic_percent) || 0));
-    const barColor = pct < 60 ? 'var(--green)' : pct < 85 ? 'var(--yellow)' : 'var(--red)';
-    const daysClass = u.days_left <= 3 ? 'crit' : u.days_left <= 7 ? 'warn' : 'val';
-    const noteHtml = u.note ? `<div class="note-badge" title="${esc(u.note)}" onclick="event.stopPropagation();promptEditNote('${jsq(u.name)}','${jsq(u.note)}')">${esc(u.note)}</div>` : '';
-    const ipCount = u.online_ip_count || 0;
-    const ipHtml = ipCount > 0 ? `<span class="ip-badge" onclick="event.stopPropagation();showUserIPs('${jsq(u.name)}')" title="Connected IPs">🌐 ${ipCount} IP${ipCount>1?'s':''}</span>` : '';
-    const speedHtml = `<span style="font-size:10px;color:var(--t3);margin-left:4px;cursor:pointer" title="Speed limit (click to edit): Down ${u.speed_limit_down} KB/s, Up ${u.speed_limit_up} KB/s" onclick="event.stopPropagation();promptSpeed('${jsq(u.name)}',${Number(u.speed_limit_down)||0},${Number(u.speed_limit_up)||0})">⚡${Number(u.speed_limit_down)||0}KB/s</span>`;
-    return `
-    <div class="card ${u.active?'':'inactive'}" id="card-${esc(u.name)}">
-      <div class="card-head">
-        <div class="card-name">
-          <span class="online-dot ${online?'on':''}" id="dot-${esc(u.name)}"></span>
-          <span class="user-name">${esc(u.name)}</span>
-          ${speedHtml}
-          ${ipHtml}
-        </div>
-        <span class="badge ${u.active?'badge-active':'badge-inactive'}">${u.active?'Active':'Disabled'}</span>
-      </div>
-      ${noteHtml}
-      <div class="traffic-section">
-        <div class="progress-track"><div class="progress-fill" style="width:${pct}%;background:${barColor}"></div></div>
-        <div class="traffic-text"><span><b>${fmtTraffic(u.traffic_used_bytes)}</b> / ${fmtTraffic(u.traffic_limit_bytes)}</span><span>${pct}%</span></div>
-      </div>
-      <div class="info-row"><span>Expires</span><span class="val">${esc(u.expire_at)}</span></div>
-      <div class="info-row"><span>Remaining</span><span class="${daysClass}">${Number(u.days_left)||0} days</span></div>
-      <div class="speed-row" id="speed-${esc(u.name)}">
-        <div class="speed-item up"><span>Upload</span><span class="speed-val">${fmtSpeed(spd.up)}</span></div>
-        <div class="speed-item down"><span>Download</span><span class="speed-val">${fmtSpeed(spd.down)}</span></div>
-      </div>
-      <div class="card-actions">
-        <button class="btn btn-outline btn-sm" onclick="showConfig('${jsq(u.name)}')">Config</button>
-        <button class="btn btn-outline btn-sm" onclick="showActivity('${jsq(u.name)}')">Activity</button>
-        <button class="btn ${u.active?'btn-orange':'btn-green'} btn-sm" onclick="toggleUser('${jsq(u.name)}')">${u.active?'Disconnect':'Connect'}</button>
-        <button class="btn btn-outline btn-sm" onclick="showRenew('${jsq(u.name)}')">Renew</button>
-        <button class="btn btn-green btn-sm" onclick="showAddTraffic('${jsq(u.name)}')" title="Add traffic without reset">+GB</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteUser('${jsq(u.name)}')">Delete</button>
-      </div>
-    </div>`;
-  }).join('');
+  grid.innerHTML = '<div class="tactical-table-wrapper"><table class="tactical-table ui-users-table"><thead><tr>'
+    + '<th>User</th><th>Bandwidth quota</th><th>Validity</th><th>Live speed</th><th>Status</th><th class="ui-th-end">Actions</th>'
+    + '</tr></thead><tbody>' + filtered.map(userRow).join('') + '</tbody></table></div>';
+}
+
+function speedCell(spd) {
+  return '<span class="up">↑ ' + fmtSpeed(spd.up) + '</span><span class="down">↓ ' + fmtSpeed(spd.down) + '</span>';
+}
+
+function quotaClass(pct) { return pct < 60 ? 'online' : (pct < 85 ? 'warning' : 'danger'); }
+
+function userRow(u) {
+  const spd = speeds[u.name] || {up:0, down:0};
+  const online = isOnline(u.name);
+  const n = esc(u.name);
+  const pct = Math.max(0, Math.min(100, Number(u.traffic_percent) || 0));
+  const days = Number(u.days_left);
+  const daysPill = days <= 0 ? ['danger', 'Expired'] : days <= 3 ? ['danger', days + ' days left']
+    : days <= 7 ? ['warning', days + ' days left'] : ['muted', days + ' days left'];
+  const ipCount = u.online_ip_count || 0;
+  const sub = [];
+  if (u.note) sub.push(`<span class="note-badge" title="${esc(u.note)}" onclick="event.stopPropagation();promptEditNote('${jsq(u.name)}','${jsq(u.note)}')">${esc(u.note)}</span>`);
+  if (ipCount > 0) sub.push(`<button type="button" onclick="showUserIPs('${jsq(u.name)}')" title="Connected IPs">${ipCount} IP${ipCount > 1 ? 's' : ''}</button>`);
+  sub.push(`<button type="button" title="Speed limit (click to edit)" onclick="promptSpeed('${jsq(u.name)}',${Number(u.speed_limit_down) || 0},${Number(u.speed_limit_up) || 0})">⚡ ${Number(u.speed_limit_down) || 0} KB/s</button>`);
+  const initials = esc(String(u.name).replace(/[^\p{L}\p{N}]/gu, '').slice(0, 2) || '?');
+  return `<tr id="card-${n}" class="${u.active ? '' : 'is-inactive'}">
+    <td><div class="ui-user-cell">
+      <span class="ui-avatar${u.active ? '' : ' is-off'}">${initials}</span>
+      <div><div class="ui-user-name"><span class="online-dot ${online ? 'on' : ''}" id="dot-${n}"></span>${n}</div>
+      <div class="ui-user-sub">${sub.join('<span>·</span>')}</div></div>
+    </div></td>
+    <td><div class="ui-quota">
+      <div class="ui-quota-top"><span>${fmtTraffic(u.traffic_used_bytes)}</span><span>/ ${fmtTraffic(u.traffic_limit_bytes)}</span></div>
+      <progress class="ops-progress ops-progress-${quotaClass(pct)} ui-quota-progress" max="100" value="${pct}"></progress>
+      <div class="ui-quota-foot">${pct}% consumed</div>
+    </div></td>
+    <td><div class="tactical-mono">${esc(u.expire_at || '—')}</div><div class="ui-days"><span class="status-pill ${daysPill[0]}">${daysPill[1]}</span></div></td>
+    <td><div class="ui-speed" id="speed-${n}">${speedCell(spd)}</div></td>
+    <td>${statusPill(u)}</td>
+    <td><div class="ui-row-actions">
+      <button type="button" class="ui-icon-btn" title="Config &amp; QR" onclick="showConfig('${jsq(u.name)}')"><span class="material-symbols-outlined">qr_code_2</span></button>
+      <button type="button" class="ui-icon-btn" title="Activity" onclick="showActivity('${jsq(u.name)}')"><span class="material-symbols-outlined">history</span></button>
+      <button type="button" class="ui-icon-btn" title="Renew" onclick="showRenew('${jsq(u.name)}')"><span class="material-symbols-outlined">event_repeat</span></button>
+      <button type="button" class="ui-icon-btn is-ok" title="Add traffic without reset" onclick="showAddTraffic('${jsq(u.name)}')"><span class="material-symbols-outlined">data_saver_on</span></button>
+      <button type="button" class="ui-icon-btn" title="${u.active ? 'Disconnect' : 'Connect'}" onclick="toggleUser('${jsq(u.name)}')"><span class="material-symbols-outlined">${u.active ? 'pause_circle' : 'play_circle'}</span></button>
+      <button type="button" class="ui-icon-btn is-danger" title="Delete" onclick="deleteUser('${jsq(u.name)}')"><span class="material-symbols-outlined">delete</span></button>
+    </div></td>
+  </tr>`;
 }
 
 function renderGroups() {
@@ -553,25 +570,23 @@ function renderGroups() {
     return;
   }
   grid.innerHTML = groups.map(g => {
-    const pctActive = g.count ? Math.round((g.active / g.count) * 100) : 0;
-    return `
-    <div class="card">
-      <div class="card-head">
-        <div class="card-name">
-          <span class="online-dot ${g.active>0?'on':''}"></span>
-          <span class="user-name">${esc(g.id)}</span>
-        </div>
-        <span class="badge ${g.active>0?'badge-active':'badge-inactive'}">${g.active>0?'Active':'Disabled'}</span>
+    const pct = g.count ? Math.round((g.active / g.count) * 100) : 0;
+    const gid = esc(g.id);
+    return `<div class="ui-group">
+      <div class="ui-group-head">
+        <span class="ui-group-icon material-symbols-outlined">workspaces</span>
+        <div class="ui-minw0"><div class="ui-group-name">${gid}</div>
+          <div class="ops-cell-sub">${esc(String(g.traffic_gb || 0))} GB each · latest expiry ${esc((g.latest_expire || '').slice(0, 10) || '—')}</div></div>
       </div>
-      <div class="info-row"><span>Total</span><span class="val">${g.count}</span></div>
-      <div class="info-row"><span>Active</span><span class="val">${g.active} (${pctActive}%)</span></div>
-      <div class="info-row"><span>Disabled</span><span class="val">${g.disabled}</span></div>
-      <div class="info-row"><span>Traffic</span><span class="val">${(g.traffic_gb||0)} GB each</span></div>
-      <div class="info-row"><span>Latest expiry</span><span class="val">${(g.latest_expire||'').slice(0,10)}</span></div>
-      <div class="card-actions">
-        <button class="btn btn-outline btn-sm" onclick="openGroupExport('${jsq(g.id)}')">Export</button>
-        <button class="btn btn-outline btn-sm" onclick="openGroupUsers('${jsq(g.id)}')">Open</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteGroup('${jsq(g.id)}')">Delete</button>
+      <div class="ui-group-stats">
+        <div><span>Users</span><strong>${Number(g.count) || 0}</strong></div>
+        <div><span>Active</span><strong>${Number(g.active) || 0} <small class="tactical-muted">(${pct}%)</small></strong></div>
+      </div>
+      <progress class="ops-progress ops-progress-online" max="100" value="${pct}"></progress>
+      <div class="ui-group-actions">
+        <button class="btn btn-outline btn-sm" onclick="openGroupExport('${jsq(g.id)}')"><span class="material-symbols-outlined">ios_share</span>Export</button>
+        <button class="btn btn-outline btn-sm" onclick="openGroupUsers('${jsq(g.id)}')"><span class="material-symbols-outlined">open_in_new</span>Open</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteGroup('${jsq(g.id)}')"><span class="material-symbols-outlined">delete</span></button>
       </div>
     </div>`;
   }).join('');
@@ -617,7 +632,7 @@ function openGroupExport(groupId) {
 
 async function deleteGroup(groupId) {
   const applyNow = false; // keep safe; user can Sync later
-  if (!confirm(`Delete group "${groupId}" from database?\n\nThis will not reload server (no disruption). Use Sync later to apply.`)) return;
+  if (!await uiConfirm(`Delete group "${groupId}" from database?\n\nThis will not reload server (no disruption). Use Sync later to apply.`)) return;
   try {
     // Delete by prefix (groupId includes gb slug too)
     const r = await fetch(API+'/bulk-delete', {
@@ -639,9 +654,7 @@ function renderSpeeds() {
     const online = isOnline(u.name);
     if (online) onlineCount++;
     const el = document.getElementById('speed-'+u.name);
-    if (el) el.innerHTML = `
-      <div class="speed-item up"><span>Upload</span><span class="speed-val">${fmtSpeed(spd.up)}</span></div>
-      <div class="speed-item down"><span>Download</span><span class="speed-val">${fmtSpeed(spd.down)}</span></div>`;
+    if (el) el.innerHTML = speedCell(spd);
     const dot = document.getElementById('dot-'+u.name);
     if (dot) dot.className = 'online-dot'+(online?' on':'');
   }
@@ -656,6 +669,8 @@ function updateStats() {
   document.getElementById('s-total').textContent = total;
   document.getElementById('s-active').textContent = active;
   document.getElementById('s-traffic').textContent = fmtTraffic(totalBytes);
+  const exp = document.getElementById('s-expiring');
+  if (exp) exp.textContent = users.filter(u => u.active && u.days_left <= 7).length;
   updateFilterCounts();
 }
 
@@ -665,7 +680,7 @@ async function doAddUser() {
   const traffic = parseFloat(document.getElementById('add-traffic').value);
   const days = parseInt(document.getElementById('add-days').value);
   const note = (document.getElementById('add-note').value || '').trim();
-  const speedOr = (id) => { const v = parseInt(document.getElementById(id).value); return Number.isNaN(v) ? 200 : v; };
+  const speedOr = (id) => { const v = parseInt(document.getElementById(id).value); return Number.isNaN(v) ? 0 : Math.max(0, v); };
   const speed_limit_down = speedOr('add-speed-down');
   const speed_limit_up = speedOr('add-speed-up');
   if (!name) {toast('Please enter a username / نام کاربری را وارد کنید','error'); return;}
@@ -678,8 +693,8 @@ async function doAddUser() {
       closeModal('add-modal');
       document.getElementById('add-name').value = '';
       document.getElementById('add-note').value = '';
-      document.getElementById('add-speed-down').value = '200';
-      document.getElementById('add-speed-up').value = '200';
+      document.getElementById('add-speed-down').value = '0';
+      document.getElementById('add-speed-up').value = '0';
       toast('User '+name+' created');
       fetchUsers();
       setTimeout(()=>showConfig(name), 1500);
@@ -699,10 +714,11 @@ async function doBulkCreate() {
   const numbered = document.getElementById('bulk-numbered').value === '1';
   const start = parseInt(document.getElementById('bulk-start').value) || 1;
   const pad = parseInt(document.getElementById('bulk-pad').value) || 3;
-  const speed_limit_down = parseInt(document.getElementById('bulk-speed-down').value) || 200;
-  const speed_limit_up = parseInt(document.getElementById('bulk-speed-up').value) || 200;
+  // 0 = unlimited (`|| 200` used to make 0 impossible to enter)
+  const speed_limit_down = Math.max(0, parseInt(document.getElementById('bulk-speed-down').value) || 0);
+  const speed_limit_up = Math.max(0, parseInt(document.getElementById('bulk-speed-up').value) || 0);
   const apply = document.getElementById('bulk-apply').checked;
-  if (apply && !confirm('Apply to server now? This may reload config.')) return;
+  if (apply && !await uiConfirm('Apply to server now? This may reload config.')) return;
 
   const outEl = document.getElementById('bulk-output');
   outEl.value = 'Creating...';
@@ -1017,7 +1033,7 @@ async function deleteBulkGroup() {
   const prefix = run.meta?.prefix || 'group';
   const msg = `Delete this group?\n\nPrefix: ${prefix}\nUsers: ${run.users.length}\n\nThis will remove users from the database.` +
               (applyNow ? `\n\nApply is ON: server config will reload.` : `\n\nApply is OFF: no disruption now (they won't be removed from server until Sync).`);
-  if (!confirm(msg)) return;
+  if (!await uiConfirm(msg)) return;
 
   try {
     const r = await fetch(API+'/bulk-delete', {
@@ -1042,7 +1058,7 @@ async function deleteBulkGroup() {
 async function toggleUser(name) {
   const u = users.find(x=>x.name===name);
   const action = u && u.active ? 'disconnect' : 'reconnect';
-  if (!confirm(`${action === 'disconnect' ? 'Disconnect' : 'Reconnect'} "${name}"?`)) return;
+  if (!await uiConfirm(`${action === 'disconnect' ? 'Disconnect' : 'Reconnect'} "${name}"?`)) return;
   try {
     const d = await apiCall(API+'/users/'+encodeURIComponent(name)+'/toggle', {method:'POST'});
     if (d.ok) { toast(d.message); fetchUsers(); }
@@ -1051,7 +1067,7 @@ async function toggleUser(name) {
 }
 
 async function deleteUser(name) {
-  if (!confirm('Are you sure you want to delete "'+name+'"?')) return;
+  if (!await uiConfirm('Are you sure you want to delete "'+name+'"?')) return;
   try {
     const d = await apiCall(API+'/users/'+encodeURIComponent(name), {method:'DELETE'});
     if (d.ok) { toast(name+' deleted'); fetchUsers(); }
@@ -1079,45 +1095,40 @@ async function doRenewUser() {
 }
 
 /* ── Config Modal (multi-protocol tabs) ── */
+// Config tab -> the user-dict field holding its link (same name otherwise).
+const CONFIG_LINK_FIELD = {cdn: 'cdn_vmess', grpc: 'grpc_vmess', httpupgrade: 'httpupgrade_vmess'};
+
 function showConfig(name) {
   const u = users.find(x=>x.name===name);
   if (!u) return;
   configTarget = u;
   document.getElementById('config-name').textContent = name;
 
-  const vlTab = document.getElementById('ct-vless');
-  const cdTab = document.getElementById('ct-cdn');
-  const trTab = document.getElementById('ct-trojan');
-  const grTab = document.getElementById('ct-grpc');
-  const huTab = document.getElementById('ct-httpupgrade');
-  const ssTab = document.getElementById('ct-ss2022');
-  const vwTab = document.getElementById('ct-vless_ws');
-  vlTab.style.display = serverInfo.reality_public_key ? '' : 'none';
-  cdTab.style.display = serverInfo.cdn_enabled ? '' : 'none';
-  trTab.style.display = serverInfo.trojan_enabled ? '' : 'none';
-  grTab.style.display = serverInfo.grpc_enabled ? '' : 'none';
-  huTab.style.display = serverInfo.httpupgrade_enabled ? '' : 'none';
-  ssTab.style.display = serverInfo.ss2022_enabled ? '' : 'none';
-  vwTab.style.display = serverInfo.vless_ws_enabled ? '' : 'none';
-  const tabProtos = [
-    ['ct-vless_xhttp','vless_xhttp_enabled'],['ct-vless_vision','vless_vision_enabled'],['ct-vless_reverse','vless_reverse_enabled'],
-    ['ct-trojan_cdn','trojan_cdn_enabled'],['ct-hysteria2','hysteria2_enabled'],['ct-tuic','tuic_enabled'],
-    ['ct-amneziawg','amneziawg_enabled'],['ct-shadowtls','shadowtls_enabled'],['ct-mieru','mieru_enabled'],
-    ['ct-naiveproxy','naiveproxy_enabled'],['ct-wireguard','wireguard_enabled'],['ct-openvpn','openvpn_enabled'],
-  ];
-  tabProtos.forEach(([id, key]) => {
-    const el = document.getElementById(id);
-    if (el) el.style.display = serverInfo[key] ? '' : 'none';
+  // A tab shows only when the server really serves that protocol to this
+  // user: the panel builds a link only then (ShadowTLS has no link format;
+  // it ships in the sing-box / Clash subscriptions).
+  const visible = [];
+  document.querySelectorAll('#config-tabs .config-tab').forEach(t => {
+    const key = [...t.classList].find(c => c.startsWith('tab-')).slice(4);
+    const on = key === 'shadowtls'
+      ? !!(serverInfo.shadowtls_enabled && serverInfo.engines && serverInfo.engines['sing-box'])
+      : key === 'naiveproxy'
+        ? !!(u.naiveproxy || (serverInfo.naiveproxy_enabled && serverInfo.engines && serverInfo.engines['sing-box']))
+        : !!u[CONFIG_LINK_FIELD[key] || key];
+    t.style.display = on ? '' : 'none';
+    if (on) visible.push(key);
   });
-
-  configTab = 'vmess';
+  configTab = visible[0] || 'vmess';
   document.querySelectorAll('.config-tab').forEach(t => t.classList.remove('active'));
-  document.querySelector('.tab-vmess').classList.add('active');
+  const first = document.querySelector('.tab-' + configTab);
+  if (first) first.classList.add('active');
   renderConfigTab();
-  // Sub link
+  // Sub links: the page, and the two app profiles
   const subUrl = location.origin + '/sub/' + u.uuid;
   document.getElementById('config-sub-url').value = subUrl;
   document.getElementById('config-sub-open').href = subUrl;
+  document.getElementById('config-sub-singbox').value = location.origin + '/sub-singbox/' + u.uuid;
+  document.getElementById('config-sub-clash').value = location.origin + '/sub-clash/' + u.uuid;
   showModal('config-modal');
 }
 
@@ -1138,12 +1149,12 @@ function renderConfigTab() {
     info = `
       <span class="ck">Protocol</span><span class="cv" style="color:var(--accent)">VMess + WS + TLS</span>
       <span class="ck">Server</span><span class="cv">${SERVER_INFO.ip}</span>
-      <span class="ck">Port</span><span class="cv">${SERVER_INFO.port}</span>
+      <span class="ck">Port</span><span class="cv">${serverInfo.vmess_port || 443}</span>
       <span class="ck">UUID</span><span class="cv" style="font-size:10px;word-break:break-all">${u.uuid}</span>
       <span class="ck">Network</span><span class="cv">WebSocket</span>
-      <span class="ck">Path</span><span class="cv">${SERVER_INFO.path}</span>
+      <span class="ck">Path</span><span class="cv">${serverInfo.vmess_ws_path || '/api/v1/stream'}</span>
       <span class="ck">TLS</span><span class="cv">Enabled</span>
-      <span class="ck">SNI</span><span class="cv">${SERVER_INFO.sni}</span>`;
+      <span class="ck">SNI</span><span class="cv">${esc(serverInfo.vmess_sni || SERVER_INFO.sni || '')}</span>`;
   } else if (configTab === 'vless') {
     link = u.vless || '';
     label = 'VLESS Link';
@@ -1282,22 +1293,15 @@ function renderConfigTab() {
       <span class="ck">Port</span><span class="cv">${serverInfo.tuic_port || 8444}</span>
       <span class="ck">Transport</span><span class="cv">QUIC/UDP</span>
       <span class="ck">Congestion</span><span class="cv">${serverInfo.tuic_congestion || 'cubic'}</span>`;
-  } else if (configTab === 'amneziawg') {
-    link = u.amneziawg || '';
-    label = 'AmneziaWG Config';
-    info = `
-      <span class="ck">Protocol</span><span class="cv" style="color:#00b894">AmneziaWG 2.0</span>
-      <span class="ck">Server</span><span class="cv">${SERVER_INFO.ip}</span>
-      <span class="ck">Port</span><span class="cv">${serverInfo.amneziawg_port || 51820}</span>
-      <span class="ck">MTU</span><span class="cv">${serverInfo.amneziawg_mtu || 1280}</span>`;
   } else if (configTab === 'shadowtls') {
-    link = u.shadowtls || '';
-    label = 'ShadowTLS v3 Link';
+    // No share-link format exists for ShadowTLS: the profile carries it.
+    link = location.origin + '/sub-singbox/' + u.uuid;
+    label = 'sing-box subscription (ShadowTLS is inside)';
     info = `
-      <span class="ck">Protocol</span><span class="cv" style="color:#b2bec3">ShadowTLS v3</span>
-      <span class="ck">Server</span><span class="cv">${SERVER_INFO.ip}</span>
+      <span class="ck">Protocol</span><span class="cv" style="color:#b2bec3">ShadowTLS v3 + Shadowsocks-2022</span>
       <span class="ck">Port</span><span class="cv">${serverInfo.shadowtls_port || 8445}</span>
-      <span class="ck">SNI</span><span class="cv">${serverInfo.shadowtls_sni || 'rubika.ir'}</span>`;
+      <span class="ck">Handshake</span><span class="cv">${esc(serverInfo.shadowtls_sni || '')}</span>
+      <span class="ck">Import in</span><span class="cv">Hiddify, NekoBox, sing-box — or the Clash link below (Clash Meta / mihomo)</span>`;
   } else if (configTab === 'mieru') {
     link = u.mieru || '';
     label = 'Mieru Link';
@@ -1305,11 +1309,13 @@ function renderConfigTab() {
       <span class="ck">Protocol</span><span class="cv" style="color:#a29bfe">Mieru</span>
       <span class="ck">Server</span><span class="cv">${SERVER_INFO.ip}</span>
       <span class="ck">Port</span><span class="cv">${serverInfo.mieru_port || 8446}</span>
-      <span class="ck">Encryption</span><span class="cv">${serverInfo.mieru_encryption || 'AES-256-GCM'}</span>
-      <span class="ck">Transport</span><span class="cv">${serverInfo.mieru_transport || 'TCP'}</span>`;
+      <span class="ck">Transport</span><span class="cv">${esc(serverInfo.mieru_transport || 'TCP')}</span>
+      <span class="ck">Import in</span><span class="cv">mieru (mieru import config), or the Clash link below</span>`;
   } else if (configTab === 'naiveproxy') {
-    link = u.naiveproxy || '';
-    label = 'NaiveProxy Link';
+    // Without a publicly trusted certificate Naive runs on its own one,
+    // which only the sing-box profile can carry.
+    link = u.naiveproxy || (location.origin + '/sub-singbox/' + u.uuid);
+    label = u.naiveproxy ? 'NaiveProxy Link' : 'sing-box subscription (NaiveProxy is inside)';
     info = `
       <span class="ck">Protocol</span><span class="cv" style="color:#fdcb6e">NaiveProxy</span>
       <span class="ck">Server</span><span class="cv">${SERVER_INFO.ip}</span>
@@ -1322,15 +1328,7 @@ function renderConfigTab() {
       <span class="ck">Protocol</span><span class="cv" style="color:#00b894">WireGuard</span>
       <span class="ck">Server</span><span class="cv">${SERVER_INFO.ip}</span>
       <span class="ck">Port</span><span class="cv">${serverInfo.wireguard_port || 51821}</span>
-      <span class="ck">MTU</span><span class="cv">${serverInfo.wireguard_mtu || 1280}</span>`;
-  } else if (configTab === 'openvpn') {
-    link = u.openvpn || '';
-    label = 'OpenVPN Config';
-    info = `
-      <span class="ck">Protocol</span><span class="cv" style="color:#e17055">OpenVPN</span>
-      <span class="ck">Server</span><span class="cv">${SERVER_INFO.ip}</span>
-      <span class="ck">Port</span><span class="cv">${serverInfo.openvpn_port || 1194}</span>
-      <span class="ck">Proto</span><span class="cv">${serverInfo.openvpn_proto || 'UDP'}</span>`;
+      <span class="ck">Import in</span><span class="cv">WireGuard app (scan the QR or import the file)</span>`;
   }
 
   // Append host header spoofing info if active. Every serverInfo.* field
@@ -1349,13 +1347,6 @@ function renderConfigTab() {
   }
   if (serverInfo.dpi_bug_host_enabled) {
     info += `\n<span class="ck" style="color:var(--purple)">Bug Host</span><span class="cv" style="color:var(--purple)">→ ${esc(serverInfo.dpi_bug_host_domain) || '?'}</span>`;
-  }
-  // Tunneling
-  if (serverInfo.dpi_dns_tunnel) {
-    info += `\n<span class="ck" style="color:var(--accent)">DNS Tunnel</span><span class="cv" style="color:var(--accent)">Active — traffic wrapped in DNS queries</span>`;
-  }
-  if (serverInfo.dpi_icmp_tunnel) {
-    info += `\n<span class="ck" style="color:var(--accent)">ICMP Tunnel</span><span class="cv" style="color:var(--accent)">Active — traffic wrapped in ICMP packets</span>`;
   }
   // Domain / CDN Fronting
   if (serverInfo.dpi_domain_front) {
@@ -1402,8 +1393,8 @@ function copyConfigLink() {
   _copyText(ta.value).then(()=>toast('Link copied')).catch(()=>toast('Link copied'));
 }
 
-function copySubUrl() {
-  const v = document.getElementById('config-sub-url').value;
+function copySubUrl(id) {
+  const v = document.getElementById(id || 'config-sub-url').value;
   if (!v) return;
   _copyText(v).then(()=>toast('Sub link copied')).catch(()=>toast('Sub link copied'));
 }
@@ -1703,7 +1694,9 @@ function updateSettingsStatus() {
     else el.lastChild.textContent = ' ' + label;
   };
   set('si-vmess', true, 'Active :' + (si.vmess_port || 443));
-  set('si-vless', si.reality_public_key, si.reality_public_key ? 'Active :' + (si.vless_port || 2053) : 'OFF — Keys needed');
+  // server-info sends the REALITY public key as vless_public_key.
+  const realityKey = si.vless_public_key || si.reality_public_key;
+  set('si-vless', realityKey, realityKey ? 'Active :' + (si.vless_port || 2053) : 'OFF — Keys needed');
   set('si-trojan', si.trojan_enabled, si.trojan_enabled ? 'Active :' + (si.trojan_port || 2083) : 'OFF');
   set('si-grpc', si.grpc_enabled, si.grpc_enabled ? 'Active :' + (si.grpc_port || 2054) : 'OFF');
   set('si-hu', si.httpupgrade_enabled, si.httpupgrade_enabled ? 'Active :' + (si.httpupgrade_port || 2055) : 'OFF');
@@ -1733,8 +1726,6 @@ function updateSettingsStatus() {
   const hostSpoofOn = si.dpi_http_host_spoof_enabled || si.dpi_ws_host_front_enabled || si.dpi_cdn_host_front_enabled || si.dpi_bug_host_enabled;
   set('si-host-spoof', hostSpoofOn, hostSpoofOn ? 'Active' : 'OFF');
   // Tunneling (DNS/ICMP)
-  const tunnelOn = si.dpi_dns_tunnel || si.dpi_icmp_tunnel;
-  set('si-dpi-tunnel', tunnelOn, tunnelOn ? 'Active' : 'OFF');
   // Obfuscation (Domain/CDN Front)
   const obfuscateOn = si.dpi_domain_front || si.dpi_cdn_front_enabled;
   set('si-dpi-obfuscate', obfuscateOn, obfuscateOn ? 'Active' : 'OFF');
@@ -1885,7 +1876,7 @@ async function loadSettings() {
     // WireGuard
     document.getElementById('set-wireguard').checked = s.wireguard_enabled || false;
     document.getElementById('set-wireguard-port').value = s.wireguard_port || 51821;
-    document.getElementById('set-wireguard-address').value = s.wireguard_address || '10.9.0.1/24';
+    document.getElementById('set-wireguard-address').value = s.wireguard_address || '10.9.0.1/16';
     document.getElementById('set-wireguard-dns').value = s.wireguard_dns || '1.1.1.1';
     document.getElementById('set-wireguard-mtu').value = s.wireguard_mtu || 1280;
     // OpenVPN
@@ -1919,8 +1910,6 @@ async function loadSettings() {
     document.getElementById('set-dpi-tls-fragment').checked = s.dpi_tls_fragment || false;
     document.getElementById('set-dpi-ip-fragment').checked = s.dpi_ip_fragment || false;
     document.getElementById('set-dpi-tcp-keepalive').checked = s.dpi_tcp_keepalive || false;
-    document.getElementById('set-dpi-dns-tunnel').checked = s.dpi_dns_tunnel || false;
-    document.getElementById('set-dpi-icmp-tunnel').checked = s.dpi_icmp_tunnel || false;
     document.getElementById('set-dpi-domain-front').checked = s.dpi_domain_front || false;
     document.getElementById('set-dpi-cdn-front-enabled').checked = s.dpi_cdn_front_enabled || false;
     document.getElementById('set-dpi-cdn-front').value = s.dpi_cdn_front || '';
@@ -1967,8 +1956,8 @@ async function loadSettings() {
   }
 }
 
-function resetSettingsToDefault() {
-  if (!confirm('Reset ALL settings to default values?\\n\\nاین کار تمام تنظیمات را به حالت پیش‌فرض برمی‌گرداند. ادامه می‌دهید؟')) return;
+async function resetSettingsToDefault() {
+  if (!await uiConfirm('Reset ALL settings to default values?\\n\\nاین کار تمام تنظیمات را به حالت پیش‌فرض برمی‌گرداند. ادامه می‌دهید؟')) return;
   // Reset all form fields in settings modal
   var defaults = {
     'set-config-prefix': 'Proxy', 'set-vmess-port': '443', 'set-vmess-sni': 'www.aparat.com', 'set-vmess-ws-path': '/api/v1/stream',
@@ -1991,14 +1980,14 @@ function resetSettingsToDefault() {
     'set-shadowtls': false, 'set-shadowtls-port': '8445', 'set-shadowtls-sni': 'rubika.ir',
     'set-mieru': false, 'set-mieru-port': '8446', 'set-mieru-encryption': 'aes-256-gcm', 'set-mieru-transport': 'tcp', 'set-mieru-mux-concurrency': '8',
     'set-naiveproxy': false, 'set-naiveproxy-port': '8447', 'set-naiveproxy-concurrency': '4',
-    'set-wireguard': false, 'set-wireguard-port': '51821', 'set-wireguard-address': '10.9.0.1/24', 'set-wireguard-dns': '1.1.1.1', 'set-wireguard-mtu': '1280',
+    'set-wireguard': false, 'set-wireguard-port': '51821', 'set-wireguard-address': '10.9.0.1/16', 'set-wireguard-dns': '1.1.1.1', 'set-wireguard-mtu': '1280',
     'set-openvpn': false, 'set-openvpn-port': '1194', 'set-openvpn-proto': 'udp', 'set-openvpn-network': '10.10.0.0/24', 'set-openvpn-dns': '1.1.1.1',
     'set-fingerprint': 'chrome', 'set-noise': false, 'set-noise-packet': 'rand:50-100', 'set-noise-delay': '10-20',
     'set-cdn': false, 'set-cdn-domain': '', 'set-cdn-path': '/cdn-ws', 'set-cdn-port': '2082',
     'set-telegram': false, 'set-telegram-token': '', 'set-telegram-chat': '',
     'set-tg-disabled': true, 'set-tg-expired': true, 'set-tg-killswitch': true, 'set-tg-traffic': true, 'set-tg-created': false, 'set-tg-deleted': false,
     'set-dpi-tcp-fragment': false, 'set-dpi-tls-fragment': false, 'set-dpi-ip-fragment': false, 'set-dpi-tcp-keepalive': false,
-    'set-dpi-dns-tunnel': false, 'set-dpi-icmp-tunnel': false, 'set-dpi-domain-front': false, 'set-dpi-cdn-front-enabled': false,
+    'set-dpi-domain-front': false, 'set-dpi-cdn-front-enabled': false,
     'set-emergency-relay': false, 'set-dpi-http-host-spoof': false, 'set-dpi-ws-host-front': false, 'set-dpi-cdn-host-front': false, 'set-dpi-bug-host': false,
     'set-dpi-packet-reorder': false, 'set-dpi-dynamic-port': false, 'set-dpi-fake-http': false,
     'set-dpi-traffic-shape': false, 'set-dpi-multi-path': false, 'set-dpi-protocol-hop': false,
@@ -2148,7 +2137,7 @@ async function saveSettings() {
     // WireGuard
     wireguard_enabled: document.getElementById('set-wireguard').checked,
     wireguard_port: parseInt(document.getElementById('set-wireguard-port').value) || 51821,
-    wireguard_address: document.getElementById('set-wireguard-address').value.trim() || '10.9.0.1/24',
+    wireguard_address: document.getElementById('set-wireguard-address').value.trim() || '10.9.0.1/16',
     wireguard_dns: document.getElementById('set-wireguard-dns').value.trim() || '1.1.1.1',
     wireguard_mtu: parseInt(document.getElementById('set-wireguard-mtu').value) || 1280,
     // OpenVPN
@@ -2182,8 +2171,6 @@ async function saveSettings() {
     dpi_tls_fragment: document.getElementById('set-dpi-tls-fragment').checked,
     dpi_ip_fragment: document.getElementById('set-dpi-ip-fragment').checked,
     dpi_tcp_keepalive: document.getElementById('set-dpi-tcp-keepalive').checked,
-    dpi_dns_tunnel: document.getElementById('set-dpi-dns-tunnel').checked,
-    dpi_icmp_tunnel: document.getElementById('set-dpi-icmp-tunnel').checked,
     dpi_domain_front: document.getElementById('set-dpi-domain-front').checked,
     dpi_cdn_front_enabled: document.getElementById('set-dpi-cdn-front-enabled').checked,
     dpi_cdn_front: document.getElementById('set-dpi-cdn-front').value.trim(),
@@ -2302,7 +2289,7 @@ function toggleKillSwitch() {
 function toggleCDN() {}
 
 async function regenerateReality() {
-  if (!confirm('Generate new Reality keys? Existing VLESS configs will stop working.')) return;
+  if (!await uiConfirm('Generate new Reality keys? Existing VLESS configs will stop working.')) return;
   const r = await fetch(API+'/settings/regenerate-reality', {method:'POST'});
   const d = await r.json();
   if (d.ok) {
@@ -2313,7 +2300,7 @@ async function regenerateReality() {
 }
 
 async function generateSS2022Key() {
-  if (!confirm('Generate new SS2022 server key? Existing SS2022 configs will need updating.')) return;
+  if (!await uiConfirm('Generate new SS2022 server key? Existing SS2022 configs will need updating.')) return;
   const r = await fetch(API+'/settings/generate-ss2022-key', {method:'POST'});
   const d = await r.json();
   if (d.ok) {
@@ -2354,7 +2341,8 @@ function switchSettingsTab(tabName) {
   const content = document.getElementById('settings-' + tabName);
   if (content) content.classList.add('active');
   // Activate corresponding button
-  const btn = document.querySelector('.settings-tabs .settings-tab-btn[onclick*="'+tabName+'"]');
+  // csp-events.js strips onclick attributes once bound, so match on data-*.
+  const btn = document.querySelector('.settings-tabs .settings-tab-btn[data-settings-tab="' + tabName + '"]');
   if (btn) btn.classList.add('active');
   // Domain tab is special: when the operator opens it we
   // refresh the active-domain card and pre-fill the "set
@@ -2486,7 +2474,7 @@ function _renderDomainSetResult(d, domain) {
 }
 
 async function domainDisable() {
-  if (!confirm('Disable the active domain? Cert files stay on disk but every TLS-bearing inbound will fall back to the server IP.')) return;
+  if (!await uiConfirm('Disable the active domain? Cert files stay on disk but every TLS-bearing inbound will fall back to the server IP.')) return;
   try {
     const data = await apiCall(API + '/domain', { method: 'DELETE' });
     if (data.ok) {
@@ -2536,17 +2524,21 @@ async function domainCheckOptions() {
 
 
 /* ── Helpers ── */
+// Admin screens that used to be modals are now pages. showModal() and
+// closeModal() on their old ids switch pages, so every caller keeps working.
+const PAGE_MODALS = {
+  'settings-modal': 'settings', 'agents-modal': 'agents', 'online-modal': 'online',
+  'backup-modal': 'backup', 'help-modal': 'help'
+};
 function showModal(id) {
   document.querySelectorAll('.modal-overlay.show').forEach(el => {
     if (el.id !== id) el.classList.remove('show');
   });
+  if (PAGE_MODALS[id]) { switchOperationTab(PAGE_MODALS[id]); return; }
   const modal = document.getElementById(id);
   if (!modal) return;
   modal.classList.add('show');
-  if (id === 'settings-modal') { loadSettings(); switchSettingsTab('protocols'); }
-  if (id === 'agents-modal') fetchAgents();
   if (id === 'sysmon-modal') openSysmonDetail();
-  if (id === 'online-modal') fetchOnlineUsers();
 }
 function applyUserPreset(gb, days) {
   const t = document.getElementById('add-traffic');
@@ -2554,7 +2546,14 @@ function applyUserPreset(gb, days) {
   if (t) t.value = gb;
   if (d) d.value = days;
 }
-function closeModal(id){const modal=document.getElementById(id); if(modal) modal.classList.remove('show')}
+function closeModal(id) {
+  if (PAGE_MODALS[id]) {
+    if (currentOperationTab === PAGE_MODALS[id]) switchOperationTab(previousOperationTab || 'mission');
+    return;
+  }
+  const modal = document.getElementById(id);
+  if (modal) modal.classList.remove('show');
+}
 function hideModal(id){closeModal(id)}
 function esc(s){if(s===0)return '0';if(!s)return '';return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 // Value inside a single-quoted call that csp-events.js will read back from
@@ -2611,42 +2610,41 @@ function renderAgents() {
   const el = document.getElementById('agents-list');
   if (!el) return;
   if (!_agents.length) {
-    el.innerHTML = '<div style="color:var(--t3);font-size:13px;text-align:center;padding:20px">No agents yet</div>';
+    el.innerHTML = '<div class="tactical-empty">No agents yet. Create one above; they sign in at /agent.</div>';
     return;
   }
-  el.innerHTML = _agents.map(a => {
-    const allocated = Number(a.traffic_allocated_gb ?? a.traffic_used_gb) || 0;
-    const consumed = Number(a.traffic_used_gb) || 0;
-    const quotaGb = Number(a.traffic_quota_gb) || 0;
-    const pct = quotaGb > 0 ? Math.min(100, Math.round((allocated / quotaGb) * 100)) : 0;
-    const barColor = pct < 60 ? 'var(--green)' : pct < 85 ? 'var(--yellow)' : 'var(--red)';
-    const remaining = Math.max(0, quotaGb - allocated);
-    return `<div class="agent-card">
-      <div class="agent-card-head">
-        <span class="agent-card-name">${esc(a.name)}</span>
-        <span class="badge ${a.active?'badge-active':'badge-inactive'}">${a.active?'Active':'Disabled'}</span>
-      </div>
-      <div class="agent-info">
-        <span>Sold: <b style="color:var(--t0)">${allocated.toFixed(1)} / ${quotaGb.toFixed(1)} GB</b></span>
-        <span>Used: <b style="color:var(--t0)">${consumed.toFixed(1)} GB</b></span>
-        <span>Remaining: <b style="color:var(--t0)">${remaining.toFixed(1)} GB</b></span>
-        <span>Users: <b style="color:var(--t0)">${a.user_count}</b></span>
-      </div>
-      <div class="agent-quota-bar"><div class="agent-quota-fill" style="width:${pct}%;background:${barColor}"></div></div>
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:4px">
-        <span style="font-size:11px;color:var(--t3)">${pct}% used</span>
-        <span style="font-size:11px;color:var(--t3)">Login: /agent</span>
-      </div>
-      <div class="agent-actions" style="margin-top:10px">
-        <button class="btn btn-outline btn-sm" onclick="showEditAgent(${Number(a.id)||0},'${jsq(a.name)}',${quotaGb})">Edit Quota</button>
-        <button class="btn btn-outline btn-sm" onclick="showResetAgentPw(${a.id},'${jsq(a.name)}')">Reset Pass</button>
-        <button class="btn btn-outline btn-sm" onclick="toggleAgentAppLink(${a.id})">📱 App Link</button>
-        <button class="btn ${a.active?'btn-orange':'btn-green'} btn-sm" onclick="toggleAgent(${a.id},${a.active?0:1})">${a.active?'Disable':'Enable'}</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteAgent(${a.id},'${jsq(a.name)}')">Delete</button>
-      </div>
-      <div id="agent-app-qr-${a.id}" style="display:none;margin-top:10px;text-align:center"></div>
-    </div>`;
-  }).join('');
+  el.innerHTML = '<div class="ui-groups">' + _agents.map(a => {
+    // The quota counts the traffic sold to users, not what they used yet.
+    const quota = Number(a.traffic_quota_gb) || 0;
+    const sold = Number(a.traffic_allocated_gb ?? a.traffic_used_gb) || 0;
+    const used = Number(a.traffic_used_gb) || 0;
+    const pct = quota > 0 ? Math.min(100, Math.round(sold / quota * 100)) : 0;
+    const remaining = Math.max(0, quota - sold);
+    const id = Number(a.id);
+    return '<div class="ui-group">' +
+      '<div class="ui-group-head">' +
+        '<span class="ui-group-icon"><span class="material-symbols-outlined">support_agent</span></span>' +
+        '<div class="ui-minw0" style="flex:1"><div class="ui-group-name">' + esc(a.name) + '</div>' +
+        '<div class="ops-cell-sub">Signs in at /agent</div></div>' +
+        (a.active ? pill('online', 'Active') : pill('muted', 'Disabled')) +
+      '</div>' +
+      '<div><div class="ui-quota-top"><span>' + sold.toFixed(1) + ' GB sold</span><span>/ ' + quota.toFixed(0) + ' GB</span></div>' +
+      '<progress class="ops-progress ops-progress-' + quotaClass(pct) + ' ui-quota-progress" max="100" value="' + pct + '"></progress>' +
+      '<div class="ui-quota-foot">' + pct + '% of quota sold · ' + used.toFixed(1) + ' GB used</div></div>' +
+      '<div class="ui-group-stats">' +
+        '<div><span>Remaining</span><strong>' + remaining.toFixed(1) + ' GB</strong></div>' +
+        '<div><span>Users</span><strong>' + Number(a.user_count || 0) + '</strong></div>' +
+      '</div>' +
+      '<div class="ui-group-actions ui-row-actions">' +
+        '<button type="button" class="ui-icon-btn" title="Edit quota" aria-label="Edit quota" onclick="showEditAgent(' + id + ',\'' + jsq(a.name) + '\',' + quota + ')"><span class="material-symbols-outlined">data_usage</span></button>' +
+        '<button type="button" class="ui-icon-btn" title="Reset password" aria-label="Reset password" onclick="showResetAgentPw(' + id + ',\'' + jsq(a.name) + '\')"><span class="material-symbols-outlined">key</span></button>' +
+        '<button type="button" class="ui-icon-btn" title="Mobile app login link" aria-label="Mobile app login link" onclick="toggleAgentAppLink(' + id + ')"><span class="material-symbols-outlined">qr_code_2</span></button>' +
+        '<button type="button" class="ui-icon-btn ' + (a.active ? '' : 'is-ok') + '" title="' + (a.active ? 'Disable' : 'Enable') + '" aria-label="' + (a.active ? 'Disable' : 'Enable') + '" onclick="toggleAgent(' + id + ',' + (a.active ? 0 : 1) + ')"><span class="material-symbols-outlined">' + (a.active ? 'pause_circle' : 'play_circle') + '</span></button>' +
+        '<button type="button" class="ui-icon-btn is-danger" title="Delete" aria-label="Delete" onclick="deleteAgent(' + id + ',\'' + jsq(a.name) + '\')"><span class="material-symbols-outlined">delete</span></button>' +
+      '</div>' +
+      '<div id="agent-app-qr-' + id + '" style="display:none;text-align:center"></div>' +
+    '</div>';
+  }).join('') + '</div>';
 }
 
 // Mobile-app import link (v7l://import…) — QR the admin shows the agent, or
@@ -2691,13 +2689,14 @@ async function doAddAgent() {
   const name = document.getElementById('agent-add-name').value.trim();
   const pass = document.getElementById('agent-add-pass').value;
   const quota = parseFloat(document.getElementById('agent-add-quota').value);
-  const speed = parseInt(document.getElementById('agent-add-speed').value) || 200;
+  const speed = Math.max(0, parseInt(document.getElementById('agent-add-speed').value) || 0);
   if (!name) { toast('Enter agent name','error'); return; }
   if (!pass || pass.length < 12) { toast('Password must be at least 12 characters and include upper, lower, digit, and symbol','error'); return; }
   if (!quota || quota <= 0) { toast('Enter valid quota','error'); return; }
   try {
     const d = await apiCall(API+'/agents', {method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({name, password: pass, traffic_quota_gb: quota, speed_limit_default: speed})});
+      body: JSON.stringify({name, password: pass, traffic_quota_gb: quota, speed_limit_default: speed,
+        active: (document.getElementById('agent-add-active') || {checked: true}).checked})});
     if (d.ok) {
       toast('Agent '+name+' created');
       document.getElementById('agent-add-name').value = '';
@@ -2756,7 +2755,7 @@ async function toggleAgent(id, newState) {
 }
 
 async function deleteAgent(id, name) {
-  if (!confirm('Delete agent "'+name+'"?\n\nTheir users will be transferred to admin.')) return;
+  if (!await uiConfirm('Delete agent "'+name+'"?\n\nTheir users will be transferred to admin.')) return;
   try {
     const d = await apiCall(API+'/agents/'+id, {method:'DELETE',
       headers:{'Content-Type':'application/json'}, body: JSON.stringify({delete_users: false})});
@@ -2794,6 +2793,13 @@ function renderSysmonBar() {
   if (upEl) { const s=d.uptime_seconds||0; const h=Math.floor(s/3600); const m=Math.floor((s%3600)/60); upEl.textContent = h>24 ? Math.floor(h/24)+'d '+h%24+'h' : h+'h '+m+'m'; }
   if (xrEl) xrEl.textContent = d.xray_pid ? '✅ Running' : '❌ Down';
   if (netEl) netEl.textContent = '↑'+fmtBytes(d.net_bytes_sent||0)+' ↓'+fmtBytes(d.net_bytes_recv||0);
+  const rc = document.getElementById('tm-ramcpu');
+  if (rc) rc.textContent = (d.ram_percent||0) + '% / ' + (d.cpu_percent||0) + '%';
+  const rb = document.getElementById('tm-ram-bar');
+  if (rb) {
+    rb.style.width = Math.min(100, d.ram_percent||0) + '%';
+    rb.className = (d.ram_percent||0) >= 85 ? 'is-bad' : ((d.ram_percent||0) >= 60 ? 'is-warn' : '');
+  }
 }
 
 async function openSysmonDetail() {
@@ -2868,7 +2874,7 @@ async function fetchOnlineUsers() {
     }
     el.innerHTML = `<table class="online-tbl"><thead><tr><th>User</th><th>IPs</th><th>Count</th></tr></thead><tbody>` +
       data.map(u => `<tr>
-        <td style="font-weight:600">${esc(u.username)}</td>
+        <td style="font-weight:600">${esc(u.name || u.username)}</td>
         <td style="font-family:monospace;font-size:11px">${(u.ips||[]).map(ip=>esc(ip)).join('<br>')}</td>
         <td>${(u.ips||[]).length}</td>
       </tr>`).join('') +
@@ -2879,7 +2885,7 @@ async function fetchOnlineUsers() {
 function showUserIPs(name) {
   const u = users.find(x=>x.name===name);
   if (!u || !u.online_ips || !u.online_ips.length) { toast('No IPs found','error'); return; }
-  alert('Connected IPs for '+name+':\n\n'+u.online_ips.join('\n'));
+  uiNotice('Connected IPs for ' + name + ':\n\n' + u.online_ips.join('\n'));
 }
 
 /* ── Add Traffic ── */
@@ -2915,8 +2921,13 @@ async function doAddTraffic() {
 
 /* ── Edit Note ── */
 async function promptEditNote(name, current) {
-  const note = prompt('Edit note for '+name+':', current || '');
-  if (note === null) return;
+  const form = await uiForm({
+    title: 'Note for ' + name,
+    fields: [{ name: 'note', label: 'Note', value: current || '', maxlength: 200,
+               hint: 'Only you see this, e.g. the customer\'s name or phone.' }],
+  });
+  if (!form) return;
+  const note = form.note;
   try {
     const r = await fetch(API+'/users/'+encodeURIComponent(name)+'/update-note', {
       method:'POST', headers:{'Content-Type':'application/json'},
@@ -2929,11 +2940,17 @@ async function promptEditNote(name, current) {
 }
 
 async function promptSpeed(name, currentDown, currentUp) {
-  const val = prompt('Speed limit (KB/s) for ' + name + ':\nFormat: down,up (e.g. 200,200)\n0 = unlimited', currentDown + ',' + currentUp);
-  if (val === null) return;
-  const parts = val.split(',').map(s => parseInt(s.trim()));
-  const down = parts[0] >= 0 ? parts[0] : 200;
-  const up = parts.length > 1 && parts[1] >= 0 ? parts[1] : down;
+  const form = await uiForm({
+    title: 'Speed limit for ' + name,
+    description: 'In KB/s. 0 means unlimited.',
+    fields: [
+      { name: 'down', label: 'Download (KB/s)', type: 'number', min: 0, value: currentDown },
+      { name: 'up', label: 'Upload (KB/s)', type: 'number', min: 0, value: currentUp },
+    ],
+  });
+  if (!form) return;
+  const down = Math.max(0, parseInt(form.down, 10) || 0);
+  const up = Math.max(0, parseInt(form.up, 10) || 0);
   try {
     const r = await fetch(API+'/users/'+encodeURIComponent(name)+'/speed-limit', {
       method:'POST', headers:{'Content-Type':'application/json'},
@@ -3132,7 +3149,7 @@ async function createBackup() {
 }
 
 async function restoreBackup(path) {
-  if (!confirm('Are you sure you want to restore this backup? This will replace current data.')) {
+  if (!await uiConfirm('Are you sure you want to restore this backup? This will replace current data.')) {
     return;
   }
 
@@ -3155,7 +3172,7 @@ async function restoreBackup(path) {
 }
 
 async function deleteBackup(path) {
-  if (!confirm('Are you sure you want to delete this backup?')) {
+  if (!await uiConfirm('Are you sure you want to delete this backup?')) {
     return;
   }
 
@@ -3342,7 +3359,789 @@ function setupSNIAutoFill() {
   });
 }
 
-// Initialize SNI auto-fill on page load
 document.addEventListener('DOMContentLoaded', function() {
   setupSNIAutoFill();
 });
+
+let currentOperationTab = 'tenants';
+let previousOperationTab = null;
+let opsLiveTimer = null;
+let _opsOverview = null;
+
+function switchOperationTab(tabId) {
+  if (tabId !== currentOperationTab) previousOperationTab = currentOperationTab;
+  currentOperationTab = tabId;
+  document.querySelectorAll('.ui-nav-item[data-tab]').forEach(btn => {
+    btn.classList.toggle('active', btn.getAttribute('data-tab') === tabId);
+  });
+  if (typeof closeDrawer === 'function') closeDrawer();
+  window.scrollTo(0, 0);
+
+  // Toggle a class rather than style.display: writing element.style before
+  // csp-events.js has migrated the inline style attribute overwrites it.
+  document.querySelectorAll('.tactical-op-view').forEach(v => {
+    v.classList.toggle('active', v.id === 'op-view-' + tabId);
+  });
+
+  // Every ops tab refreshes itself while it is open.
+  clearInterval(opsLiveTimer);
+  opsLiveTimer = null;
+
+  if (tabId === 'tenants') {
+    if (mainView === 'groups') {
+      renderGroups();
+      fetchGroups();
+    } else {
+      renderUsers();
+      fetchUsers();
+    }
+    return;
+  }
+  if (PAGE_LOADERS[tabId]) PAGE_LOADERS[tabId]();
+  const refresh = OPS_TAB_REFRESH[tabId];
+  if (refresh) {
+    refresh[0]();
+    opsLiveTimer = setInterval(refresh[0], refresh[1]);
+  }
+}
+
+// Settings sections fold: the header row (title + ON/OFF pill) toggles the
+// rest of the section, so the page reads as an overview. Built once; the
+// first section of each tab starts open.
+function initSettingsSections() {
+  const root = document.getElementById('settings-modal');
+  if (!root || root.dataset.sectionsReady) return;
+  root.dataset.sectionsReady = '1';
+  root.querySelectorAll('.settings-section').forEach(sec => {
+    const head = sec.querySelector(':scope > .sec-header');
+    if (!head) return;
+    const body = document.createElement('div');
+    body.className = 'sec-body';
+    while (head.nextSibling) body.appendChild(head.nextSibling);
+    sec.appendChild(body);
+    sec.classList.add('is-collapsible');
+    head.tabIndex = 0;
+    head.setAttribute('role', 'button');
+    head.setAttribute('aria-expanded', 'false');
+    const chev = document.createElement('span');
+    chev.className = 'material-symbols-outlined sec-chevron';
+    chev.setAttribute('aria-hidden', 'true');
+    chev.textContent = 'expand_more';
+    head.appendChild(chev);
+    const toggle = () => head.setAttribute('aria-expanded', String(sec.classList.toggle('open')));
+    head.addEventListener('click', toggle);
+    head.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
+    });
+  });
+  root.querySelectorAll('.settings-tab-content').forEach(tab => {
+    const first = tab.querySelector('.settings-section.is-collapsible');
+    if (first) {
+      first.classList.add('open');
+      first.querySelector(':scope > .sec-header').setAttribute('aria-expanded', 'true');
+    }
+  });
+}
+
+// Admin pages (formerly modals): load once when opened.
+const PAGE_LOADERS = {
+  settings: () => { initSettingsSections(); loadSettings(); switchSettingsTab('protocols'); },
+  agents: () => fetchAgents(),
+  backup: () => loadBackups()
+};
+
+// [loader, refresh interval ms]. Protocols run network checks, so slower.
+const OPS_TAB_REFRESH = {
+  mission: [() => loadMissionView(), 5000],
+  warroom: [() => loadWarroomView(), 15000],
+  protocols: [() => loadProtocolsView(), 120000],
+  nodes: [() => loadNodesView(), 60000],
+  sentinel: [() => loadSentinelView(), 60000],
+  routing: [() => loadRoutingView(), 60000],
+  diagnostics: [() => loadCarriersView(), 60000],
+  financials: [() => loadFinancialsView(), 60000],
+  security: [() => loadSecurityView(), 60000],
+  online: [() => fetchOnlineUsers(), 15000]
+};
+
+/* ── Ops helpers ── */
+async function opsFetch(path, opts) {
+  const r = await fetch(API + path, opts);
+  let d = {};
+  try { d = await r.json(); } catch (e) {}
+  if (!r.ok) {
+    const detail = Array.isArray(d.detail) ? d.detail.map(x => x.msg).join('; ') : d.detail;
+    throw new Error(detail || ('HTTP ' + r.status));
+  }
+  return d;
+}
+
+function opsJson(method, body) {
+  return { method: method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
+}
+
+function setText(id, text) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = text;
+}
+
+function tableMessage(bodyId, cols, msg) {
+  const body = document.getElementById(bodyId);
+  if (body) body.innerHTML = '<tr><td colspan="' + cols + '" class="tactical-empty">' + esc(msg) + '</td></tr>';
+}
+
+function fmtBps(bps) {
+  if (bps == null) return '—';
+  const units = ['bps', 'Kbps', 'Mbps', 'Gbps'];
+  let i = 0;
+  while (bps >= 1000 && i < units.length - 1) { bps /= 1000; i++; }
+  return bps.toFixed(i ? 1 : 0) + ' ' + units[i];
+}
+
+function fmtDuration(sec) {
+  sec = Math.max(0, Math.floor(sec || 0));
+  const d = Math.floor(sec / 86400), h = Math.floor(sec % 86400 / 3600), m = Math.floor(sec % 3600 / 60);
+  return d ? d + 'd ' + h + 'h' : (h ? h + 'h ' + m + 'm' : m + 'm');
+}
+
+// The API returns naive UTC timestamps.
+function parseUtc(iso) {
+  if (!iso) return null;
+  return new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(iso) ? iso : iso + 'Z');
+}
+
+function fmtAgo(iso) {
+  const t = parseUtc(iso);
+  if (!t) return 'never';
+  const s = Math.max(0, (Date.now() - t.getTime()) / 1000);
+  if (s < 60) return 'just now';
+  if (s < 3600) return Math.floor(s / 60) + 'm ago';
+  if (s < 86400) return Math.floor(s / 3600) + 'h ago';
+  return Math.floor(s / 86400) + 'd ago';
+}
+
+function fmtMs(v) { return v == null ? '—' : Math.round(v) + ' ms'; }
+function fmtPct(rate) { return rate == null ? '—' : Math.round(rate * 100) + '%'; }
+function fmtTests(n) { return n + (n === 1 ? ' test' : ' tests'); }
+
+function okClass(rate) { return rate >= 0.8 ? 'online' : (rate >= 0.4 ? 'warning' : 'danger'); }
+
+function pill(cls, text, title) {
+  return '<span class="status-pill ' + cls + '"' + (title ? ' title="' + esc(title) + '"' : '') + '>' + esc(text) + '</span>';
+}
+
+/* ── Overview: topbar, sidebar, Mission Control, War-Room ── */
+async function fetchOpsOverview() {
+  const d = await opsFetch('/ops/overview');
+  _opsOverview = d;
+  applyOpsStatus(d);
+  return d;
+}
+
+function applyOpsStatus(d) {
+  const running = d.xray_running;
+  setText('ops-hostname', d.host.hostname);
+  setText('ops-uptime', 'Up ' + fmtDuration(d.host.uptime_seconds));
+  setText('ops-proto-count', (running ? 'Operational' : 'Xray down') + ' · ' + d.protocols.enabled + ' protocols');
+  const chip = document.getElementById('ops-status-chip');
+  if (chip) chip.className = 'ui-chip' + (running ? '' : ' is-bad');
+  const dot = document.getElementById('ops-host-dot');
+  if (dot) dot.className = 'ops-dot ' + (running ? 'is-ok' : 'is-bad');
+  if (d.admin) {
+    setText('ops-admin-name', d.admin);
+    setText('ops-admin-initial', d.admin.charAt(0));
+  }
+
+  // Core telemetry card in the sidebar
+  const tm = (id, text, cls) => {
+    const el = document.getElementById(id);
+    if (el) { el.textContent = text; el.className = cls; }
+  };
+  const ver = (sysmonData && sysmonData.xray_version) ? 'v' + String(sysmonData.xray_version).replace(/^v/, '') + ' ' : '';
+  tm('tm-xray', running ? ver + 'running' : 'down', running ? 'ui-tm-ok' : 'ui-tm-bad');
+  const sb = d.singbox || {};
+  tm('tm-singbox', !sb.needed ? 'not used' : (sb.running ? 'active' : 'down'),
+     !sb.needed ? 'ui-tm-dim' : (sb.running ? 'ui-tm-ok' : 'ui-tm-bad'));
+  tm('tm-redis', d.redis_ok ? 'Connected' : 'Unavailable', d.redis_ok ? 'ui-tm-ok' : 'ui-tm-bad');
+  const pulse = document.getElementById('tm-dot');
+  if (pulse) pulse.className = 'ui-pulse ' + (running ? 'is-ok' : 'is-bad');
+
+  const p = d.posture;
+  document.querySelectorAll('[data-cloak-label]').forEach(el => {
+    el.textContent = p.cloak_active ? (p.cloak_source === 'auto' ? 'Cloak: AUTO' : 'Cloak: ON') : 'Emergency Cloak';
+  });
+}
+
+function refreshOpsStatus() {
+  fetchOpsOverview().catch(e => console.warn('ops overview failed:', e.message));
+}
+
+function drawSpark(id, values) {
+  const svg = document.getElementById(id);
+  if (!svg) return;
+  if (values.length < 2) { svg.innerHTML = ''; return; }
+  const max = Math.max(1, ...values);
+  const step = 240 / (values.length - 1);
+  const pts = values.map((v, i) => (i * step).toFixed(1) + ' ' + (46 - v / max * 42).toFixed(1));
+  const line = 'M' + pts.join(' L');
+  svg.innerHTML = '<path class="ops-spark-area" d="' + line + ' L240 48 L0 48 Z"></path>' +
+    '<path class="ops-spark-line" d="' + line + '"></path>';
+}
+
+async function loadMissionView() {
+  try {
+    const d = await fetchOpsOverview();
+    const net = d.network;
+    setText('mc-in', net.in_bps == null ? 'sampling…' : fmtBps(net.in_bps));
+    setText('mc-out', net.out_bps == null ? 'sampling…' : fmtBps(net.out_bps));
+    drawSpark('mc-in-spark', net.history.map(h => h.in_bps));
+    drawSpark('mc-out-spark', net.history.map(h => h.out_bps));
+    setText('mc-online', d.users.online);
+    setText('mc-users', d.users.active + ' active of ' + d.users.total + ' users');
+    setText('mc-protocols', d.protocols.enabled + ' / ' + d.protocols.total);
+    setText('mc-uptime', 'Server up ' + fmtDuration(d.host.uptime_seconds));
+    const x = document.getElementById('mc-xray');
+    if (x) {
+      x.textContent = d.xray_running ? 'XRAY RUNNING' : 'XRAY DOWN';
+      x.className = 'status-pill ' + (d.xray_running ? 'online' : 'danger');
+    }
+  } catch (e) {
+    setText('mc-in', '—');
+    setText('mc-out', '—');
+    console.warn('mission control failed:', e.message);
+  }
+}
+
+const OPS_EVENT_LABELS = {
+  honeypot_hit: ['HONEYPOT', 'red'],
+  login_failed: ['LOGIN FAILED', 'yellow'],
+  login_2fa_failed: ['2FA FAILED', 'yellow'],
+  login: ['LOGIN', 'green'],
+  panic_flush: ['PANIC FLUSH', 'accent'],
+  emergency_cloak_on: ['CLOAK ON', 'accent'],
+  emergency_cloak_off: ['CLOAK OFF', 'accent'],
+  probe_created: ['PROBE ADDED', 'accent'],
+  probe_deleted: ['PROBE REMOVED', 'accent'],
+  edge_node_added: ['NODE ADDED', 'accent'],
+  edge_node_deleted: ['NODE REMOVED', 'accent'],
+  automation_updated: ['AUTOMATION', 'accent']
+};
+
+async function loadWarroomView() {
+  const stream = document.getElementById('wr-events');
+  try {
+    const d = await fetchOpsOverview();
+    const s = d.security_24h, p = d.posture;
+    setText('wr-honeypot', s.honeypot_hits);
+    setText('wr-failed', s.failed_logins);
+    setText('wr-bans', s.active_bans);
+    const evasions = [p.fragment, p.noise, p.mux].filter(Boolean).length;
+    setText('wr-posture', p.cloak_active ? 'CLOAKED' : (evasions ? 'HARDENED' : 'DEFAULT'));
+    const on = v => v ? 'on' : 'off';
+    setText('wr-posture-detail', 'fragment ' + on(p.fragment) + ' · noise ' + on(p.noise) + ' · mux ' + on(p.mux) + ' · fp ' + p.fingerprint);
+    if (!stream) return;
+    if (!d.events.length) {
+      stream.innerHTML = '<div class="tactical-empty">No security events yet.</div>';
+      return;
+    }
+    // detail and ip come from attackers (honeypot paths, login usernames): escape everything.
+    stream.innerHTML = d.events.map(ev => {
+      const meta = OPS_EVENT_LABELS[ev.action] || [ev.action, 'accent'];
+      const t = parseUtc(ev.at);
+      return '<div class="ops-event">' +
+        '<span class="ops-event-time">' + esc(t ? t.toLocaleString() : '') + '</span>' +
+        '<span class="ops-event-tag ops-' + meta[1] + '">' + esc(meta[0]) + '</span>' +
+        '<span class="ops-event-detail">' + esc(ev.detail) + '</span>' +
+        '<span class="ops-event-ip">' + esc(ev.ip || '') + '</span>' +
+      '</div>';
+    }).join('');
+  } catch (e) {
+    if (stream) stream.innerHTML = '<div class="tactical-empty">Could not load: ' + esc(e.message) + '</div>';
+  }
+  loadAutomation();
+}
+
+/* ── Automation (Celery beat runs the checks every minute) ── */
+async function loadAutomation() {
+  try {
+    applyAutomation(await opsFetch('/ops/automation'));
+  } catch (e) {
+    const hb = document.getElementById('auto-heartbeat');
+    if (hb) { hb.textContent = 'ERROR'; hb.className = 'status-pill danger'; hb.title = e.message; }
+  }
+}
+
+function applyAutomation(a) {
+  document.querySelectorAll('[data-auto-key]').forEach(el => {
+    el.checked = !!a.settings[el.getAttribute('data-auto-key')];
+  });
+  const hb = document.getElementById('auto-heartbeat');
+  if (hb) {
+    const last = parseUtc(a.last_run_at);
+    const age = last ? (Date.now() - last.getTime()) / 1000 : null;
+    if (age == null) {
+      hb.textContent = 'NEVER RUN';
+      hb.className = 'status-pill warning';
+      hb.title = 'No automatic check has run yet. On the server, check that the Celery beat and worker services are running.';
+    } else if (age > 300) {
+      hb.textContent = 'STALLED · ' + fmtAgo(a.last_run_at);
+      hb.className = 'status-pill warning';
+      hb.title = 'The every-minute check stopped. Check the Celery beat and worker services.';
+    } else {
+      hb.textContent = 'RUNNING · ' + fmtAgo(a.last_run_at);
+      hb.className = 'status-pill online';
+      hb.title = 'Checks run every minute';
+    }
+  }
+  setText('auto-cloak-rule', 'On when ' + a.rules.engage + '. Off when ' + a.rules.release +
+    '. Never switches off a cloak you turned on; after you switch it off, waits ' + a.rules.manual_off_hold_hours + ' h.');
+  setText('auto-telegram', a.telegram_configured
+    ? 'Telegram configured' + (a.last_delivery_ok === false ? ' · last delivery FAILED' : '') + '. Xray, edge nodes, blocked protocols, silent probes.'
+    : 'Telegram is not configured: enable it in Settings → Telegram (bot token and chat ID).');
+  const log = document.getElementById('auto-log');
+  if (log) {
+    log.innerHTML = a.log.length ? a.log.map(e => {
+      const t = parseUtc(e.at);
+      return '<div class="ops-event ops-event-2">' +
+        '<span class="ops-event-time">' + esc(t ? t.toLocaleString() : '') + '</span>' +
+        '<span class="ops-event-detail" dir="rtl">' + esc(e.text) + '</span></div>';
+    }).join('') : '<div class="tactical-empty">No automatic actions yet.</div>';
+  }
+}
+
+async function setAutomation(el) {
+  const key = el.getAttribute('data-auto-key');
+  const body = {};
+  body[key] = el.checked;
+  try {
+    applyAutomation(await opsFetch('/ops/automation', opsJson('POST', body)));
+    toast('Saved');
+  } catch (e) {
+    el.checked = !el.checked;
+    toast(e.message, 'error');
+  }
+}
+
+async function runAutomationNow() {
+  toast('Running checks…');
+  try {
+    const d = await opsFetch('/ops/automation/run', { method: 'POST' });
+    applyAutomation(d.status);
+    toast(d.events ? d.events + ' change(s) found' : 'Checked: no changes');
+    refreshOpsStatus();
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+async function sendTestAlert() {
+  try {
+    await opsFetch('/ops/automation/test-alert', { method: 'POST' });
+    toast('Test alert sent to Telegram');
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+/* ── Emergency actions ── */
+async function panicFlush() {
+  if (!await uiConfirm('Panic Flush restarts Xray (and sing-box / Mieru if enabled).\n' +
+               'Every connected user is disconnected; clients reconnect on their own.\n\nContinue?')) return;
+  try {
+    const d = await opsFetch('/ops/panic-flush', { method: 'POST' });
+    const lines = Object.entries(d.services).map(([svc, r]) => svc + ': ' + (r.ok ? 'restarted' : 'FAILED (' + r.message + ')'));
+    uiNotice((d.ok ? 'Panic Flush done.\n\n' : 'Panic Flush incomplete.\n\n') + lines.join('\n'), d.ok ? 'ok' : 'error');
+  } catch (e) {
+    uiNotice('Panic Flush failed: ' + e.message, 'error');
+  }
+  refreshOpsStatus();
+}
+
+async function toggleEmergencyCloak() {
+  let current;
+  try {
+    current = await opsFetch('/ops/cloak');
+  } catch (e) {
+    toast('Cloak: ' + e.message, 'error');
+    return;
+  }
+  const want = !current.active;
+  const msg = want
+    ? 'Emergency Cloak forces TLS-hello fragmentation and noise packets into every client config.\n' +
+      'Your current fragment/noise settings are saved and restored when you turn it off.\n' +
+      'Users get the change on their next subscription refresh.\n\nTurn Emergency Cloak ON?'
+    : 'Turn Emergency Cloak OFF and restore your previous fragment/noise settings?';
+  if (!await uiConfirm(msg)) return;
+  try {
+    const d = await opsFetch('/ops/cloak', opsJson('POST', { active: want }));
+    toast(d.active ? 'Emergency Cloak ON' : 'Emergency Cloak OFF: previous settings restored');
+  } catch (e) {
+    toast('Cloak: ' + e.message, 'error');
+  }
+  refreshOpsStatus();
+  if (currentOperationTab === 'warroom') loadWarroomView();
+}
+
+/* ── Protocol health ── */
+async function loadProtocolsView() {
+  fetchServerInfo();
+  const pbody = document.getElementById('protocols-health-body');
+  if (pbody && !pbody.querySelector('td:not(.tactical-empty)')) tableMessage('protocols-health-body', 6, 'Checking…');
+  try {
+    const d = await opsFetch('/ops/protocols');
+    const body = document.getElementById('protocols-health-body');
+    if (!d.protocols.length) {
+      tableMessage('protocols-health-body', 6, 'No protocol is enabled. Use Configure to turn some on.');
+    } else {
+      body.innerHTML = d.protocols.map(p => {
+        const listening = p.listening == null ? pill('muted', 'UNKNOWN') : (p.listening ? pill('online', 'YES') : pill('danger', 'NO'));
+        let dest = '<span class="tactical-muted">—</span>';
+        if (p.dest_check) {
+          dest = (p.dest_check.ok ? pill('online', fmtMs(p.dest_check.ms)) : pill('danger', 'FAIL', p.dest_check.error)) +
+            '<div class="ops-cell-sub">' + esc(p.dest) + (p.dest_check.ok ? '' : ' · ' + esc(p.dest_check.error)) + '</div>';
+        }
+        let fromIran = '<span class="tactical-muted">' + (p.transport === 'udp' ? 'not testable (UDP)' : 'no probe data') + '</span>';
+        if (p.probe_24h) {
+          fromIran = pill(okClass(p.probe_24h.ok_rate), fmtPct(p.probe_24h.ok_rate)) +
+            '<div class="ops-cell-sub">' + fmtTests(p.probe_24h.attempts) + (p.probe_24h.median_ms != null ? ' · ' + fmtMs(p.probe_24h.median_ms) : '') + '</div>';
+        }
+        return '<tr>' +
+          '<td><strong>' + esc(p.name) + '</strong><div class="ops-cell-sub">' + esc(p.method.toUpperCase()) + (p.sni ? ' · SNI ' + esc(p.sni) : '') + '</div></td>' +
+          '<td class="tactical-mono">' + esc(String(p.port || '—')) + '/' + esc(p.transport) + '</td>' +
+          '<td>' + listening + '</td>' +
+          '<td>' + dest + '</td>' +
+          '<td>' + fromIran + '</td>' +
+          '<td>' + (p.rotation_blocked ? pill('danger', 'BLOCKED') : '<span class="tactical-muted">—</span>') + '</td>' +
+        '</tr>';
+      }).join('');
+    }
+    const note = document.getElementById('protocols-disabled');
+    if (note) {
+      note.hidden = !d.disabled.length;
+      note.textContent = d.disabled.length ? 'Disabled: ' + d.disabled.join(', ') : '';
+    }
+  } catch (e) {
+    tableMessage('protocols-health-body', 6, 'Could not load: ' + e.message);
+  }
+}
+
+/* ── Edge nodes ── */
+function renderNodes(nodes) {
+  const body = document.getElementById('nodes-table-body');
+  if (!body) return;
+  if (!nodes.length) {
+    tableMessage('nodes-table-body', 6, 'No edge nodes yet. Add your other servers above.');
+    return;
+  }
+  body.innerHTML = nodes.map(n => {
+    let status = pill('muted', 'NOT CHECKED');
+    if (n.reachable === true) status = pill('online', 'REACHABLE');
+    else if (n.reachable === false) status = pill('danger', 'UNREACHABLE', n.last_error) + '<div class="ops-cell-sub">' + esc(n.last_error || '') + '</div>';
+    return '<tr>' +
+      '<td><strong>' + esc(n.name) + '</strong>' + (n.location ? '<div class="ops-cell-sub">' + esc(n.location) + '</div>' : '') + '</td>' +
+      '<td class="tactical-mono">' + esc(n.address) + ':' + Number(n.port) + '</td>' +
+      '<td>' + status + '</td>' +
+      '<td class="tactical-mono tactical-accent">' + fmtMs(n.rtt_ms) + '</td>' +
+      '<td class="tactical-muted">' + esc(fmtAgo(n.last_checked_at)) + '</td>' +
+      '<td><button type="button" class="btn btn-sm btn-outline" onclick="deleteEdgeNode(' + Number(n.id) + ')">Remove</button></td>' +
+    '</tr>';
+  }).join('');
+}
+
+async function loadNodesView() {
+  try {
+    renderNodes((await opsFetch('/ops/nodes')).nodes);
+  } catch (e) {
+    tableMessage('nodes-table-body', 6, 'Could not load: ' + e.message);
+  }
+}
+
+async function addEdgeNode() {
+  const val = id => (document.getElementById(id).value || '').trim();
+  const name = val('node-name'), address = val('node-address');
+  if (!name || !address) { toast('Name and address are required', 'error'); return; }
+  try {
+    await opsFetch('/ops/nodes', opsJson('POST', {
+      name: name, address: address,
+      port: parseInt(val('node-port'), 10) || 443,
+      location: val('node-location') || null
+    }));
+    ['node-name', 'node-address', 'node-location'].forEach(id => { document.getElementById(id).value = ''; });
+    toast('Node added');
+    loadNodesView();
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+async function deleteEdgeNode(id) {
+  if (!await uiConfirm('Remove this edge node?')) return;
+  try {
+    await opsFetch('/ops/nodes/' + Number(id), { method: 'DELETE' });
+    loadNodesView();
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+async function checkEdgeNodes() {
+  toast('Checking nodes…');
+  try {
+    renderNodes((await opsFetch('/ops/nodes/check', { method: 'POST' })).nodes);
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+/* ── Sentinel probes ── */
+async function loadSentinelView() {
+  try {
+    const d = await opsFetch('/ops/probes');
+    const body = document.getElementById('sentinel-table-body');
+    if (!d.probes.length) {
+      tableMessage('sentinel-table-body', 7, 'No probes yet. Create a token above and run the probe inside Iran.');
+      return;
+    }
+    body.innerHTML = d.probes.map(p => '<tr>' +
+      '<td><strong>' + esc(p.name) + '</strong></td>' +
+      '<td class="tactical-mono tactical-muted">' + esc(p.token_prefix) + '…</td>' +
+      '<td>' + esc(p.last_carrier || '—') + '</td>' +
+      '<td class="tactical-muted">' + esc(fmtAgo(p.last_seen_at)) + '</td>' +
+      '<td class="tactical-mono">' + Number(p.reports_24h) + '</td>' +
+      '<td>' + (p.ok_rate_24h == null ? '<span class="tactical-muted">—</span>' : pill(okClass(p.ok_rate_24h), fmtPct(p.ok_rate_24h))) + '</td>' +
+      '<td><button type="button" class="btn btn-sm btn-outline" onclick="deleteProbe(' + Number(p.id) + ')">Delete</button></td>' +
+    '</tr>').join('');
+  } catch (e) {
+    tableMessage('sentinel-table-body', 7, 'Could not load: ' + e.message);
+  }
+}
+
+async function createProbe() {
+  const input = document.getElementById('probe-name');
+  const name = (input.value || '').trim();
+  if (!name) { toast('Give the probe a name', 'error'); return; }
+  try {
+    const d = await opsFetch('/ops/probes', opsJson('POST', { name: name }));
+    const origin = location.origin;
+    document.getElementById('probe-command').textContent = [
+      'curl -fsSLo spiritus-probe.py ' + origin + '/api/probe/script',
+      'export SPIRITUS_PROBE_TOKEN=' + d.token,
+      'python3 spiritus-probe.py --panel ' + origin + ' --interval 900'
+    ].join('\n');
+    document.getElementById('probe-created').hidden = false;
+    input.value = '';
+    loadSentinelView();
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+function copyProbeCommand() {
+  const text = document.getElementById('probe-command').textContent;
+  _copyText(text).then(() => toast('Commands copied')).catch(() => toast('Copy failed', 'error'));
+}
+
+async function deleteProbe(id) {
+  if (!await uiConfirm('Delete this probe and all of its reports? Its token stops working immediately.')) return;
+  try {
+    await opsFetch('/ops/probes/' + Number(id), { method: 'DELETE' });
+    loadSentinelView();
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+/* ── Carrier steering & diagnostics ── */
+async function loadRoutingView() {
+  try {
+    const d = await opsFetch('/ops/carriers?hours=24');
+    const body = document.getElementById('routing-matrix-body');
+    if (!d.carriers.length) {
+      tableMessage('routing-matrix-body', 5, 'No probe reports in the last 24 h. Add a probe under Sentinel Probes.');
+    } else {
+      body.innerHTML = d.carriers.map(c => '<tr>' +
+        '<td><strong>' + esc(c.carrier) + '</strong></td>' +
+        '<td>' + (c.best ? '<strong class="tactical-accent">' + esc(c.best.name) + '</strong>' : pill('danger', 'NOTHING GETS THROUGH')) + '</td>' +
+        '<td>' + (c.best ? pill(okClass(c.best.ok_rate), fmtPct(c.best.ok_rate)) + '<div class="ops-cell-sub">' + fmtTests(c.best.attempts) + '</div>' : '—') + '</td>' +
+        '<td class="tactical-mono">' + (c.best ? fmtMs(c.best.median_ms) : '—') + '</td>' +
+        '<td class="tactical-muted">' + esc(fmtAgo(c.last_report_at)) + '</td>' +
+      '</tr>').join('');
+    }
+    const fo = document.getElementById('routing-failover');
+    if (fo) {
+      const r = d.rotation, blocked = new Set(r.blocked);
+      fo.innerHTML = r.order.map(p => {
+        const cls = blocked.has(p) ? 'danger' : (p === r.active ? 'online' : 'muted');
+        const label = p + (blocked.has(p) ? ' · BLOCKED' : (p === r.active ? ' · PREFERRED' : '')) +
+          (r.failures[p] ? ' · ' + r.failures[p] + ' fail' : '');
+        return pill(cls, label);
+      }).join('');
+    }
+  } catch (e) {
+    tableMessage('routing-matrix-body', 5, 'Could not load: ' + e.message);
+  }
+}
+
+async function loadCarriersView() {
+  const container = document.getElementById('carrier-test-results');
+  if (!container) return;
+  const hours = (document.getElementById('diag-hours') || {}).value || 24;
+  try {
+    const d = await opsFetch('/ops/carriers?hours=' + encodeURIComponent(hours));
+    if (!d.carriers.length) {
+      container.innerHTML = '<div class="tactical-card tactical-empty">No probe reports in this window. Create a probe under Sentinel Probes and run it inside Iran.</div>';
+      return;
+    }
+    container.innerHTML = '<div class="tactical-grid">' + d.carriers.map(c =>
+      '<div class="tactical-card tactical-stack">' +
+        '<div class="tactical-card-head"><strong>' + esc(c.carrier) + '</strong>' +
+          '<span class="tactical-muted tactical-mono">' + esc(fmtAgo(c.last_report_at)) + '</span></div>' +
+        c.protocols.map(p =>
+          '<div class="ops-proto-row">' +
+            '<span class="ops-proto-name">' + esc(p.name) + '</span>' +
+            '<progress class="ops-progress ops-progress-' + okClass(p.ok_rate) + '" max="1" value="' + Number(p.ok_rate) + '"></progress>' +
+            '<span class="tactical-mono">' + fmtPct(p.ok_rate) + '</span>' +
+            '<span class="tactical-mono tactical-muted">' + fmtMs(p.median_ms) + '</span>' +
+          '</div>'
+        ).join('') +
+      '</div>'
+    ).join('') + '</div>';
+  } catch (e) {
+    container.innerHTML = '<div class="tactical-card tactical-empty">Could not load: ' + esc(e.message) + '</div>';
+  }
+}
+
+/* ── Financials ── */
+function fmtMoney(amount, currency) {
+  if (currency === 'USDT') return Number(amount || 0).toFixed(2) + ' USDT';
+  return Math.round(amount || 0).toLocaleString('en-US');
+}
+
+async function loadFinancialsView() {
+  try {
+    const d = await opsFetch('/ops/financials');
+    const t = (bucket, cur) => d[bucket][cur] || { count: 0, amount: 0 };
+    setText('fin-irr-30d', fmtMoney(t('paid_30d', 'IRR').amount, 'IRR'));
+    setText('fin-irr-all', 'All time: ' + fmtMoney(t('paid_all', 'IRR').amount, 'IRR') + ' · ' + t('paid_all', 'IRR').count + ' payments');
+    setText('fin-usdt-30d', fmtMoney(t('paid_30d', 'USDT').amount, 'USDT'));
+    setText('fin-usdt-all', 'All time: ' + fmtMoney(t('paid_all', 'USDT').amount, 'USDT') + ' · ' + t('paid_all', 'USDT').count + ' payments');
+    setText('fin-pending', d.pending);
+    setText('fin-balances', fmtMoney(d.resellers.balance_total_irr, 'IRR'));
+    setText('fin-resellers', d.resellers.count + ' resellers' + (d.resellers.top.length ? ' · top: ' + d.resellers.top[0].username : ''));
+
+    const gw = document.getElementById('fin-gateways');
+    if (gw) gw.innerHTML = d.gateways.map(g =>
+      pill(g.configured ? 'online' : 'muted', g.name + (g.configured ? ' · configured' : ' · not configured'))
+    ).join('');
+
+    const statusCls = { paid: 'online', pending: 'warning', failed: 'danger', expired: 'danger', refunded: 'muted' };
+    const tx = document.getElementById('financials-tx-body');
+    if (!d.recent_payments.length) tableMessage('financials-tx-body', 6, 'No payments yet.');
+    else tx.innerHTML = d.recent_payments.map(p => '<tr>' +
+      '<td class="tactical-mono">#' + Number(p.id) + '</td>' +
+      '<td>' + esc(p.gateway) + '</td>' +
+      '<td class="tactical-mono tactical-accent"><strong>' + esc(fmtMoney(p.amount, p.currency)) + '</strong>' + (p.currency === 'IRR' ? ' <span class="tactical-muted">IRR</span>' : '') + '</td>' +
+      '<td>' + pill(statusCls[p.status] || 'muted', p.status) + '</td>' +
+      '<td>' + esc(p.reseller || '—') + '</td>' +
+      '<td class="tactical-muted">' + esc(fmtAgo(p.created_at)) + '</td>' +
+    '</tr>').join('');
+
+    const lg = document.getElementById('financials-ledger-body');
+    if (!d.ledger.length) tableMessage('financials-ledger-body', 5, 'No ledger entries yet.');
+    else lg.innerHTML = d.ledger.map(e => '<tr>' +
+      '<td><strong>' + esc(e.reseller) + '</strong></td>' +
+      '<td>' + esc(e.kind) + '</td>' +
+      '<td class="tactical-mono ' + (e.amount_irr < 0 ? 'ops-red' : 'ops-green') + '">' + (e.amount_irr > 0 ? '+' : '') + esc(fmtMoney(e.amount_irr, 'IRR')) + '</td>' +
+      '<td class="tactical-muted">' + esc(e.note || '') + '</td>' +
+      '<td class="tactical-muted">' + esc(fmtAgo(e.created_at)) + '</td>' +
+    '</tr>').join('');
+  } catch (e) {
+    tableMessage('financials-tx-body', 6, 'Could not load: ' + e.message);
+  }
+}
+
+async function verifySecurityAudit() {
+  try {
+    const r = await fetch(API + '/security/audit/verify');
+    const d = await r.json();
+    if (!r.ok) {
+      uiNotice('Audit verification failed: ' + (d.detail || ('HTTP ' + r.status)), 'error');
+    } else if (d.ok) {
+      uiNotice('Audit hash-chain intact: ' + d.checked + ' entries verified.', 'ok');
+    } else {
+      uiNotice('AUDIT LOG TAMPERED: hash-chain broken at entry #' + d.broken_at + ' (' + d.checked + ' entries checked).', 'error');
+    }
+  } catch (e) {
+    uiNotice('Audit verification failed: ' + e.message, 'error');
+  }
+}
+
+async function loadSecurityView() {
+  const container = document.getElementById('security-audit-body');
+  if (!container) return;
+  try {
+    const r = await fetch(API + '/security/audit?limit=10');
+    const d = await r.json();
+    if (!r.ok || !Array.isArray(d)) {
+      container.innerHTML = '<tr><td colspan="4" class="tactical-empty">Could not load audit log: ' + esc(d.detail || ('HTTP ' + r.status)) + '</td></tr>';
+      return;
+    }
+    if (!d.length) {
+      container.innerHTML = '<tr><td colspan="4" class="tactical-empty">No audit entries yet.</td></tr>';
+      return;
+    }
+    container.innerHTML = d.map(entry => {
+      const actor = entry.admin_id != null ? 'admin #' + entry.admin_id : (entry.ip_address || 'system');
+      return '<tr>' +
+        '<td class="tactical-mono">' + esc((entry.created_at || '').replace('T', ' ').slice(0, 19)) + '</td>' +
+        '<td><strong>' + esc(entry.action) + '</strong></td>' +
+        '<td class="tactical-mono">' + esc(actor) + '</td>' +
+        '<td class="tactical-mono tactical-hash" title="' + esc(entry.entry_hash) + '">' + esc(entry.entry_hash ? entry.entry_hash.slice(0, 16) + '…' : 'unsigned') + '</td>' +
+      '</tr>';
+    }).join('');
+  } catch (e) {
+    container.innerHTML = '<tr><td colspan="4" class="tactical-empty">Could not load audit log: ' + esc(e.message) + '</td></tr>';
+  }
+}
+
+function switchTheme(theme) {
+  if (!['obsidian', 'cyberops', 'midnight'].includes(theme)) theme = 'obsidian';
+  document.documentElement.setAttribute('data-theme', theme);
+  try { localStorage.setItem('spiritus_theme', theme); } catch (e) {}
+  const name = { obsidian: 'Obsidian', cyberops: 'CyberOps', midnight: 'Midnight' }[theme];
+  document.querySelectorAll('#theme-label, [data-theme-label]').forEach(lbl => { lbl.textContent = name; });
+}
+
+function cycleTheme() {
+  const current = document.documentElement.getAttribute('data-theme') || 'obsidian';
+  const next = current === 'obsidian' ? 'cyberops' : (current === 'cyberops' ? 'midnight' : 'obsidian');
+  switchTheme(next);
+}
+
+// Theme only: the tenants view is active in the markup, and its data is
+// loaded after authentication. Fetching here, before login, hit fetchUsers'
+// 401 -> location.reload() path and reloaded the login page in a loop.
+document.addEventListener('DOMContentLoaded', function() {
+  let saved = 'obsidian';
+  try { saved = localStorage.getItem('spiritus_theme') || 'obsidian'; } catch (e) {}
+  switchTheme(saved);
+  setupLoginForm();
+});
+
+function setupLoginForm() {
+  const user = document.getElementById('login-user');
+  const pass = document.getElementById('login-pass');
+  if (user && pass) {
+    user.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); pass.focus(); }
+    });
+  }
+  const transport = document.getElementById('login-transport');
+  if (transport) {
+    const secure = location.protocol === 'https:';
+    transport.textContent = secure ? 'HTTPS' : 'HTTP · UNENCRYPTED';
+    transport.className = 'status-pill ' + (secure ? 'online' : 'warning');
+    transport.title = secure ? 'Connection is encrypted' : 'This connection is not encrypted. Put the panel behind TLS before using it over the internet.';
+  }
+  setText('ui-transport', location.protocol === 'https:' ? 'HTTPS session · HttpOnly cookie' : 'HTTP · unencrypted session');
+}

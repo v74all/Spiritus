@@ -23,6 +23,7 @@ import subprocess
 import time
 import urllib.parse
 import uuid as uuid_lib
+import weakref
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -361,6 +362,21 @@ def _build_share_links(u: VpnUser, server_ip: str | None = None) -> dict[str, st
     sni_host = _settings_state.get("vmess_sni") or "www.aparat.com"
     ws_path = _settings_state.get("vmess_ws_path") or "/api/v1/stream"
 
+    # How clients verify our TLS certificate now that Xray has no
+    # allowInsecure: pin a self-signed cert (pcs), or check a public one
+    # against the name it was issued for (vcn). With a Let's Encrypt IP
+    # certificate, links without a vcn field send the IP itself as SNI.
+    from ...tls_trust import ip_certificate_for, load_cert_info, trust_for
+
+    _cert = load_cert_info()
+    _ip_cert = ip_certificate_for(server_ip, _cert)
+
+    def _tls(sni: str) -> dict[str, str]:
+        t = trust_for(sni, server_ip, _cert)
+        return {"pcs": t.pcs, "vcn": t.vcn}
+
+    _vmess_tls_sni = server_ip if _ip_cert else ""
+
     # ── DPI Evasion common flags ──
     _frag = bool(_settings_state.get("fragment_enabled"))
     _frag_pkt = _settings_state.get("fragment_packets") or "tlshello"
@@ -416,7 +432,8 @@ def _build_share_links(u: VpnUser, server_ip: str | None = None) -> dict[str, st
             port=int(_settings_state.get("vmess_port") or 443),
             sni=sni_host,
             path=ws_path,
-            allow_insecure=True,
+            tls_sni=_vmess_tls_sni,
+            **_tls(sni_host),
             label="VMess",
             **_dpi_vmess_kwargs(extra_host=_host_spoof or _ws_front),
         )
@@ -454,7 +471,6 @@ def _build_share_links(u: VpnUser, server_ip: str | None = None) -> dict[str, st
                 security="tls",
                 sni=cdn_host,
                 path=_settings_state.get("cdn_ws_path") or "/cdn-ws",
-                allow_insecure=True,
                 label="CDN-VMess",
                 **_dpi_vmess_kwargs(extra_host=cdn_host),
             )
@@ -473,7 +489,7 @@ def _build_share_links(u: VpnUser, server_ip: str | None = None) -> dict[str, st
                 sni=sni_host,
                 host=_host_spoof or _ws_front or sni_host,
                 path=_settings_state.get("vless_ws_path") or settings.vless_ws_path,
-                allow_insecure=True,
+                **_tls(sni_host),
                 label="VLESS-WS",
                 **_dpi_vless_kwargs(),
             )
@@ -496,7 +512,7 @@ def _build_share_links(u: VpnUser, server_ip: str | None = None) -> dict[str, st
                 fp=_settings_state.get("fingerprint") or "chrome",
                 host=_front_domain,
                 path=_front_path,
-                allow_insecure=True,
+                **_tls(_front_domain),
                 label="VLESS-WS-TLS",
                 **_dpi_vless_kwargs(),
             )
@@ -512,7 +528,7 @@ def _build_share_links(u: VpnUser, server_ip: str | None = None) -> dict[str, st
                 port=int(_settings_state.get("trojan_port") or 2083),
                 sni=sni_host,
                 network="tcp",
-                allow_insecure=True,
+                **_tls(sni_host),
                 label="Trojan",
                 **_dpi_trojan_kwargs(),
             )
@@ -530,7 +546,8 @@ def _build_share_links(u: VpnUser, server_ip: str | None = None) -> dict[str, st
                 security="tls",
                 sni=sni_host,
                 path=_settings_state.get("grpc_service_name") or "GunService",
-                allow_insecure=True,
+                tls_sni=_vmess_tls_sni,
+                **_tls(sni_host),
                 label="gRPC",
                 **_dpi_vmess_kwargs(),
             )
@@ -548,7 +565,8 @@ def _build_share_links(u: VpnUser, server_ip: str | None = None) -> dict[str, st
                 security="tls",
                 sni=sni_host,
                 path=_settings_state.get("httpupgrade_path") or "/httpupgrade",
-                allow_insecure=True,
+                tls_sni=_vmess_tls_sni,
+                **_tls(sni_host),
                 label="HTTPUpgrade",
                 **_dpi_vmess_kwargs(extra_host=_host_spoof or _ws_front),
             )
@@ -558,9 +576,12 @@ def _build_share_links(u: VpnUser, server_ip: str | None = None) -> dict[str, st
 
     if _settings_state.get("ss2022_enabled") and _settings_state.get("ss2022_server_key"):
         try:
+            from ...protocol_engine import ss2022_user_key
+
             method = _settings_state.get("ss2022_method") or "2022-blake3-aes-128-gcm"
+            user_key = ss2022_user_key(u.uuid, method)
             userinfo = base64.urlsafe_b64encode(
-                f"{method}:{_settings_state['ss2022_server_key']}:{u.uuid}".encode()
+                f"{method}:{_settings_state['ss2022_server_key']}:{user_key}".encode()
             ).decode().rstrip("=")
             label = urllib.parse.quote(f"V7LTHRONYX-SS-{u.name}")
             links["ss2022"] = (
@@ -570,103 +591,91 @@ def _build_share_links(u: VpnUser, server_ip: str | None = None) -> dict[str, st
             logger.warning("Failed to build %s share link", "ss2022", exc_info=False)
             links["ss2022"] = ""
 
-    # Hysteria2
-    if _settings_state.get("hysteria2_enabled"):
+    # ── sing-box / mita protocols. Credentials and settings come from
+    # standalone_engines, which renders the servers from the same values;
+    # no link is offered when the engine behind it is not installed.
+    from ...standalone_engines import client_credentials, engine_installed, standalone_settings
+
+    _st = standalone_settings(_settings_state)
+    _creds = client_credentials(_settings_state, u)
+    _tls_sni = server_ip if _ip_cert else sni_host
+    _singbox = engine_installed("sing-box")
+
+    # Hysteria2 / TUIC / Naive terminate TLS with our certificate.
+    if _settings_state.get("hysteria2_enabled") and _singbox and _cert:
         try:
             links["hysteria2"] = ClientConfigGenerator.generate_hysteria2_share_url(
-                password=u.uuid,
+                password=urllib.parse.quote(_creds["hysteria2"]["password"], safe=""),
                 address=server_ip,
-                port=int(_settings_state.get("hysteria2_port") or 8443),
-                sni=sni_host,
-                obfs=_settings_state.get("hysteria2_obfs_password") or "",
-                insecure=1,
+                port=_st["hysteria2_port"],
+                sni=_tls_sni,
+                obfs=_st["hysteria2_obfs"],
+                pin_sha256="" if _ip_cert else trust_for(sni_host, server_ip, _cert).pin_colon,
                 label="Hysteria2",
-                port_hop=(
-                    str(_settings_state.get("hysteria2_port_hop_ports") or "")
-                    if _settings_state.get("hysteria2_port_hop_enabled")
-                    else ""
-                ),
+                port_hop=_st["hysteria2_hop"],
             )
         except Exception:
             logger.warning("Failed to build %s share link", "hysteria2", exc_info=False)
             links["hysteria2"] = ""
 
-    # TUIC v5
-    if _settings_state.get("tuic_enabled"):
+    if _settings_state.get("tuic_enabled") and _singbox and _cert:
         try:
-            tuic_port = int(_settings_state.get("tuic_port") or 8444)
-            tuic_password = _settings_state.get("tuic_password") or u.uuid
             label = urllib.parse.quote(f"V7LTHRONYX-TUIC-{u.name}")
-            params = urllib.parse.urlencode({
-                "sni": sni_host,
+            _tuic_params = {
+                "sni": _tls_sni,
                 "alpn": "h3",
-                "congestion_control": "bbr",
+                "congestion_control": _st["tuic_cc"],
                 "udp_relay_mode": "native",
-                "allow_insecure": "1",
-            })
+            }
+            # TUIC links have no pin field: a self-signed certificate can
+            # only be accepted unverified.
+            if not _ip_cert and trust_for(sni_host, server_ip, _cert).needs_insecure:
+                _tuic_params["allow_insecure"] = "1"
+            tuic_pw = urllib.parse.quote(_creds["tuic"]["password"], safe="")
             links["tuic"] = (
-                f"tuic://{u.uuid}:{tuic_password}@{server_ip}:{tuic_port}?{params}#{label}"
+                f"tuic://{u.uuid}:{tuic_pw}@{server_ip}:{_st['tuic_port']}"
+                f"?{urllib.parse.urlencode(_tuic_params)}#{label}"
             )
         except Exception:
             logger.warning("Failed to build %s share link", "tuic", exc_info=False)
             links["tuic"] = ""
 
-    # ShadowTLS v3 — encoded as a sing-box-style URI. The password is
-    # the ShadowTLS user password; clients pair it with the handshake SNI.
-    if _settings_state.get("shadowtls_enabled"):
-        try:
-            stls_port = int(_settings_state.get("shadowtls_port") or 8445)
-            stls_password = _settings_state.get("shadowtls_password") or u.uuid
-            stls_sni = _settings_state.get("shadowtls_sni") or sni_host
-            label = urllib.parse.quote(f"V7LTHRONYX-ShadowTLS-{u.name}")
-            params = urllib.parse.urlencode({
-                "security": "tls",
-                "sni": stls_sni,
-                "version": _settings_state.get("shadowtls_version") or "3",
-            })
-            links["shadowtls"] = (
-                f"shadowtls://{stls_password}@{server_ip}:{stls_port}?{params}#{label}"
-            )
-        except Exception:
-            logger.warning("Failed to build %s share link", "shadowtls", exc_info=False)
-            links["shadowtls"] = ""
+    # ShadowTLS has no share-link format clients agree on: it is served in
+    # the sing-box and Clash subscriptions, which carry the Shadowsocks layer.
 
-    # NaiveProxy — naive+https URI (username:password@host:port).
-    if _settings_state.get("naiveproxy_enabled"):
+    # NaiveProxy (naive+https URI). Naive clients use Chromium's TLS stack,
+    # which accepts no pin: it needs a certificate clients trust.
+    if (_settings_state.get("naiveproxy_enabled") and _singbox and _cert
+            and not trust_for(_st["naive_sni"], server_ip, _cert).pcs):
         try:
-            naive_port = int(_settings_state.get("naiveproxy_port") or 8447)
-            naive_user = _settings_state.get("naiveproxy_user") or u.name
-            naive_password = _settings_state.get("naiveproxy_password") or u.uuid
-            naive_sni = _settings_state.get("naiveproxy_sni") or sni_host
             label = urllib.parse.quote(f"V7LTHRONYX-Naive-{u.name}")
-            creds = urllib.parse.quote(f"{naive_user}:{naive_password}", safe="")
-            links["naiveproxy"] = (
-                f"naive+https://{creds}@{server_ip}:{naive_port}?sni={urllib.parse.quote(naive_sni)}#{label}"
-            )
+            creds = (urllib.parse.quote(_creds["naiveproxy"]["username"], safe="") + ":"
+                     + urllib.parse.quote(_creds["naiveproxy"]["password"], safe=""))
+            host = server_ip if _ip_cert else _st["naive_sni"]
+            links["naiveproxy"] = f"naive+https://{creds}@{host}:{_st['naive_port']}#{label}"
         except Exception:
             logger.warning("Failed to build %s share link", "naiveproxy", exc_info=False)
             links["naiveproxy"] = ""
 
-    # Mieru — no universal URI scheme; clients import a JSON profile.
-    # We expose it as a base64-encoded JSON so the frontend can offer it
-    # as a downloadable mieru profile.
-    if _settings_state.get("mieru_enabled"):
+    # WireGuard (sing-box endpoint): the .conf the WireGuard apps import.
+    if _settings_state.get("wireguard_enabled") and _singbox and server_ip:
+        from ...standalone_engines import wireguard_client_conf
+
+        links["wireguard"] = wireguard_client_conf(_settings_state, u, server_ip) or ""
+
+    # Mieru: the official "simple" link (`mieru import config <url>`).
+    if _settings_state.get("mieru_enabled") and engine_installed("mita"):
         try:
-            mieru_port = int(_settings_state.get("mieru_port") or 8446)
-            mieru_user = _settings_state.get("mieru_user") or u.name
-            mieru_password = _settings_state.get("mieru_password") or u.uuid
-            from ...protocol_engine import MieruConfigGenerator
-            profile = MieruConfigGenerator.generate_client_profile(
-                username=mieru_user,
-                password=mieru_password,
-                server_ip=server_ip,
-                port=mieru_port,
-                protocol=_settings_state.get("mieru_transport") or "TCP",
-                mtu=int(_settings_state.get("mieru_mtu") or 1400),
-            )
-            links["mieru"] = "mieru://" + base64.urlsafe_b64encode(
-                json.dumps(profile).encode()
-            ).decode()
+            q = urllib.parse.urlencode({
+                "profile": "spiritus",
+                "mtu": _st["mieru_mtu"],
+                "multiplexing": "MULTIPLEXING_LOW",
+                "port": _st["mieru_port"],
+                "protocol": _st["mieru_transport"],
+            })
+            creds = (urllib.parse.quote(_creds["mieru"]["username"], safe="") + ":"
+                     + urllib.parse.quote(_creds["mieru"]["password"], safe=""))
+            links["mieru"] = f"mierus://{creds}@{server_ip}?{q}"
         except Exception:
             logger.warning("Failed to build %s share link", "mieru", exc_info=False)
             links["mieru"] = ""
@@ -748,7 +757,6 @@ def _build_share_links(u: VpnUser, server_ip: str | None = None) -> dict[str, st
                 sni=_cdn_front or _settings_state.get("cdn_domain"),
                 network="ws",
                 path=_settings_state.get("cdn_ws_path") or "/cdn-ws",
-                allow_insecure=False,
                 label="Trojan-CDN",
                 **_dpi_trojan_kwargs(),
             )
@@ -801,7 +809,9 @@ def _user_to_legacy(u: VpnUser, server_ip: str | None = None) -> dict[str, Any]:
         "id": u.id,
         "name": u.name,
         "uuid": u.uuid,
-        "active": bool(u.active),
+        # Only 1 is served; -1 (expired) and -2 (quota used) were truthy.
+        "active": u.active == 1,
+        "status": {1: "active", -1: "expired", -2: "limited"}.get(u.active, "disabled"),
         "traffic_limit": traffic_limit_gb,
         "traffic_limit_gb": traffic_limit_gb,
         "traffic_limit_bytes": traffic_limit_bytes,
@@ -836,6 +846,7 @@ def _user_to_legacy(u: VpnUser, server_ip: str | None = None) -> dict[str, Any]:
         "shadowtls": links.get("shadowtls", ""),
         "naiveproxy": links.get("naiveproxy", ""),
         "mieru": links.get("mieru", ""),
+        "wireguard": links.get("wireguard", ""),
         # IPv6 variants
         "vmess_ipv6": links.get("vmess_ipv6", ""),
         "vless_ipv6": links.get("vless_ipv6", ""),
@@ -893,7 +904,7 @@ def _default_legacy_settings() -> dict[str, Any]:
         "ss2022_enabled": True,
         "ss2022_port": 2056,
         "ss2022_method": "2022-blake3-aes-128-gcm",
-        "ss2022_server_key": secrets.token_hex(16),
+        "ss2022_server_key": base64.b64encode(secrets.token_bytes(16)).decode(),
         "hysteria2_enabled": True,
         "hysteria2_port": 8443,
         "tuic_enabled": True,
@@ -1002,14 +1013,37 @@ def _preserve_protocols_on_dpi_update(
     return protected
 
 
+# Serialises saves: two concurrent saves would otherwise each merge onto the
+# same stale snapshot and the later commit would drop the earlier one's keys.
+# One lock per event loop, since an asyncio.Lock is bound to the loop that
+# first waits on it (tests and the thread fallback run separate loops).
+_SETTINGS_SAVE_LOCKS: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
+
+
+def _settings_save_lock() -> asyncio.Lock:
+    loop = asyncio.get_running_loop()
+    lock = _SETTINGS_SAVE_LOCKS.get(loop)
+    if lock is None:
+        lock = _SETTINGS_SAVE_LOCKS[loop] = asyncio.Lock()
+    return lock
+
+
 async def _save_legacy_settings(db: AsyncSession, data: dict[str, Any]) -> None:
+    async with _settings_save_lock():
+        await _save_legacy_settings_locked(db, data)
+
+
+async def _save_legacy_settings_locked(db: AsyncSession, data: dict[str, Any]) -> None:
     current = await _load_legacy_settings(db)
     data = _normalize_settings_types(data)
     data = _preserve_protocols_on_dpi_update(current, data)
-    _settings_state.update(data)
+    # Build the new state locally. _settings_state is rebuilt by every
+    # concurrent _load_legacy_settings (the panel polls it), so serialising
+    # the shared dict after an await could write back a stale copy.
+    new_state = {**current, **data}
     result = await db.execute(select(Setting).where(Setting.key == _LEGACY_SETTINGS_KEY))
     row = result.scalar_one_or_none()
-    value = json.dumps(_settings_state)
+    value = json.dumps(new_state)
     if row is None:
         row = Setting(
             key=_LEGACY_SETTINGS_KEY,
@@ -1022,12 +1056,15 @@ async def _save_legacy_settings(db: AsyncSession, data: dict[str, Any]) -> None:
         row.value = value
         row.value_type = "json"
     await db.commit()
+    # Publish only after the commit; no await between clear() and update().
+    _settings_state.clear()
+    _settings_state.update(new_state)
 
     settings_path = os.path.join(os.getcwd(), _LEGACY_SETTINGS_FILE)
     try:
         tmp_path = settings_path + ".tmp"
         with open(tmp_path, "w") as f:
-            json.dump(_settings_state, f, indent=2)
+            json.dump(new_state, f, indent=2)
         os.chmod(tmp_path, 0o600)
         os.replace(tmp_path, settings_path)
     except Exception as exc:

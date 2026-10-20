@@ -843,11 +843,10 @@ async def set_domain(
         KEY_DOMAIN_LAST_ERROR: "",
     })
 
-    # Re-render the Xray config so every TLS-bearing inbound
-    # sees the new SNI and cert paths.
+    # Serve the new certificate: record it where every TLS inbound reads it
+    # (tls_trust.tls_files), then re-render Xray and sing-box.
     try:
-        from .services.protocol_sync import sync_and_reload
-        await sync_and_reload(db)
+        await _use_certificate(db, str(paths["cert"]), str(paths["key"]))
     except Exception as exc:  # noqa: BLE001
         steps.append(f"warn: xray sync failed: {exc}")
 
@@ -875,11 +874,20 @@ async def disable_domain(db: AsyncSession) -> DomainSetResult:
         KEY_DOMAIN_LAST_ERROR,
     ])
     try:
-        from .services.protocol_sync import sync_and_reload
-        await sync_and_reload(db)
+        await _use_certificate(db, "", "")
     except Exception as exc:  # noqa: BLE001
         return DomainSetResult(success=True, error=f"sync failed: {exc}")
     return DomainSetResult(success=True, steps=["domain cleared, Xray config re-rendered"])
+
+
+async def _use_certificate(db: AsyncSession, cert: str, key: str) -> None:
+    """Point the panel's TLS inbounds at `cert` / `key` ("" = back to
+    TLS_CERT_FILE) and re-render Xray and sing-box from the panel settings."""
+    from .api.compat._core import _save_legacy_settings
+    from .api.compat.panel_settings import _schedule_xray_sync
+
+    await _save_legacy_settings(db, {"tls_cert_file": cert, "tls_key_file": key})
+    _schedule_xray_sync()
 
 
 async def rotate_cert(db: AsyncSession) -> DomainSetResult:
