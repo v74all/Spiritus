@@ -758,9 +758,9 @@ async def _probe_cert(
             error="could not parse cert expiry",
         )
     now = _utcnow()
-    # Make expires timezone-aware if it isn't (openssl returns naive).
-    if expires.tzinfo is None:
-        expires = expires.replace(tzinfo=UTC)
+    # openssl's notAfter is often timezone-aware; utcnow() is naive UTC.
+    if expires.tzinfo is not None:
+        expires = expires.astimezone(UTC).replace(tzinfo=None)
     days_remaining = (expires - now).days
     if days_remaining < 0:
         status = CertStatus.EXPIRED
