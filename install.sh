@@ -471,18 +471,31 @@ enabled = false
 enabled = false
 EOF
     systemctl reload fail2ban >/dev/null 2>&1 || systemctl restart fail2ban >/dev/null 2>&1 || true
-    # jail.local is read after jail.d, so a package [sshd] enabled=true there
-    # would ignore the jail.d override and still close port 22.
-    if [[ -f /etc/fail2ban/jail.local ]] && grep -q 'spiritus-keep-ssh' /etc/fail2ban/jail.local; then
-        :
-    else
-        cat >> /etc/fail2ban/jail.local << 'EOF'
-
-# spiritus-keep-ssh
-[sshd]
-enabled = false
-EOF
-    fi
+    # jail.local overrides jail.d. A second [sshd] section is a hard error,
+    # so flip the existing one instead of appending another.
+    python3 - << 'PY'
+from pathlib import Path
+p = Path("/etc/fail2ban/jail.local")
+text = p.read_text() if p.exists() else "[DEFAULT]\n"
+lines = text.splitlines(True)
+out, in_sshd, seen = [], False, False
+for line in lines:
+    if line.startswith("[") and line.strip() == "[sshd]":
+        in_sshd, seen = True, True
+        out.append(line)
+        continue
+    if line.startswith("[") and in_sshd:
+        in_sshd = False
+    if in_sshd and line.strip().startswith("enabled"):
+        out.append("enabled = false\n")
+        continue
+    out.append(line)
+if not seen:
+    if out and not out[-1].endswith("\n"):
+        out[-1] += "\n"
+    out.append("\n[sshd]\nenabled = false\n")
+p.write_text("".join(out))
+PY
     systemctl restart fail2ban >/dev/null 2>&1 || true
 }
 
