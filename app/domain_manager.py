@@ -64,6 +64,7 @@ from __future__ import annotations
 
 import ipaddress
 import logging
+import grp
 import os
 import re
 import shutil
@@ -551,9 +552,13 @@ def _issue_letsencrypt_cert(
         paths["root"].chmod(0o755)
         if paths["root"].parent.name == "tls":
             paths["root"].parent.chmod(0o755)
-        paths["key"].chmod(0o640)
         paths["cert"].chmod(0o644)
-    except OSError:
+        paths["key"].chmod(0o640)
+        # Xray runs as its own user and is in the panel group. A root:root
+        # key is unreadable, so every TLS inbound refuses to start.
+        gid = grp.getgrnam(os.environ.get("PANEL_GROUP", "vpnpanel")).gr_gid
+        os.chown(paths["key"], 0, gid)
+    except (OSError, KeyError):
         pass
     return DomainSetResult(
         success=True,
