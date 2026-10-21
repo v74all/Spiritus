@@ -605,7 +605,7 @@ async def serve_panel(request: Request):
         asset_v = "0"
     html = template.render(
         dir=_detect_direction(request),
-        server_ip=settings.host if settings.host != "0.0.0.0" else "",
+        server_ip=_public_server_ip(request),  # what links carry, not the bind address
         server_port=settings.web_port,
         sni_host=settings.vless_ws_host,
         ws_path=settings.vless_ws_path,
@@ -632,7 +632,7 @@ async def serve_agent_panel(request: Request):
     html = template.render(
         dir=_detect_direction(request),
         asset_v=asset_v,
-        server_ip=settings.host if settings.host != "0.0.0.0" else "",
+        server_ip=_public_server_ip(request),  # what links carry, not the bind address
         server_port=settings.web_port,
         sni_host=settings.vless_ws_host,
         ws_path=settings.vless_ws_path,
@@ -654,7 +654,7 @@ async def serve_landing(request: Request):
         asset_v = "0"
     html = template.render(
         dir=_detect_direction(request),
-        server_ip=settings.host if settings.host != "0.0.0.0" else "",
+        server_ip=_public_server_ip(request),  # what links carry, not the bind address
         server_port=settings.web_port,
         asset_v=asset_v,
         csp_nonce=getattr(request.state, "csp_nonce", ""),
@@ -1121,10 +1121,9 @@ def _subscription_json_config(
         xhttp_reality_sni = panel_settings.get("vless_xhttp_reality_sni") or "digikala.com"
         xhttp_reality_pk = panel_settings.get("vless_xhttp_reality_public_key") or panel_settings.get("reality_public_key") or ""
         xhttp_reality_sid = panel_settings.get("vless_xhttp_reality_short_id") or ""
-        # Resolve port avoiding collision with standard VLESS Reality
-        _rxp = int(panel_settings.get("vless_xhttp_port") or 0)
-        _vrp = int(panel_settings.get("vless_port") or 2053)
-        _xhttp_port = _rxp if (_rxp and _rxp != _vrp) else 8449
+        from .api.compat import effective_xhttp_port
+
+        _xhttp_port = effective_xhttp_port(panel_settings)
         outbounds.append({
             "tag": f"{prefix}-VLESS-XHTTP-{user.name}",
             "protocol": "vless",

@@ -254,7 +254,7 @@ def _net_history() -> list[dict[str, float]]:
         _NET_SAMPLES.append((now, io.bytes_sent, io.bytes_recv))
     history = []
     samples = list(_NET_SAMPLES)
-    for (t0, sent0, recv0), (t1, sent1, recv1) in zip(samples, samples[1:]):
+    for (t0, sent0, recv0), (t1, sent1, recv1) in zip(samples, samples[1:], strict=False):
         dt = t1 - t0
         if dt <= 0:
             continue
@@ -546,7 +546,7 @@ async def ops_protocols(
     blocked = set(rotation["blocked"])
 
     rows = []
-    for p, dest in zip(enabled, dests):
+    for p, dest in zip(enabled, dests, strict=True):
         listening = None
         if ports is not None and p["port"]:
             listening = p["port"] in (ports[0] if p["transport"] == "tcp" else ports[1])
@@ -666,7 +666,7 @@ async def _check_nodes(db: AsyncSession, nodes: list[EdgeNode]) -> None:
 
     results = await asyncio.gather(*(one(n) for n in nodes))
     now = _utcnow()
-    for n, r in zip(nodes, results):
+    for n, r in zip(nodes, results, strict=True):
         n.reachable = r["ok"]
         n.rtt_ms = r["ms"]
         n.last_error = r["error"]

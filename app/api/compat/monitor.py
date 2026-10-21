@@ -76,7 +76,7 @@ async def legacy_server_info(
         # VLESS xHTTP REALITY
         "vless_xhttp": _as_bool(s.get("vless_xhttp_enabled", False)),
         "vless_xhttp_enabled": _as_bool(s.get("vless_xhttp_enabled", False)),
-        "vless_xhttp_port": s.get("vless_xhttp_port", 2053),
+        "vless_xhttp_port": effective_xhttp_port(s),
         "vless_xhttp_mode": s.get("vless_xhttp_mode", "auto"),
         "vless_xhttp_path": s.get("vless_xhttp_path", "/xhttp"),
         "vless_xhttp_reality_sni": s.get("vless_xhttp_reality_sni", "digikala.com"),

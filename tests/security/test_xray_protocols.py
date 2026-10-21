@@ -159,3 +159,16 @@ def test_xray_accepts_the_generated_configs(state, tmp_path):
         path.write_text(json.dumps(cfg))
         r = subprocess.run(["xray", "run", "-test", "-c", str(path)], capture_output=True, text=True, timeout=30)
         assert r.returncode == 0, (name, (r.stdout + r.stderr)[-600:])
+
+
+def test_xhttp_port_is_the_same_everywhere(state):
+    # The old defaults put XHTTP and VLESS-REALITY both on 2053; the server
+    # moves XHTTP off it, and links / UI must follow.
+    state.update(vless_port=2053, vless_xhttp_port=2053)
+    port = _inbound(_server(), "in-vless-xhttp")["port"]
+    assert port == 8449 == _core.effective_xhttp_port(state)
+    link = _build_share_links(_user(), server_ip=SERVER_IP)["vless_xhttp"]
+    assert urllib.parse.urlsplit(link).port == port
+    sub = _subscription_json_config(_user(), SERVER_IP, state)
+    xhttp = next(o for o in sub["outbounds"] if o["streamSettings"].get("network") == "xhttp")
+    assert xhttp["settings"]["vnext"][0]["port"] == port

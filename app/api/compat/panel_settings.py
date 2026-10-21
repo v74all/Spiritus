@@ -354,14 +354,7 @@ def _generate_xray_server_config(
         xhttp_dest = s.get("vless_xhttp_reality_dest") or "digikala.com:443"
         xhttp_pk = s.get("vless_xhttp_reality_private_key") or reality_pk
         xhttp_sid = s.get("vless_xhttp_reality_short_id") or ""
-        raw_xhttp_port = int(s.get("vless_xhttp_port") or 0)
-        vless_port_val = int(s.get("vless_port") or 2053)
-        # Avoid port collision with standard VLESS Reality inbound
-        xhttp_port = (
-            raw_xhttp_port
-            if raw_xhttp_port and raw_xhttp_port != vless_port_val
-            else 8449  # Safe default for XHTTP Reality
-        )
+        xhttp_port = effective_xhttp_port(s)
         inbounds.append({
             "tag": "in-vless-xhttp",
             "port": xhttp_port,

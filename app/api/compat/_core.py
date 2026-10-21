@@ -325,6 +325,14 @@ def _detect_ipv6() -> str:
     return ""
 
 
+def effective_xhttp_port(s: dict) -> int:
+    """The port VLESS-XHTTP really listens on. It cannot share the
+    VLESS-REALITY port (the old default put both on 2053), so a clash moves
+    it to 8449. Server config, links, profiles and the UI all use this."""
+    raw = int(s.get("vless_xhttp_port") or 0)
+    return raw if raw and raw != int(s.get("vless_port") or 2053) else 8449
+
+
 def _build_share_links(u: VpnUser, server_ip: str | None = None) -> dict[str, str]:
     """生成用户分享链接。Best-effort — 如果协议关闭则为空字符串。
 
@@ -683,10 +691,7 @@ def _build_share_links(u: VpnUser, server_ip: str | None = None) -> dict[str, st
     # VLESS xHTTP REALITY
     if _settings_state.get("vless_xhttp_enabled") and (_settings_state.get("reality_public_key") or _settings_state.get("vless_xhttp_reality_public_key")):
         try:
-            # Resolve port avoiding collision with standard VLESS Reality (same logic as Xray config generator)
-            _rxp = int(_settings_state.get("vless_xhttp_port") or 0)
-            _vrp = int(_settings_state.get("vless_port") or 2053)
-            _xhttp_port = _rxp if (_rxp and _rxp != _vrp) else 8449
+            _xhttp_port = effective_xhttp_port(_settings_state)
             links["vless_xhttp"] = ClientConfigGenerator.generate_vless_share_url(
                 uuid=u.uuid,
                 address=server_ip,

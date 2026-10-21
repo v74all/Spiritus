@@ -2872,13 +2872,14 @@ async function fetchOnlineUsers() {
       el.innerHTML = '<div style="color:var(--t3);text-align:center;padding:30px">No users currently online</div>';
       return;
     }
-    el.innerHTML = `<table class="online-tbl"><thead><tr><th>User</th><th>IPs</th><th>Count</th></tr></thead><tbody>` +
+    el.innerHTML = '<div class="tactical-table-wrapper"><table class="tactical-table"><thead><tr>' +
+      '<th>User</th><th>Connected from</th><th>Sessions</th><th>Moved (total)</th></tr></thead><tbody>' +
       data.map(u => `<tr>
-        <td style="font-weight:600">${esc(u.name || u.username)}</td>
-        <td style="font-family:monospace;font-size:11px">${(u.ips||[]).map(ip=>esc(ip)).join('<br>')}</td>
-        <td>${(u.ips||[]).length}</td>
-      </tr>`).join('') +
-      `</tbody></table>`;
+        <td><div class="ui-user-name"><span class="online-dot on"></span>${esc(u.name || u.username)}</div></td>
+        <td class="tactical-mono">${(u.ips || []).map(ip => esc(ip)).join('<br>') || '—'}</td>
+        <td>${(u.ips || []).length}</td>
+        <td class="tactical-mono">${fmtTraffic(u.total || 0)}</td>
+      </tr>`).join('') + '</tbody></table></div>';
   } catch(e) { toast('Error fetching online users','error'); }
 }
 
