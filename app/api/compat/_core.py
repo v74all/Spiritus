@@ -33,6 +33,7 @@ from fastapi.responses import StreamingResponse
 from jwt import PyJWTError as JWTError
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...audit import record_audit
@@ -1060,7 +1061,24 @@ async def _save_legacy_settings_locked(db: AsyncSession, data: dict[str, Any]) -
     else:
         row.value = value
         row.value_type = "json"
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        # Two uvicorn workers both insert legacy_panel_settings on first boot.
+        await db.rollback()
+        result = await db.execute(select(Setting).where(Setting.key == _LEGACY_SETTINGS_KEY))
+        row = result.scalar_one()
+        winner: dict[str, Any] = {}
+        try:
+            loaded = json.loads(row.value or "{}")
+            if isinstance(loaded, dict):
+                winner = loaded
+        except json.JSONDecodeError:
+            winner = {}
+        new_state = {**winner, **data}
+        row.value = json.dumps(new_state)
+        row.value_type = "json"
+        await db.commit()
     # Publish only after the commit; no await between clear() and update().
     _settings_state.clear()
     _settings_state.update(new_state)

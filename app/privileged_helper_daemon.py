@@ -34,8 +34,19 @@ CONFIG_TARGETS = {
 }
 
 
+def _resolve_argv(argv: list[str]) -> list[str]:
+    """Find sbin tools such as nft when the unit's PATH omits /usr/sbin."""
+    if not argv or os.path.isabs(argv[0]):
+        return argv
+    for directory in ("/usr/local/sbin", "/usr/sbin", "/sbin", "/usr/local/bin", "/usr/bin", "/bin"):
+        candidate = os.path.join(directory, argv[0])
+        if os.access(candidate, os.X_OK):
+            return [candidate, *argv[1:]]
+    return argv
+
+
 def _run(argv: list[str], timeout: int = 30) -> dict[str, Any]:
-    proc = subprocess.run(argv, capture_output=True, text=True, timeout=timeout, check=False)
+    proc = subprocess.run(_resolve_argv(argv), capture_output=True, text=True, timeout=timeout, check=False)
     output = (proc.stderr or proc.stdout or "").strip()[-2000:]
     return {"ok": proc.returncode == 0, "message": output, "code": proc.returncode}
 
@@ -56,6 +67,14 @@ def _atomic_config(target_name: str, content: str) -> dict[str, Any]:
         handle.write(content)
     os.chmod(tmp, 0o640)
     os.replace(tmp, target)
+    # root:panel-group 0640. The panel user can validate the file, and the
+    # xray user reads it via SupplementaryGroups=vpnpanel. 0640 root:root
+    # made /api/ready fail and left Xray unable to open its own config.
+    try:
+        os.chown(target, 0, grp.getgrnam(PANEL_GROUP).gr_gid)
+    except KeyError:
+        pass
+    os.chmod(target, 0o640)
     return {"ok": True, "message": "config installed"}
 
 

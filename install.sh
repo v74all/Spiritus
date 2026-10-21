@@ -851,19 +851,71 @@ setup_panel_user() {
     # Grant the panel user write access to the xray config directory so it
     # can push updated configs without running as root.
     mkdir -p /usr/local/etc/xray
-    chown -R root:"${PANEL_USER}" /usr/local/etc/xray
-    chmod -R 775 /usr/local/etc/xray
-    # Ensure existing config.json is writable by the group
-    [[ -f /usr/local/etc/xray/config.json ]] && chmod 664 /usr/local/etc/xray/config.json || true
-    print_success "Xray config dir writable by ${PANEL_USER}"
+    chown root:"${PANEL_USER}" /usr/local/etc/xray
+    chmod 750 /usr/local/etc/xray
+    if [[ -f /usr/local/etc/xray/config.json ]]; then
+        chown root:"${PANEL_USER}" /usr/local/etc/xray/config.json
+        chmod 640 /usr/local/etc/xray/config.json
+    fi
+    print_success "Xray config dir readable by ${PANEL_USER}"
 
     export PANEL_USER
 }
 
 
+ensure_xray_service() {
+    # A preinstalled xray binary without a unit is what a Kali box hits:
+    # install_xray sees the binary and returns, then every sync fails with
+    # "Unit xray.service not found".
+    PANEL_USER="${PANEL_USER:-vpnpanel}"
+    if ! command -v xray >/dev/null 2>&1; then
+        print_error "xray binary is missing"
+        exit 1
+    fi
+    if ! id xray >/dev/null 2>&1; then
+        useradd --system --shell /usr/sbin/nologin --comment "Xray" xray 2>/dev/null \
+            || useradd --system --shell /usr/sbin/nologin xray
+    fi
+    usermod -aG "${PANEL_USER}" xray 2>/dev/null || true
+
+    if [[ ! -f /etc/systemd/system/xray.service ]]; then
+        cat > /etc/systemd/system/xray.service << EOF
+[Unit]
+Description=Xray Service
+Documentation=https://xtls.github.io/
+After=network.target nss-lookup.target
+
+[Service]
+User=xray
+Group=xray
+SupplementaryGroups=${PANEL_USER}
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_NET_RAW
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_NET_RAW
+NoNewPrivileges=true
+ExecStart=/usr/local/bin/xray run -config /usr/local/etc/xray/config.json
+Restart=on-failure
+RestartPreventExitStatus=23
+LimitNOFILE=1000000
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    else
+        mkdir -p /etc/systemd/system/xray.service.d
+        cat > /etc/systemd/system/xray.service.d/spiritus.conf << EOF
+[Service]
+SupplementaryGroups=${PANEL_USER}
+EOF
+    fi
+    systemctl daemon-reload
+    systemctl enable xray >/dev/null 2>&1 || true
+    print_success "xray.service enabled"
+}
+
 configure_systemd() {
     print_info "Configuring systemd service..."
     PANEL_USER="${PANEL_USER:-vpnpanel}"
+    ensure_xray_service
     # uvicorn binds from its --host CLI arg, not settings.host, so the unit
     # must carry the HOST that setup_env wrote (0.0.0.0 unless the operator
     # chose a specific address for a reverse proxy).
@@ -937,7 +989,7 @@ User=root
 Group=root
 WorkingDirectory=${INSTALL_DIR}
 EnvironmentFile=${INSTALL_DIR}/.env
-Environment="PATH=${INSTALL_DIR}/venv/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="PATH=${INSTALL_DIR}/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 ExecStart=${INSTALL_DIR}/venv/bin/python3 -m app.privileged_helper_daemon
 Restart=on-failure
 RestartSec=3

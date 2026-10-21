@@ -50,8 +50,20 @@ table inet {TABLE} {{
 """
 
 
+def _resolve_argv(argv: list[str]) -> list[str]:
+    if not argv or os.path.isabs(argv[0]):
+        return argv
+    for directory in ("/usr/local/sbin", "/usr/sbin", "/sbin", "/usr/local/bin", "/usr/bin", "/bin"):
+        candidate = os.path.join(directory, argv[0])
+        if os.access(candidate, os.X_OK):
+            return [candidate, *argv[1:]]
+    return argv
+
+
 def _run(argv: list[str], stdin: str | None = None, timeout: int = 30) -> subprocess.CompletedProcess:
-    return subprocess.run(argv, input=stdin, capture_output=True, text=True, timeout=timeout, check=False)
+    return subprocess.run(
+        _resolve_argv(argv), input=stdin, capture_output=True, text=True, timeout=timeout, check=False,
+    )
 
 
 def uplink_interface() -> str:

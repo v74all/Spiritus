@@ -62,16 +62,20 @@ async def get_system_status(
     mem = psutil.virtual_memory()
     disk = psutil.disk_usage('/')
 
-    # Xray status
+    # Xray status. `xray version` only proves the binary exists; the
+    # dashboard used to report the service as up when nothing was listening.
     xray_running = False
     xray_version = None
     try:
+        for proc in psutil.process_iter(["name"]):
+            if "xray" in (proc.info.get("name") or "").lower():
+                xray_running = True
+                break
         result = subprocess.run(
             [settings.xray_bin_path, "version"],
             capture_output=True, text=True, timeout=5
         )
         if result.returncode == 0:
-            xray_running = True
             xray_version = result.stdout.strip().split('\n')[0]
     except (FileNotFoundError, subprocess.TimeoutExpired, OSError) as exc:
         logger.debug("xray version probe failed: %s", exc)
