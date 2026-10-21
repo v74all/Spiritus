@@ -63,7 +63,10 @@ install_dependencies() {
 
     if [[ "$PKG_MANAGER" == "apt" ]]; then
         apt update -y
-        apt install -y git ca-certificates openssl cron sudo python3 python3-pip python3-venv curl wget unzip socat postgresql postgresql-contrib redis-server fail2ban nftables iproute2
+        # --no-upgrade: install anything missing, but do not upgrade packages
+        # already on the machine. A plain `apt install` on Kali rolling
+        # rewrites python3 and metapackages and can remove unrelated software.
+        apt install -y --no-upgrade git ca-certificates openssl cron sudo python3 python3-pip python3-venv curl wget unzip socat postgresql postgresql-contrib redis-server fail2ban nftables iproute2
     elif [[ "$PKG_MANAGER" == "yum" ]]; then
         yum install -y git ca-certificates openssl cronie sudo python3 python3-pip curl wget unzip socat postgresql-server redis fail2ban nftables iproute-tc
     fi
@@ -349,16 +352,31 @@ setup_postgresql() {
     fi
 
     # Always ensure user exists and password is correct
-    sudo -u postgres psql -c "CREATE USER ${DB_USER} WITH PASSWORD '${DB_PASS}';" || true
-    sudo -u postgres psql -c "ALTER USER ${DB_USER} WITH PASSWORD '${DB_PASS}';" || true
+    sudo -u postgres psql -d postgres -c "CREATE USER ${DB_USER} WITH PASSWORD '${DB_PASS}';" || true
+    sudo -u postgres psql -d postgres -c "ALTER USER ${DB_USER} WITH PASSWORD '${DB_PASS}';" || true
 
-    # Always try to create the database (will harmlessly error if it already exists)
-    sudo -u postgres psql -c "CREATE DATABASE ${DB_NAME} OWNER ${DB_USER};" || true
+    # A glibc upgrade leaves template1 with a stale collation version.
+    # CREATE DATABASE then fails, and ignoring that error (the old `|| true`)
+    # let the installer continue until migrations died on a missing database.
+    sudo -u postgres psql -d postgres -c "ALTER DATABASE template1 REFRESH COLLATION VERSION;" >/dev/null 2>&1 || true
+    sudo -u postgres psql -d postgres -c "ALTER DATABASE postgres REFRESH COLLATION VERSION;" >/dev/null 2>&1 || true
+    sudo -u postgres psql -d postgres -c "ALTER DATABASE template0 REFRESH COLLATION VERSION;" >/dev/null 2>&1 || true
+
+    if ! sudo -u postgres psql -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='${DB_NAME}'" | grep -qx 1; then
+        if ! sudo -u postgres psql -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE ${DB_NAME} OWNER ${DB_USER};"; then
+            print_error "Could not create PostgreSQL database '${DB_NAME}'."
+            print_error "If the error is a collation version mismatch, run:"
+            print_error "  sudo -u postgres psql -d postgres -c \"ALTER DATABASE template1 REFRESH COLLATION VERSION;\""
+            exit 1
+        fi
+    fi
+
+    if ! sudo -u postgres psql -d "${DB_NAME}" -v ON_ERROR_STOP=1 -c "GRANT ALL PRIVILEGES ON DATABASE ${DB_NAME} TO ${DB_USER};" \
+        || ! sudo -u postgres psql -d "${DB_NAME}" -v ON_ERROR_STOP=1 -c "GRANT ALL ON SCHEMA public TO ${DB_USER};"; then
+        print_error "Could not grant privileges on '${DB_NAME}'."
+        exit 1
+    fi
     print_success "PostgreSQL database initialized"
-
-    # Ensure privileges and schema access for PostgreSQL 15+
-    sudo -u postgres psql -d ${DB_NAME} -c "GRANT ALL PRIVILEGES ON DATABASE ${DB_NAME} TO ${DB_USER};" || true
-    sudo -u postgres psql -d ${DB_NAME} -c "GRANT ALL ON SCHEMA public TO ${DB_USER};" || true
 
     # Export for later setup steps.
     export DB_USER DB_PASS DB_NAME
