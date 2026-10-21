@@ -47,11 +47,6 @@ def apply_edge(domain: str, cert: str, key: str) -> dict:
     if not _nginx_installed():
         return {"ok": False, "message": "nginx is not installed"}
     _write_configs(domain, cert_path, key_path)
-    proc = subprocess.run(
-        ["nginx", "-t"], capture_output=True, text=True, timeout=20, check=False,
-    )
-    if proc.returncode != 0:
-        return {"ok": False, "message": (proc.stderr or proc.stdout or "nginx -t failed")[-400:]}
     reload = subprocess.run(
         ["systemctl", "reload", "nginx"], capture_output=True, text=True, timeout=20, check=False,
     )
@@ -138,8 +133,9 @@ def _write_configs(domain: str, cert: Path, key: Path) -> None:
     enabled.mkdir(parents=True, exist_ok=True)
     (available / "spiritus-panel.conf").write_text(site, encoding="utf-8")
     link = enabled / "spiritus-panel.conf"
-    if not link.exists():
-        link.symlink_to(available / "spiritus-panel.conf")
+    if link.is_symlink() or link.exists():
+        link.unlink()
+    link.symlink_to(available / "spiritus-panel.conf")
     default = enabled / "default"
     if default.exists() or default.is_symlink():
         default.unlink()
