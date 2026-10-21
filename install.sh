@@ -131,6 +131,13 @@ install_acme() {
 }
 
 install_xray() {
+    # Absolute path: sudo's PATH may still hide /usr/local/bin, and the
+    # official installer exits before writing xray.service when the binary
+    # is already current.
+    if [[ -x /usr/local/bin/xray ]]; then
+        print_success "Xray already installed: $(/usr/local/bin/xray version 2>&1 | head -1)"
+        return
+    fi
     if command -v xray &> /dev/null; then
         print_success "Xray already installed: $(xray version 2>&1 | head -1)"
         return
@@ -627,7 +634,7 @@ setup_ip_certificate() {
         print_warning "No public IPv4 found; keeping the self-signed certificate."
         return 0
     fi
-    if ! command -v acme.sh &>/dev/null; then
+    if ! command -v acme.sh &>/dev/null && [[ ! -x /usr/local/bin/acme.sh ]] && [[ ! -x /etc/v7lthronyx/acme/acme.sh ]]; then
         print_warning "acme.sh is missing; keeping the self-signed certificate."
         return 0
     fi
