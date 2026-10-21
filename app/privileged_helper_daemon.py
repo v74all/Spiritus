@@ -211,6 +211,11 @@ def _dispatch(operation: str, payload: dict[str, Any]) -> dict[str, Any]:
         return _update_egress_rules("apply")
     if operation == "firewall.egress.remove":
         return _update_egress_rules("remove")
+    if operation == "panel.edge":
+        from .panel_edge import apply_edge, remove_edge
+        if str(payload.get("action", "apply")) == "remove":
+            return remove_edge()
+        return apply_edge(str(payload.get("domain", "")), str(payload.get("cert", "")), str(payload.get("key", "")))
     if operation == "fail2ban.install":
         return _install_fail2ban()
     if operation == "fail2ban.unban":

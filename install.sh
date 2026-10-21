@@ -1090,7 +1090,7 @@ AmbientCapabilities=CAP_CHOWN CAP_DAC_OVERRIDE CAP_NET_ADMIN CAP_NET_RAW
 # /var/www is only used by the optional nginx-fallback site (not set up
 # by this installer) — prefixed with '-' so a box without it doesn't
 # hit the same "path doesn't exist" namespace failure as /run above.
-ReadWritePaths=/run/v7lthronyx /etc/v7lthronyx -/etc/letsencrypt /etc/fail2ban /usr/local/etc -/var/www /var/log/xray
+ReadWritePaths=/run/v7lthronyx /etc/v7lthronyx -/etc/letsencrypt /etc/fail2ban /etc/nginx /usr/local/etc -/var/www -/var/log/nginx -/var/lib/nginx /var/log/xray
 
 [Install]
 WantedBy=multi-user.target

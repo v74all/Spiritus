@@ -589,6 +589,8 @@ def _generate_xray_server_config(
 
     # The panel reads per-user traffic with `xray api statsquery` on this
     # loopback API; without it nothing is ever counted.
+    from ...panel_edge import retarget_shared_443
+
     return {
         "log": {"loglevel": "warning"},
         "api": {
@@ -606,7 +608,7 @@ def _generate_xray_server_config(
                 "statsOutboundDownlink": True,
             },
         },
-        "inbounds": inbounds,
+        "inbounds": retarget_shared_443(inbounds),
         # Users with a speed limit leave through their own marked outbound
         # (app/traffic_control.py); everyone else through "direct".
         "outbounds": [
@@ -631,6 +633,21 @@ def _schedule_xray_sync():
         t.start()
     except Exception:
         pass
+
+
+async def _publish_panel_edge() -> None:
+    """HTTPS on the domain name, after Xray has released public port 443."""
+    from ...domain_manager import cached_active_domain
+    from ...tls_trust import tls_files
+
+    domain = cached_active_domain()
+    if not domain:
+        await helper_request("panel.edge", {"action": "remove"})
+        return
+    cert, key = tls_files()
+    result = await helper_request("panel.edge", {"action": "apply", "domain": domain, "cert": cert, "key": key})
+    if not result.ok:
+        logger.warning("Panel HTTPS edge was not published: %s", result.message)
 
 
 async def _sync_xray_config_async(delay: float = 0.5):
@@ -675,6 +692,7 @@ async def _sync_xray_config_async(delay: float = 0.5):
             raise RuntimeError(restarted.message or "Xray restart failed")
         logger.info("Xray config auto-synced (%d inbounds, %d users)",
                     len(config.get("inbounds", [])), len(vmess_clients))
+        await _publish_panel_edge()
     except Exception as e:
         logger.warning(f"Async Xray sync failed: {e}")
     # sing-box / mita follow the same settings (Hysteria2, TUIC, ShadowTLS,
