@@ -487,7 +487,8 @@ ignoreregex =
             },
             "xray": {
                 "filter": self.XRAY_FILTER_NAME,
-                "port": "all",
+                # Never "all": a ban would close SSH as well as the proxy ports.
+                "port": "443,2052:2059,2083,8443,8444,8449",
                 "log_path": "/var/log/xray/error.log",
             },
         }
@@ -613,7 +614,9 @@ action = iptables-multiport[name=v7lthronyx-{service}, port="{jail['port']}", pr
     def install_all(self) -> dict[str, bool]:
         """Install all fail2ban filters and jails."""
         results = {}
-        for service in ["panel", "ssh", "xray"]:
+        # No SSH jail. The distro sshd jail, plus this one at maxretry=3,
+        # banned the operator's own address and closed port 22.
+        for service in ["panel", "xray"]:
             results[f"{service}_filter"] = self.install_filter(service)
             results[f"{service}_jail"] = self.install_jail(service)
         return results

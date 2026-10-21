@@ -96,7 +96,8 @@ def _install_fail2ban() -> dict[str, Any]:
         "enabled=true\nfilter=v7lthronyx-panel\nport=38471\n"
         "logpath=/opt/v7lthronyx/vpn-panel.log\nmaxretry=3\nbantime=3600\nfindtime=600\n\n"
         "[v7lthronyx-xray]\n"
-        "enabled=true\nfilter=v7lthronyx-xray\nport=all\n"
+        "enabled=true\nfilter=v7lthronyx-xray\n"
+        "port=443,2052:2059,2083,8443,8444,8449\n"
         "logpath=/var/log/xray/error.log\nmaxretry=3\nbantime=3600\nfindtime=600\n",
         encoding="utf-8",
     )

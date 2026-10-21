@@ -460,6 +460,17 @@ print('Fail2ban setup:', results)
         print_warning "  Re-run after fixing, or check 'app.security.fail2ban_manager'."
     fi
     rm -f "$f2b_err"
+    # Ubuntu enables [sshd] as soon as the package is installed. A few
+    # failed key attempts then REJECT port 22 and the operator is locked out.
+    rm -f /etc/fail2ban/jail.d/v7lthronyx-ssh.conf
+    cat > /etc/fail2ban/jail.d/zzz-spiritus-keep-ssh.conf << 'EOF'
+[sshd]
+enabled = false
+
+[v7lthronyx-ssh]
+enabled = false
+EOF
+    systemctl reload fail2ban >/dev/null 2>&1 || systemctl restart fail2ban >/dev/null 2>&1 || true
 }
 
 # Idempotent .env upsert. `_env_set KEY value` replaces an existing
