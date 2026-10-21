@@ -26,6 +26,11 @@ VERSION="2.1.0"
 # to .env as VPN_WEB_PORT so the app and the systemd unit agree.
 WEB_PORT="${WEB_PORT:-38471}"
 
+# sudo on Kali replaces PATH and drops /usr/local/bin. xray and acme.sh
+# are installed there, so `command -v` then reports them missing and the
+# official Xray installer exits before it writes xray.service.
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${PATH}"
+
 print_banner() { echo -e "${CYAN}${BANNER}${NC}"; }
 print_info() { echo -e "${BLUE}[INFO]${NC} $1"; }
 print_success() { echo -e "${GREEN}[OK]${NC} $1"; }
@@ -868,7 +873,7 @@ ensure_xray_service() {
     # install_xray sees the binary and returns, then every sync fails with
     # "Unit xray.service not found".
     PANEL_USER="${PANEL_USER:-vpnpanel}"
-    if ! command -v xray >/dev/null 2>&1; then
+    if [[ ! -x /usr/local/bin/xray ]] && ! command -v xray >/dev/null 2>&1; then
         print_error "xray binary is missing"
         exit 1
     fi
