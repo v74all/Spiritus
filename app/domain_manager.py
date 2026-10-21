@@ -467,22 +467,25 @@ def _issue_letsencrypt_cert(
         env = os.environ.copy()
         env["HOME"] = str(home)
         env["LE_WORKING_DIR"] = str(home)
+        webroot = Path("/etc/v7lthronyx/acme-web")
+        (webroot / ".well-known" / "acme-challenge").mkdir(parents=True, exist_ok=True)
+        webroot.chmod(0o755)
+        from .panel_edge import ensure_challenge_location
+        ensure_challenge_location(domain)
         try:
-            # Standalone mode: acme.sh runs its OWN temporary listener on
-            # port 80 for the HTTP-01 challenge. We use this rather than
-            # --webroot because the panel binds to its own high port and
-            # there is no nginx/Caddy serving the webroot on :80 — a
-            # webroot challenge would always 404. Standalone needs :80 to
-            # be free (it is on a default single-node install).
+            # Port 80 is the panel redirect. Serve the HTTP-01 token there
+            # instead of stopping nginx for standalone mode.
+            issue_cmd = [
+                "acme.sh", "--issue",
+                "--domain", domain,
+                "--webroot", str(webroot),
+                "--keylength", "ec-256",
+                "--server", "letsencrypt",
+            ]
+            if contact_email:
+                issue_cmd += ["--accountemail", contact_email]
             proc = subprocess.run(
-                [
-                    "acme.sh", "--issue",
-                    "--domain", domain,
-                    "--standalone",
-                    "--keylength", "ec-256",
-                    "--accountemail", contact_email,
-                    "--httpport", "80",
-                ],
+                ["bash", "-c", "umask 022 && exec \"$@\"", "acme.sh", *issue_cmd],
                 capture_output=True, text=True, timeout=120,
                 env=env,
             )

@@ -13,6 +13,7 @@ from pathlib import Path
 
 XRAY_LOOPBACK_PORT = 10443
 PANEL_TLS_PORT = 18443
+ACME_WEBROOT = "/etc/v7lthronyx/acme-web"
 _DOMAIN = re.compile(
     r"(?=.{1,253}\Z)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?"
 )
@@ -72,6 +73,28 @@ def remove_edge() -> dict:
     return {"ok": True, "message": "panel edge removed"}
 
 
+def ensure_challenge_location(domain: str) -> None:
+    """Let Let's Encrypt read the HTTP-01 token before the HTTPS redirect."""
+    site = Path("/etc/nginx/sites-available/spiritus-panel.conf")
+    if not site.is_file() or "acme-challenge" in site.read_text(encoding="utf-8"):
+        return
+    old = "    return 301 https://$host$request_uri;\n"
+    new = (
+        "    location ^~ /.well-known/acme-challenge/ {\n"
+        f"        root {ACME_WEBROOT};\n"
+        "        default_type text/plain;\n"
+        "    }\n"
+        "    location / {\n"
+        "        return 301 https://$host$request_uri;\n"
+        "    }\n"
+    )
+    text = site.read_text(encoding="utf-8")
+    if old not in text:
+        return
+    site.write_text(text.replace(old, new, 1), encoding="utf-8")
+    subprocess.run(["systemctl", "reload", "nginx"], capture_output=True, timeout=20, check=False)
+
+
 def _nginx_installed() -> bool:
     return Path("/usr/sbin/nginx").is_file()
 
@@ -111,7 +134,13 @@ def _write_configs(domain: str, cert: Path, key: Path) -> None:
         "    listen 80;\n"
         "    listen [::]:80;\n"
         f"    server_name {domain};\n"
-        "    return 301 https://$host$request_uri;\n"
+        "    location ^~ /.well-known/acme-challenge/ {\n"
+        f"        root {ACME_WEBROOT};\n"
+        "        default_type text/plain;\n"
+        "    }\n"
+        "    location / {\n"
+        "        return 301 https://$host$request_uri;\n"
+        "    }\n"
         "}\n"
         "server {\n"
         f"    listen 127.0.0.1:{PANEL_TLS_PORT} ssl;\n"
