@@ -417,8 +417,9 @@ def _issue_letsencrypt_cert(
     """
     paths = _tls_paths_for(domain)
     paths["root"].mkdir(parents=True, exist_ok=True)
-    challenge_dir = Path("/var/www/spiritus-acme")
-    challenge_dir.mkdir(parents=True, exist_ok=True)
+    # Standalone mode binds port 80 itself. Do not create /var/www here:
+    # the helper's filesystem is read-only outside its allowlist, and
+    # mkdir of a missing /var/www crashed the certificate request.
     # Open the HTTP-01 port in the local firewall. The
     # open_firewall_port helper in install.sh has the same
     # logic; we duplicate a minimal version here so the

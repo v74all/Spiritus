@@ -253,8 +253,8 @@ async def _handle(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) ->
                     result = {"ok": False, "message": "invalid request"}
                 else:
                     result = await asyncio.to_thread(_dispatch, operation, payload)
-    except (TimeoutError, ValueError, json.JSONDecodeError, subprocess.SubprocessError) as exc:
-        result = {"ok": False, "message": type(exc).__name__}
+    except (TimeoutError, ValueError, json.JSONDecodeError, subprocess.SubprocessError, OSError) as exc:
+        result = {"ok": False, "message": f"{type(exc).__name__}: {exc}"}
     writer.write(json.dumps(result, separators=(",", ":")).encode() + b"\n")
     await writer.drain()
     writer.close()
