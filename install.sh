@@ -97,6 +97,7 @@ install_acme() {
         # the working dir to the one domain_manager exports as HOME.
         if (cd "$tmp" && HOME="$acme_home" sh ./acme.sh --install-online --home "$acme_home" --nocron) >/dev/null 2>&1 \
            && [[ -f "$acme_home/acme.sh" ]]; then
+            chmod 755 "$acme_home/acme.sh"
             ln -sf "$acme_home/acme.sh" /usr/local/bin/acme.sh
             print_success "acme.sh installed (symlinked to /usr/local/bin/acme.sh)"
         else
@@ -950,7 +951,7 @@ UMask=0027
 RuntimeDirectory=v7lthronyx
 # 0751, not 0750: the directory is owned by root:root (this service's
 # User=/Group=) since RuntimeDirectory has no separate "owning group"
-# knob, but the panel runs as the unrelated `vpnpanel` user. The 'x'
+# knob, but the panel runs as the unrelated vpnpanel user. The 'x'
 # bit for "other" lets it traverse into the dir and connect() to the
 # socket by its known path without being able to list the directory's
 # contents or create files in it; the socket file itself is still the
