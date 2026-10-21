@@ -166,6 +166,8 @@ async def lifespan(app: FastAPI):
             from .traffic_control import retire_unenforced_default_limits
 
             await retire_unenforced_default_limits(_db)
+            from .domain_manager import refresh_active_domain
+            await refresh_active_domain(_db)
         _schedule_xray_sync()
         logger.info("Xray config bootstrap: settings loaded, sync scheduled")
     except Exception as _xray_exc:

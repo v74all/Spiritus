@@ -118,6 +118,23 @@ KEY_DOMAIN_AUTORENEW_DAYS = "domain_autorenew_days"  # int: rotate when remainin
 DEFAULT_AUTORENEW_DAYS = 30
 EXPIRY_HARD_FLOOR_DAYS = 7
 
+# Share links read this without a database round-trip. set_domain and
+# startup keep it equal to the domain_active row.
+_cached_active_domain = ""
+
+
+def cached_active_domain() -> str:
+    return _cached_active_domain
+
+
+def remember_active_domain(domain: str) -> None:
+    global _cached_active_domain
+    _cached_active_domain = (domain or "").strip().lower()
+
+
+async def refresh_active_domain(db: AsyncSession) -> None:
+    remember_active_domain(await _get_setting(db, KEY_DOMAIN_ACTIVE) or "")
+
 # Domain validation. We accept IDN punycode so operators can
 # point the panel at an Arabic or Persian domain; we just
 # refuse to allow anything that resolves to a private/loopback
@@ -883,6 +900,7 @@ async def set_domain(
         KEY_DOMAIN_LAST_CHECK: _utcnow().isoformat(),
         KEY_DOMAIN_LAST_ERROR: acme_note,
     })
+    remember_active_domain(domain)
 
     # Serve the new certificate: record it where every TLS inbound reads it
     # (tls_trust.tls_files), then re-render Xray and sing-box.
@@ -914,6 +932,7 @@ async def disable_domain(db: AsyncSession) -> DomainSetResult:
         KEY_DOMAIN_ISSUER,
         KEY_DOMAIN_LAST_ERROR,
     ])
+    remember_active_domain("")
     try:
         await _use_certificate(db, "", "")
     except Exception as exc:  # noqa: BLE001

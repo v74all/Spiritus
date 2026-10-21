@@ -243,7 +243,10 @@ def resolve_public_host(request: Request | None) -> str:
     process-wide settings dict — one poisoned request must not rewrite the
     address every other subscriber receives.
     """
+    from ..domain_manager import cached_active_domain
+    cached_domain = cached_active_domain()
     for candidate in (
+        cached_domain,
         _settings_state.get("server_ip"),
         _settings_state.get("domain_active"),
         settings.vpn_server_ip,
