@@ -58,7 +58,9 @@ async function apiCall(url, opts) {
   let body = null;
   try { body = await r.json(); } catch { body = {}; }
   if (!r.ok) {
-    const msg = (body && (body.detail || body.error)) || ('HTTP ' + r.status);
+    let detail = body && (body.detail || body.error);
+    if (detail && typeof detail === 'object') detail = detail.error || detail.message || '';
+    const msg = detail || ('HTTP ' + r.status);
     if (typeof toast === 'function') toast(msg, 'error');
     const err = new Error(msg);
     err.status = r.status;
@@ -2368,13 +2370,20 @@ async function domainRefresh() {
   } catch (e) { /* apiCall already toasted */ }
 }
 
+function _setLabel(id, val) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = val;
+}
+
 function renderDomainStatus(s) {
   const empty = document.getElementById('domain-empty');
   const active = document.getElementById('domain-active');
   const statusPill = document.getElementById('si-domain-status');
   const statusText = document.getElementById('si-domain-text');
 
-  if (!s || !s.active) {
+  const cert = (s && s.cert) || {};
+  const domainName = (s && (s.active_domain || s.active) || '').trim();
+  if (!domainName) {
     if (empty) empty.style.display = '';
     if (active) active.style.display = 'none';
     if (statusPill) {
@@ -2386,18 +2395,21 @@ function renderDomainStatus(s) {
 
   if (empty) empty.style.display = 'none';
   if (active) active.style.display = '';
-  setVal('dom-active-val', s.active);
-  setVal('dom-issuer-val', s.issuer || 'unknown');
-  setVal('dom-expires-val', s.expires_at ? new Date(s.expires_at).toLocaleDateString() : '—');
-  setVal('dom-cert-status-val', _certStatusLabel(s.cert_status));
+  const expires = cert.expires_at || s.expires_at;
+  // These are labels, not inputs. setVal() writes .value and the card stays "—".
+  _setLabel('dom-active-val', domainName);
+  _setLabel('dom-issuer-val', cert.issuer || s.issuer || 'unknown');
+  _setLabel('dom-expires-val', expires ? new Date(expires).toLocaleDateString() : '—');
+  _setLabel('dom-cert-status-val', _certStatusLabel(cert.status || s.cert_status));
 
   if (statusPill && statusText) {
     let cls = 'on';
     let label = 'Active';
-    if (s.cert_status === 'expiring_soon') { cls = 'warning'; label = 'Expiring Soon'; }
-    else if (s.cert_status === 'expired')    { cls = 'expired'; label = 'Expired'; }
-    else if (s.cert_status === 'missing')    { cls = 'off';    label = 'No cert'; }
-    else if (s.cert_status === 'invalid')    { cls = 'expired'; label = 'Invalid'; }
+    const certStatus = cert.status || s.cert_status;
+    if (certStatus === 'expiring_soon') { cls = 'warning'; label = 'Expiring Soon'; }
+    else if (certStatus === 'expired')    { cls = 'expired'; label = 'Expired'; }
+    else if (certStatus === 'missing')    { cls = 'off';    label = 'No cert'; }
+    else if (certStatus === 'invalid')    { cls = 'expired'; label = 'Invalid'; }
     statusPill.className = 's-indicator ' + cls;
     statusText.textContent = label;
   }
@@ -2442,8 +2454,9 @@ async function domainSet() {
           autorenew_days: autorenew,
         }),
       });
-      _renderDomainSetResult(data, domain);
-      if (data.ok) {
+      const saved = !!(data && (data.ok || data.success));
+      _renderDomainSetResult(Object.assign({}, data, { ok: saved }), domain);
+      if (saved) {
         toast('Domain ' + domain + ' configured');
         domainRefresh();
       }

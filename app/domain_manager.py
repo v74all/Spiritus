@@ -810,6 +810,7 @@ async def set_domain(
 
     from .privileged_helper import PrivilegedHelperError, helper_request
     issuer = "self-signed" if prefer_self_signed else "letsencrypt"
+    acme_note = ""
     try:
         result = await helper_request(
             "certificate.issue",
@@ -823,9 +824,37 @@ async def set_domain(
         )
     except PrivilegedHelperError as exc:
         return DomainSetResult(success=False, domain=domain, error=str(exc))
-    if not result.ok:
+    if not result.ok and not prefer_self_signed:
+        # The Domain tab says a failed ACME attempt still registers the
+        # domain with a pinned self-signed cert. Dropping the request
+        # left the tab on "No domain" after every DNS or port-80 failure.
+        acme_note = result.message or "Let's Encrypt failed"
+        try:
+            result = await helper_request(
+                "certificate.issue",
+                {
+                    "domain": domain,
+                    "contact_email": contact_email,
+                    "mode": "self-signed",
+                },
+                timeout=60,
+            )
+        except PrivilegedHelperError as exc:
+            return DomainSetResult(
+                success=False, domain=domain,
+                error=f"{acme_note}; self-signed certificate also failed: {exc}",
+            )
+        if not result.ok:
+            return DomainSetResult(
+                success=False, domain=domain,
+                error=f"{acme_note}; self-signed certificate also failed: {result.message}",
+            )
+        issuer = "self-signed"
+    elif not result.ok:
         return DomainSetResult(success=False, domain=domain, error=result.message)
     steps = list((result.data or {}).get("steps") or [])
+    if acme_note:
+        steps.insert(0, "Let's Encrypt failed; issued a pinned self-signed certificate instead: " + acme_note)
     cp = _tls_paths_for(domain)["cert"]
     exp = _parse_cert_expiry(cp)
     expires_at = exp.isoformat() if exp else ""
@@ -840,7 +869,7 @@ async def set_domain(
         KEY_DOMAIN_ISSUER: issuer,
         KEY_DOMAIN_CONTACT_EMAIL: contact_email,
         KEY_DOMAIN_LAST_CHECK: _utcnow().isoformat(),
-        KEY_DOMAIN_LAST_ERROR: "",
+        KEY_DOMAIN_LAST_ERROR: acme_note,
     })
 
     # Serve the new certificate: record it where every TLS inbound reads it
