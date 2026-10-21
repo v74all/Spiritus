@@ -548,6 +548,9 @@ def _issue_letsencrypt_cert(
         )
 
     try:
+        paths["root"].chmod(0o755)
+        if paths["root"].parent.name == "tls":
+            paths["root"].parent.chmod(0o755)
         paths["key"].chmod(0o640)
         paths["cert"].chmod(0o644)
     except OSError:
@@ -569,7 +572,10 @@ def _parse_cert_expiry(cert_path: Path) -> datetime | None:
     We use openssl because the python `cryptography` package
     would add a heavy dependency for one function.
     """
-    if not cert_path.exists():
+    try:
+        if not cert_path.exists():
+            return None
+    except OSError:
         return None
     try:
         proc = subprocess.run(
