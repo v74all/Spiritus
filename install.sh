@@ -471,6 +471,19 @@ enabled = false
 enabled = false
 EOF
     systemctl reload fail2ban >/dev/null 2>&1 || systemctl restart fail2ban >/dev/null 2>&1 || true
+    # jail.local is read after jail.d, so a package [sshd] enabled=true there
+    # would ignore the jail.d override and still close port 22.
+    if [[ -f /etc/fail2ban/jail.local ]] && grep -q 'spiritus-keep-ssh' /etc/fail2ban/jail.local; then
+        :
+    else
+        cat >> /etc/fail2ban/jail.local << 'EOF'
+
+# spiritus-keep-ssh
+[sshd]
+enabled = false
+EOF
+    fi
+    systemctl restart fail2ban >/dev/null 2>&1 || true
 }
 
 # Idempotent .env upsert. `_env_set KEY value` replaces an existing
@@ -1216,6 +1229,10 @@ start_panel() {
     open_firewall_port "${WEB_PORT}"
 
     systemctl restart v7lthronyx-helper
+    for _i in $(seq 1 40); do
+        [[ -S /run/v7lthronyx/helper.sock ]] && break
+        sleep 0.25
+    done
     systemctl restart ${SERVICE_NAME}
     systemctl restart ${SERVICE_NAME}-worker 2>/dev/null || true
     systemctl restart ${SERVICE_NAME}-beat 2>/dev/null || true

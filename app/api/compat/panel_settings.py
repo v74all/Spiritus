@@ -639,15 +639,26 @@ async def _sync_xray_config_async(delay: float = 0.5):
         await asyncio.sleep(delay)  # Small delay to let settings settle
 
         from ...database import AsyncSessionLocal
+        from ...privileged_helper import PrivilegedHelperError
         from ...user_runtime import _desired_xray_config
 
         async with AsyncSessionLocal() as _db:
             config, n_users = await _desired_xray_config(_db)
         vmess_clients = [None] * n_users
-        installed = await helper_request(
-            "config.install",
-            {"target": "xray", "content": json.dumps(config, indent=2)},
-        )
+        # The helper socket is created a moment after its unit starts. The
+        # first boot used to give up once and leave Xray on an empty config.
+        installed = None
+        for attempt in range(10):
+            try:
+                installed = await helper_request(
+                    "config.install",
+                    {"target": "xray", "content": json.dumps(config, indent=2)},
+                )
+                break
+            except PrivilegedHelperError:
+                if attempt == 9:
+                    raise
+                await asyncio.sleep(1)
         if not installed.ok:
             raise RuntimeError(installed.message or "config install failed")
         # A restart zeroes Xray's counters: bank the bytes not yet counted.
