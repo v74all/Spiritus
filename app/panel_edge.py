@@ -18,13 +18,13 @@ _DOMAIN = re.compile(
 )
 
 
-def retarget_shared_443(config: dict) -> dict:
+def retarget_shared_443(inbounds: list) -> list:
     """When a domain is active, Xray must not bind the public 443."""
     from .domain_manager import cached_active_domain
 
     if not cached_active_domain():
-        return config
-    for inbound in config.get("inbounds") or []:
+        return inbounds
+    for inbound in inbounds:
         try:
             port = int(inbound.get("port") or 0)
         except (TypeError, ValueError):
@@ -32,7 +32,7 @@ def retarget_shared_443(config: dict) -> dict:
         if port == 443 and inbound.get("listen") != "127.0.0.1":
             inbound["listen"] = "127.0.0.1"
             inbound["port"] = XRAY_LOOPBACK_PORT
-    return config
+    return inbounds
 
 
 def apply_edge(domain: str, cert: str, key: str) -> dict:
