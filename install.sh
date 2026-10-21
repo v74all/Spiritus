@@ -690,6 +690,9 @@ setup_ip_certificate() {
 chown ${PANEL_USER:-vpnpanel} "${tls_dir}/spiritus.crt" "${tls_dir}/spiritus.key" 2>/dev/null
 chmod 644 "${tls_dir}/spiritus.crt"
 chmod 640 "${tls_dir}/spiritus.key"
+# acme.sh locks the directory to 0700 root, so the panel user cannot see
+# the cert and every TLS inbound is skipped.
+chmod 755 "$tls_dir"
 # On start-up the panel copies the certificate to Xray and restarts it.
 systemctl try-restart ${SERVICE_NAME}
 systemctl try-restart sing-box 2>/dev/null || true
@@ -752,6 +755,7 @@ setup_tls_cert() {
             }
         chmod 644 "${CERT}"
         chmod 640 "${KEY}"
+        chmod 755 "${TLS_DIR}"
     fi
     # Cert is world-readable; key is group-readable. Group must contain
     # whichever user xray runs as. Try the common ones.
