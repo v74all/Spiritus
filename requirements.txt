@@ -42,7 +42,7 @@ httpx>=0.25.0
 # ═══ Protocol Dependencies ═══
 
 # WireGuard / AmneziaWG
-python-wireguard>=0.1.0
+python-wireguard>=0.2.2
 
 # OpenVPN management
 openvpn-api>=0.3.0
