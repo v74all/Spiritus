@@ -7,7 +7,7 @@ dnspython==2.4.2
 python-whois==0.8.0
 aiohttp==3.9.1
 requests==2.34.2
-scapy==2.5.0
+scapy==2.8.0
 cryptography==50.0.2
 psutil==5.9.6
 
