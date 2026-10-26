@@ -33,6 +33,11 @@ vpn-panel.log
 
 # --- Backups ---
 backups/
+
+# --- Runtime state written by the panel user (install.sh) ---
+/data/
+/mtls/
+/tls/
 *.zip
 *.tar.gz
 *.bak

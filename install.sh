@@ -284,12 +284,8 @@ clone_or_update() {
         else
             print_success "V7LTHRONYX is already up to date"
         fi
-        # Ensure the freshly pulled files end up owned by the panel user if
-        # the user already exists (re-install path). The first-time install
-        # path will chown later in setup_panel_user.
-        if id "${PANEL_USER:-vpnpanel}" >/dev/null 2>&1; then
-            chown -R "${PANEL_USER:-vpnpanel}:${PANEL_USER:-vpnpanel}" "$INSTALL_DIR" 2>/dev/null || true
-        fi
+        # Ownership is set by secure_install_tree (setup_panel_user): the
+        # code stays root-owned, only the panel's data is handed over.
     else
         print_info "Cloning Spiritus from GitHub..."
         rm -rf "$INSTALL_DIR" 2>/dev/null || true
@@ -418,6 +414,48 @@ setup_redis() {
             exit 1
         fi
     fi
+}
+
+# Redis holds the token revocation list, session epochs, login lockouts and
+# the Celery queue, and listens on loopback, which every local process (and
+# a VPN client, before the engines blocked private destinations) can reach.
+# docker-compose already sets a password; do the same here.
+setup_redis_password() {
+    local url; url=$(_env_get REDIS_URL)
+    # Leave alone a URL that already carries credentials or points elsewhere.
+    if [[ "$url" == *"@"* ]]; then return 0; fi
+    if [[ -n "$url" && ! "$url" =~ ^redis://(localhost|127\.0\.0\.1)(:6379)?(/[0-9]+)?$ ]]; then return 0; fi
+    local conf="" c
+    for c in /etc/redis/redis.conf /etc/redis.conf; do
+        [[ -f "$c" ]] && { conf="$c"; break; }
+    done
+    if [[ -z "$conf" ]]; then
+        print_warning "redis.conf not found; Redis keeps running without a password."
+        return 0
+    fi
+    local db="${url##*/}"
+    [[ "$db" =~ ^[0-9]+$ ]] || db=0
+    local pass
+    pass=$(sed -n 's/^[[:space:]]*requirepass[[:space:]]\{1,\}"\{0,1\}\([^"[:space:]]*\)"\{0,1\}.*/\1/p' "$conf" | tail -1)
+    if [[ -z "$pass" ]]; then
+        pass=$(python3 -c 'import secrets; print(secrets.token_hex(24))')
+        cp -p "$conf" "${conf}.spiritus-bak"
+        printf '\n# Spiritus panel (install.sh): Redis password\nrequirepass %s\n' "$pass" >> "$conf"
+        systemctl restart redis-server 2>/dev/null || systemctl restart redis 2>/dev/null || true
+        sleep 1
+        if [[ "$(REDISCLI_AUTH="$pass" redis-cli -n "$db" ping 2>/dev/null)" != "PONG" ]]; then
+            # Never leave the panel without Redis: put the old config back.
+            mv -f "${conf}.spiritus-bak" "$conf"
+            systemctl restart redis-server 2>/dev/null || systemctl restart redis 2>/dev/null || true
+            print_warning "Redis did not accept a password; it keeps running without one."
+            return 0
+        fi
+        rm -f "${conf}.spiritus-bak"
+        print_success "Redis now requires a password"
+    fi
+    local quoted
+    quoted=$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$pass")
+    _env_set REDIS_URL "redis://:${quoted}@127.0.0.1:6379/${db}"
 }
 
 setup_fail2ban() {
@@ -608,6 +646,10 @@ while True:
     # the value already in .env (so we don't silently revert an operator's
     # custom port back to the default).
     local cur_port; cur_port=$(_env_get VPN_WEB_PORT)
+    # .env belongs to the panel user; root hands this value to ufw.
+    if ! [[ "$cur_port" =~ ^[0-9]{1,5}$ ]] || (( cur_port < 1 || cur_port > 65535 )); then
+        cur_port=""
+    fi
     if [[ "$WEB_PORT" != "38471" ]]; then
         _env_set VPN_WEB_PORT "$WEB_PORT"          # explicit --port wins
     elif [[ -n "$cur_port" ]]; then
@@ -627,11 +669,16 @@ while True:
         _env_set DATABASE_URL "postgresql+asyncpg://${DB_USER:-vpnadmin}:${DB_PASS}@127.0.0.1:5432/${DB_NAME:-vpnpanel}"
     fi
 
+    setup_redis_password
+
     # ── TLS cert paths (set by setup_tls_cert) ───────────────────────
     if [[ -n "${TLS_CERT_FILE:-}" && -n "${TLS_KEY_FILE:-}" ]]; then
         _env_set TLS_CERT_FILE "${TLS_CERT_FILE}"
         _env_set TLS_KEY_FILE  "${TLS_KEY_FILE}"
     fi
+
+    # ── Panel state outside the root-owned install root ──────────────
+    _env_set PANEL_DATA_DIR "${INSTALL_DIR}/data"
 
     # ── OpenTelemetry off unless operator turns it on ────────────────
     _env_set OTEL_ENABLED "false"
@@ -700,12 +747,14 @@ setup_ip_certificate() {
     cat > /usr/local/sbin/spiritus-cert-reload <<RELOAD
 #!/bin/sh
 # Run by acme.sh after it renews this server's IP certificate.
-chown ${PANEL_USER:-vpnpanel} "${tls_dir}/spiritus.crt" "${tls_dir}/spiritus.key" 2>/dev/null
+# Root's files, readable through the panel group (the directory is root's
+# too, so the panel user cannot swap in a symlink for this chown to follow).
+chown -h root:${PANEL_USER:-vpnpanel} "${tls_dir}" "${tls_dir}/spiritus.crt" "${tls_dir}/spiritus.key" 2>/dev/null
 chmod 644 "${tls_dir}/spiritus.crt"
 chmod 640 "${tls_dir}/spiritus.key"
 # acme.sh locks the directory to 0700 root, so the panel user cannot see
 # the cert and every TLS inbound is skipped.
-chmod 755 "$tls_dir"
+chmod 750 "$tls_dir"
 # On start-up the panel copies the certificate to Xray and restarts it.
 systemctl try-restart ${SERVICE_NAME}
 systemctl try-restart sing-box 2>/dev/null || true
@@ -768,17 +817,12 @@ setup_tls_cert() {
             }
         chmod 644 "${CERT}"
         chmod 640 "${KEY}"
-        chmod 755 "${TLS_DIR}"
     fi
-    # Cert is world-readable; key is group-readable. Group must contain
-    # whichever user xray runs as. Try the common ones.
-    local XRAY_USER=""
-    for _u in xray nobody root; do
-        id "${_u}" >/dev/null 2>&1 && { XRAY_USER="${_u}"; break; }
-    done
-    if [[ -n "${XRAY_USER}" ]]; then
-        chgrp "${XRAY_USER}" "${KEY}" 2>/dev/null || true
-    fi
+    # Cert is world-readable; the key is root's, readable through the panel
+    # group: the panel copies it for Xray, and Xray is in that group.
+    chown root:"${PANEL_USER:-vpnpanel}" "${TLS_DIR}" "${CERT}" "${KEY}" 2>/dev/null || true
+    chmod 750 "${TLS_DIR}"
+    chmod 640 "${KEY}"
     export TLS_CERT_FILE="${CERT}"
     export TLS_KEY_FILE="${KEY}"
     print_success "TLS cert ready (${CERT})"
@@ -811,8 +855,13 @@ prompt_domain() {
     local input=""
     read -r -p "$(echo -e "${YELLOW}Domain [leave blank to skip]:${NC} ")" input
     input="${input// /}"
+    input="${input,,}"
     if [[ -z "$input" ]]; then
         print_info "No domain entered; the panel will use the IP address."
+        return 1
+    fi
+    if ! [[ "$input" =~ ^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$ ]]; then
+        print_warning "'${input}' is not a domain name; the panel will use the IP address."
         return 1
     fi
     # Persist immediately so the .env / startup sees the value
@@ -848,8 +897,10 @@ apply_domain_on_install() {
     # Xray here (the panel's systemd unit hasn't started
     # yet on a first install); the first reload happens
     # when start_panel() runs systemctl restart below.
+    # The domain goes in as an argument, never into the Python source.
     python3 -c "
 import asyncio
+import sys
 from app.database import AsyncSessionLocal
 from app.domain_manager import set_domain
 
@@ -861,7 +912,7 @@ async def _run():
         # 'Renew now' button can re-issue as a real LE
         # cert later.
         result = await set_domain(
-            db, '$domain', '',
+            db, sys.argv[1], '',
             prefer_self_signed=True,
         )
         if result.success:
@@ -872,12 +923,65 @@ async def _run():
             print(f'DOMAIN_FAILED: {result.error}')
 
 asyncio.run(_run())
-" || {
+" "$domain" || {
         print_warning "Domain setup failed; the panel will use the IP address."
         print_warning "You can retry from the Domain tab in the UI."
     }
 }
 
+
+# The privileged helper runs this tree as root (python -m from the install
+# dir, which also puts the dir itself first on sys.path), and so does every
+# installer run. If the panel user could write here, any panel compromise
+# would be root: edit app/ or venv/, or drop a json.py next to app/. So the
+# tree is root's, and the panel user owns only its data, logs and backups.
+secure_install_tree() {
+    local u="${PANEL_USER:-vpnpanel}"
+    id "$u" >/dev/null 2>&1 || return 0
+    chown -R root:"$u" "${INSTALL_DIR}"
+    chmod -R go-w "${INSTALL_DIR}"
+    chmod 750 "${INSTALL_DIR}"
+    # Bytecode the panel user wrote while it owned the tree is not trusted.
+    find "${INSTALL_DIR}/app" -name __pycache__ -type d -prune -exec rm -rf {} + 2>/dev/null || true
+    [[ -x "${INSTALL_DIR}/venv/bin/python" ]] \
+        && "${INSTALL_DIR}/venv/bin/python" -m compileall -q "${INSTALL_DIR}/app" >/dev/null 2>&1 || true
+
+    # Xray shares the panel group, so these are owner-only: the settings
+    # mirror carries the REALITY private key, backups carry every user.
+    install -d -o "$u" -g "$u" -m 700 "${INSTALL_DIR}/data" "${INSTALL_DIR}/backups" "${INSTALL_DIR}/mtls"
+    # The settings mirror used to sit in the install root.
+    if [[ -f "${INSTALL_DIR}/vpn-settings.json" && ! -e "${INSTALL_DIR}/data/vpn-settings.json" ]]; then
+        mv "${INSTALL_DIR}/vpn-settings.json" "${INSTALL_DIR}/data/vpn-settings.json"
+    fi
+    rm -f "${INSTALL_DIR}/vpn-settings.json" "${INSTALL_DIR}/vpn-settings.json.tmp"
+    chown -R "$u:$u" "${INSTALL_DIR}/data" "${INSTALL_DIR}/backups" "${INSTALL_DIR}/mtls"
+    [[ -f "${INSTALL_DIR}/data/vpn-settings.json" ]] && chmod 600 "${INSTALL_DIR}/data/vpn-settings.json"
+    # Log files: the panel appends; it cannot replace them (root's directory).
+    # Python's FileHandler and systemd's StandardOutput=append both need them
+    # before the service starts.
+    local _log
+    for _log in vpn-panel.log celery-worker.log celery-beat.log update.log; do
+        [[ -L "${INSTALL_DIR}/${_log}" ]] && rm -f "${INSTALL_DIR}/${_log}"
+        [[ -f "${INSTALL_DIR}/${_log}" ]] || : > "${INSTALL_DIR}/${_log}"
+        chown "$u:$u" "${INSTALL_DIR}/${_log}"
+        chmod 640 "${INSTALL_DIR}/${_log}"
+    done
+    # .env is the panel's own config. Root reads it only as data (_env_get);
+    # no unit uses it as an EnvironmentFile any more.
+    if [[ -f "${INSTALL_DIR}/.env" ]]; then
+        chown "$u:$u" "${INSTALL_DIR}/.env"
+        chmod 600 "${INSTALL_DIR}/.env"
+    fi
+    # TLS: root's files; the key is readable through the panel group, which
+    # Xray is in (SupplementaryGroups).
+    if [[ -d "${INSTALL_DIR}/tls" ]]; then
+        chmod 750 "${INSTALL_DIR}/tls"
+        find "${INSTALL_DIR}/tls" -maxdepth 1 -type f -name '*.key' -exec chmod 640 {} +
+        find "${INSTALL_DIR}/tls" -maxdepth 1 -type f -name '*.crt' -exec chmod 644 {} +
+    fi
+    # Generated by older installers inside the tree and run by root's cron.
+    rm -f "${INSTALL_DIR}/scripts/auto-update.sh"
+}
 
 setup_panel_user() {
     print_info "Creating dedicated unprivileged service user..."
@@ -887,17 +991,7 @@ setup_panel_user() {
             --comment "V7LTHRONYX VPN Panel" "$PANEL_USER" 2>/dev/null || \
             useradd --system --home "${INSTALL_DIR}" --shell /usr/sbin/nologin "$PANEL_USER"
     fi
-    # Tighten ownership of the panel install dir.
-    chown -R "${PANEL_USER}:${PANEL_USER}" "${INSTALL_DIR}" 2>/dev/null || true
-    # Pre-create log files with the right ownership. Python's FileHandler and
-    # systemd's StandardOutput=append: both need them writable before the
-    # service starts. Stale root-owned log files from earlier installs would
-    # otherwise survive the chown -R if any sub-tool created them late.
-    for _log in vpn-panel.log celery-worker.log celery-beat.log update.log; do
-        : > "${INSTALL_DIR}/${_log}" 2>/dev/null || true
-        chown "${PANEL_USER}:${PANEL_USER}" "${INSTALL_DIR}/${_log}" 2>/dev/null || true
-        chmod 640 "${INSTALL_DIR}/${_log}" 2>/dev/null || true
-    done
+    secure_install_tree
     rm -f /etc/sudoers.d/${PANEL_USER}
     print_success "Service user '${PANEL_USER}' created without sudo access"
 
@@ -973,7 +1067,8 @@ configure_systemd() {
     # must carry the HOST that setup_env wrote (0.0.0.0 unless the operator
     # chose a specific address for a reverse proxy).
     local bind_host; bind_host=$(_env_get HOST "${INSTALL_DIR}/.env")
-    bind_host="${bind_host:-0.0.0.0}"
+    # Written into the unit file below: an address, nothing else.
+    [[ "$bind_host" =~ ^[0-9A-Za-z.:-]+$ ]] || bind_host="0.0.0.0"
 
     cat > /etc/systemd/system/${SERVICE_NAME}.service << EOF
 [Unit]
@@ -1041,7 +1136,9 @@ Type=simple
 User=root
 Group=root
 WorkingDirectory=${INSTALL_DIR}
-EnvironmentFile=${INSTALL_DIR}/.env
+# No EnvironmentFile: .env is the panel user's file, and LD_PRELOAD or
+# PYTHONPATH in it would run as root here. The app still reads it as data.
+Environment="PANEL_USER=${PANEL_USER}" "PANEL_GROUP=${PANEL_USER}"
 Environment="PATH=${INSTALL_DIR}/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 ExecStart=${INSTALL_DIR}/venv/bin/python3 -m app.privileged_helper_daemon
 Restart=on-failure
@@ -1145,7 +1242,7 @@ Group=${PANEL_USER}
 WorkingDirectory=${INSTALL_DIR}
 Environment="PYTHONUNBUFFERED=1"
 Environment="PATH=${INSTALL_DIR}/venv/bin:/usr/local/bin:/usr/bin:/bin"
-ExecStart=${INSTALL_DIR}/venv/bin/celery -A app.celery_tasks beat --loglevel=info
+ExecStart=${INSTALL_DIR}/venv/bin/celery -A app.celery_tasks beat --loglevel=info --schedule=${INSTALL_DIR}/data/celerybeat-schedule
 Restart=always
 
 NoNewPrivileges=true
@@ -1176,45 +1273,56 @@ EOF
 
 setup_auto_update() {
     print_info "Setting up automatic updates..."
-    
-    cat > /etc/cron.d/spiritus-update << EOF
-# Spiritus auto-update check - runs daily at 4:00 AM
-0 4 * * * root ${INSTALL_DIR}/scripts/auto-update.sh >> ${INSTALL_DIR}/update.log 2>&1
-EOF
+    PANEL_USER="${PANEL_USER:-vpnpanel}"
 
-    mkdir -p "${INSTALL_DIR}/scripts"
-    cat > "${INSTALL_DIR}/scripts/auto-update.sh" << 'UPDATEEOF'
+    # Root's cron runs this, so it lives outside the install tree, owned by
+    # root. It used to be written to ${INSTALL_DIR}/scripts, which the panel
+    # user owned: editing it was a way to root.
+    local updater=/usr/local/sbin/spiritus-auto-update
+    cat > "$updater" << UPDATEEOF
 #!/bin/bash
 set -e
-INSTALL_DIR="/opt/v7lthronyx"
-SERVICE_NAME="spiritus"
-LOG_FILE="${INSTALL_DIR}/update.log"
+INSTALL_DIR="${INSTALL_DIR}"
+SERVICE_NAME="${SERVICE_NAME}"
+LOG_FILE="\${INSTALL_DIR}/update.log"
 
-echo "$(date): Checking for updates..." >> "$LOG_FILE"
+echo "\$(date): Checking for updates..." >> "\$LOG_FILE"
 
-cd "$INSTALL_DIR"
+cd "\$INSTALL_DIR"
 git fetch origin 2>/dev/null
 
-LOCAL=$(git rev-parse HEAD)
-REMOTE=$(git rev-parse origin/main 2>/dev/null || git rev-parse origin/master 2>/dev/null)
+LOCAL=\$(git rev-parse HEAD)
+REMOTE=\$(git rev-parse origin/main 2>/dev/null || git rev-parse origin/master 2>/dev/null)
 
-if [[ "$LOCAL" != "$REMOTE" ]]; then
-    echo "$(date): Update found! Updating..." >> "$LOG_FILE"
+if [[ "\$LOCAL" != "\$REMOTE" ]]; then
+    echo "\$(date): Update found! Updating..." >> "\$LOG_FILE"
     git stash 2>/dev/null || true
     git pull origin main 2>/dev/null || git pull origin master 2>/dev/null
     git stash pop 2>/dev/null || true
-    
-    source venv/bin/activate
-    pip install -r requirements.txt -q
-    
-    systemctl restart "$SERVICE_NAME"
-    echo "$(date): Update completed and service restarted" >> "$LOG_FILE"
+
+    "\${INSTALL_DIR}/venv/bin/pip" install -q -r requirements.txt
+    # Pulled files are root's (this runs as root): the tree stays read-only
+    # to the panel user. Drop bytecode so nothing stale is imported.
+    chmod -R go-w "\${INSTALL_DIR}/app"
+    find "\${INSTALL_DIR}/app" -name __pycache__ -type d -prune -exec rm -rf {} + 2>/dev/null || true
+
+    # The helper imports modules lazily: it must not mix old and new code.
+    systemctl try-restart v7lthronyx-helper "\$SERVICE_NAME" "\${SERVICE_NAME}-worker" "\${SERVICE_NAME}-beat"
+    echo "\$(date): Update completed and services restarted" >> "\$LOG_FILE"
 else
-    echo "$(date): No update available" >> "$LOG_FILE"
+    echo "\$(date): No update available" >> "\$LOG_FILE"
 fi
 UPDATEEOF
+    chown root:root "$updater"
+    chmod 755 "$updater"
+    rm -f "${INSTALL_DIR}/scripts/auto-update.sh"
 
-    chmod +x "${INSTALL_DIR}/scripts/auto-update.sh"
+    cat > /etc/cron.d/spiritus-update << EOF
+# Spiritus auto-update check - runs daily at 4:00 AM
+0 4 * * * root ${updater} >> ${INSTALL_DIR}/update.log 2>&1
+EOF
+    chmod 644 /etc/cron.d/spiritus-update
+
     print_success "Auto-update configured (daily check at 4:00 AM)"
 }
 
@@ -1371,7 +1479,7 @@ uninstall() {
     fi
 
     print_info "Stopping and disabling services..."
-    for svc in "${SERVICE_NAME}" "${SERVICE_NAME}-worker" "${SERVICE_NAME}-beat"; do
+    for svc in "${SERVICE_NAME}" "${SERVICE_NAME}-worker" "${SERVICE_NAME}-beat" v7lthronyx-helper; do
         systemctl stop "$svc" 2>/dev/null || true
         systemctl disable "$svc" 2>/dev/null || true
         rm -f "/etc/systemd/system/${svc}.service"
@@ -1380,7 +1488,7 @@ uninstall() {
     systemctl stop sing-box mita 2>/dev/null || true
 
     # Remove the daily auto-update cron/timer if present.
-    rm -f /etc/cron.d/spiritus-update /etc/systemd/system/spiritus-update.* 2>/dev/null || true
+    rm -f /etc/cron.d/spiritus-update /etc/systemd/system/spiritus-update.* /usr/local/sbin/spiritus-auto-update 2>/dev/null || true
     # IP-certificate renewal (setup_ip_certificate).
     systemctl disable --now spiritus-acme.timer 2>/dev/null || true
     rm -f /etc/systemd/system/spiritus-acme.* /usr/local/sbin/spiritus-cert-reload 2>/dev/null || true
@@ -1391,7 +1499,12 @@ uninstall() {
         sudo -u postgres psql -c "DROP DATABASE IF EXISTS ${DB_NAME:-vpnpanel};" 2>/dev/null || true
         sudo -u postgres psql -c "DROP ROLE IF EXISTS ${DB_USER:-vpnadmin};" 2>/dev/null || true
         print_info "Flushing Redis keys for the panel..."
-        redis-cli FLUSHDB 2>/dev/null || true
+        # redis-cli -u reads ":pass@" as an empty user name; pass the password alone.
+        local redis_url redis_pw
+        redis_url=$(_env_get REDIS_URL "${INSTALL_DIR}/.env")
+        redis_pw=$(python3 -c 'import sys, urllib.parse; print(urllib.parse.unquote(urllib.parse.urlsplit(sys.argv[1]).password or ""))' "$redis_url" 2>/dev/null)
+        REDISCLI_AUTH="$redis_pw" redis-cli -n "${redis_url##*/}" FLUSHDB 2>/dev/null \
+            || redis-cli FLUSHDB 2>/dev/null || true
     fi
 
     print_info "Removing installed files..."
@@ -1499,6 +1612,10 @@ main() {
 
     echo -e "${CYAN}[12/13]${NC} Setting up auto-update..."
     setup_auto_update
+
+    # Root ran the app above (migrations, domain): hand the panel its data
+    # files again and keep everything else root's.
+    secure_install_tree
 
     echo -e "${CYAN}[13/13]${NC} Starting panel..."
     start_panel

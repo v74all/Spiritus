@@ -106,6 +106,9 @@ class Settings(BaseSettings):
     privileged_helper_socket: str = Field(
         "/run/v7lthronyx/helper.sock", env="PRIVILEGED_HELPER_SOCKET"
     )
+    # Where the panel writes its own state (vpn-settings.json). The install
+    # root is root-owned, so install.sh points this at a panel-owned folder.
+    panel_data_dir: str = Field("", env="PANEL_DATA_DIR")
     usdt_min_confirmations: int = Field(20, ge=1, le=100, env="USDT_MIN_CONFIRMATIONS")
 
     @field_validator("secret_key", "jwt_secret_key")

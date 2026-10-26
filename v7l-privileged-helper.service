@@ -7,8 +7,11 @@ Before=vpn-panel.service
 Type=simple
 User=root
 Group=root
+# /opt/v7lthronyx must be root-owned (install.sh: secure_install_tree): this
+# root service imports code from it. No EnvironmentFile: .env belongs to the
+# panel user, and LD_PRELOAD or PYTHONPATH in it would run as root.
 WorkingDirectory=/opt/v7lthronyx
-EnvironmentFile=/opt/v7lthronyx/.env
+Environment="PANEL_USER=vpnpanel" "PANEL_GROUP=vpnpanel"
 Environment="PYTHONUNBUFFERED=1"
 Environment="PATH=/opt/v7lthronyx/venv/bin:/usr/local/bin:/usr/bin:/bin"
 ExecStart=/opt/v7lthronyx/venv/bin/python3 -m app.privileged_helper_daemon

@@ -979,9 +979,16 @@ def _default_legacy_settings() -> dict[str, Any]:
     }
 
 
+def _legacy_settings_path() -> str:
+    return os.path.join(settings.panel_data_dir or os.getcwd(), _LEGACY_SETTINGS_FILE)
+
+
 async def _load_legacy_settings(db: AsyncSession) -> dict[str, Any]:
     file_settings: dict[str, Any] = {}
-    settings_path = os.path.join(os.getcwd(), _LEGACY_SETTINGS_FILE)
+    settings_path = _legacy_settings_path()
+    if not os.path.exists(settings_path):
+        # Installs before PANEL_DATA_DIR kept it in the working directory.
+        settings_path = os.path.join(os.getcwd(), _LEGACY_SETTINGS_FILE)
     if os.path.exists(settings_path):
         try:
             with open(settings_path) as f:
@@ -1086,7 +1093,7 @@ async def _save_legacy_settings_locked(db: AsyncSession, data: dict[str, Any]) -
     _settings_state.clear()
     _settings_state.update(new_state)
 
-    settings_path = os.path.join(os.getcwd(), _LEGACY_SETTINGS_FILE)
+    settings_path = _legacy_settings_path()
     try:
         tmp_path = settings_path + ".tmp"
         with open(tmp_path, "w") as f:
