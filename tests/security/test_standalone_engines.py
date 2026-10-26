@@ -23,9 +23,15 @@ from app.api.compat._core import _load_legacy_settings, _save_legacy_settings
 from app.api.compat.panel_settings import ensure_ss2022_key
 from app.client_profiles import clash_profile, parse_link, singbox_profile
 from app.database import AsyncSessionLocal, init_db
+from app.egress_policy import PRIVATE_DESTINATIONS
 from app.models import VpnUser
 from app.privileged_helper_daemon import _dispatch
 from app.tls_trust import load_cert_info
+
+PRIVATE_RULES = [
+    {"action": "resolve"},
+    {"ip_is_private": True, "ip_cidr": PRIVATE_DESTINATIONS, "action": "reject"},
+]
 
 SERVER_IP = "203.0.113.7"
 
@@ -62,7 +68,9 @@ def test_every_user_gets_their_own_credentials_and_mark(cert):
     # Each user leaves through their own marked outbound (counting, limits).
     marks = {o["tag"]: o["routing_mark"] for o in cfg["outbounds"] if "routing_mark" in o}
     assert marks == {f"u{u.id}": traffic_control.singbox_mark(u.id) for u in users}
-    assert {r["outbound"] for r in cfg["route"]["rules"]} == set(marks)
+    # Private destinations are refused before any user rule can route them.
+    assert cfg["route"]["rules"][:2] == PRIVATE_RULES
+    assert {r["outbound"] for r in cfg["route"]["rules"][2:]} == set(marks)
     wg = cfg["endpoints"][0]
     assert wg["listen_port"] == 51821 and len(wg["peers"]) == 2
 
@@ -253,4 +261,4 @@ def test_marks_are_left_out_when_the_engine_cannot_set_them(tmp_path, cert):
     assert traffic_control.engine_can_mark("xray", proc=root) is True
     assert traffic_control.engine_can_mark("mita", proc=root) is True  # not running yet
     cfg = standalone_engines.singbox_server_config(STATE, _users(), *cert, mark_users=False)
-    assert not any("routing_mark" in o for o in cfg["outbounds"]) and not cfg["route"]["rules"]
+    assert not any("routing_mark" in o for o in cfg["outbounds"]) and cfg["route"]["rules"] == PRIVATE_RULES

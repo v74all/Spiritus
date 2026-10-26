@@ -313,6 +313,11 @@ async def _decode_token_to_user(token: str, db: AsyncSession) -> User:
     except JWTError:
         raise credentials_exception
 
+    # Agent and reseller tokens share the signing key. An agent named like
+    # an admin account must not act as that account (e.g. reset its 2FA).
+    if payload.get("role") == "agent" or "agent_id" in payload or "reseller_id" in payload:
+        raise credentials_exception
+
     if jti and await _is_token_revoked(jti):
         raise credentials_exception
 

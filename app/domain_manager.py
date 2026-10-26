@@ -144,6 +144,11 @@ _DOMAIN_RE = re.compile(
     r"^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+"
     r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.?$"
 )
+# acme.sh (run as root) writes the account email into a shell file it
+# sources on every run, so a quote in it would execute. Plain addresses only.
+CONTACT_EMAIL_RE = re.compile(
+    r"(?=.{3,254}\Z)[A-Za-z0-9._%+-]{1,64}@(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}"
+)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -835,6 +840,9 @@ async def set_domain(
         return DomainSetResult(
             success=False, error="empty domain; call disable_domain() instead",
         )
+
+    if contact_email and not CONTACT_EMAIL_RE.fullmatch(contact_email):
+        return DomainSetResult(success=False, domain=domain, error="invalid contact email")
 
     err = _validate_domain(domain)
     if err:

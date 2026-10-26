@@ -3,6 +3,11 @@
 Port 443 stays the public door. TLS with the panel's own name goes to the
 panel over HTTPS. Every other name on 443 (the camouflage SNI in client
 configs) still goes to Xray. Plain IP access on the panel port is unchanged.
+
+The SNI split hands both backends a loopback connection, so it speaks the
+PROXY protocol to them: without it every visitor reached the panel as
+127.0.0.1, which the admin IP allowlist always lets in and which put every
+visitor in one login rate-limit bucket.
 """
 
 from __future__ import annotations
@@ -17,6 +22,11 @@ ACME_WEBROOT = "/etc/v7lthronyx/acme-web"
 _DOMAIN = re.compile(
     r"(?=.{1,253}\Z)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?"
 )
+# The cert paths are written into nginx.conf, which root's nginx master
+# parses: a ';', '{' or newline in a file name would add directives.
+_SAFE_PATH = re.compile(r"/[A-Za-z0-9._/-]{1,250}")
+# Only the TLS directories: root-owned, and holding nothing but certificates.
+_CERT_ROOTS = (Path("/etc/v7lthronyx/tls"), Path("/opt/v7lthronyx/tls"))
 
 
 def retarget_shared_443(inbounds: list) -> list:
@@ -33,6 +43,9 @@ def retarget_shared_443(inbounds: list) -> list:
         if port == 443 and inbound.get("listen") != "127.0.0.1":
             inbound["listen"] = "127.0.0.1"
             inbound["port"] = XRAY_LOOPBACK_PORT
+            # nginx's stream proxy announces the real client (see _write_configs).
+            stream = inbound.setdefault("streamSettings", {})
+            stream.setdefault("sockopt", {})["acceptProxyProtocol"] = True
     return inbounds
 
 
@@ -40,8 +53,8 @@ def apply_edge(domain: str, cert: str, key: str) -> dict:
     domain = (domain or "").strip().lower()
     if not _DOMAIN.fullmatch(domain):
         return {"ok": False, "message": "invalid domain"}
-    cert_path, key_path = Path(cert), Path(key)
-    if not _allowed_cert(cert_path) or not _allowed_cert(key_path):
+    cert_path, key_path = _allowed_cert(cert), _allowed_cert(key)
+    if cert_path is None or key_path is None:
         return {"ok": False, "message": "certificate path is not allowed"}
     if not cert_path.is_file() or not key_path.is_file():
         return {"ok": False, "message": "certificate files are missing"}
@@ -99,13 +112,19 @@ def _nginx_installed() -> bool:
     return Path("/usr/sbin/nginx").is_file()
 
 
-def _allowed_cert(path: Path) -> bool:
+def _allowed_cert(path: str) -> Path | None:
+    """The resolved path when it is a plain file name inside a TLS directory."""
+    if not _SAFE_PATH.fullmatch(path or ""):
+        return None
     try:
-        resolved = path.resolve()
-    except OSError:
-        return False
-    allowed = (Path("/etc/v7lthronyx"), Path("/opt/v7lthronyx"))
-    return any(resolved.is_relative_to(root) for root in allowed)
+        resolved = Path(path).resolve(strict=True)
+    except (OSError, RuntimeError):
+        return None
+    if not _SAFE_PATH.fullmatch(str(resolved)):
+        return None
+    if not any(resolved.is_relative_to(root) for root in _CERT_ROOTS):
+        return None
+    return resolved
 
 
 def _write_configs(domain: str, cert: Path, key: Path) -> None:
@@ -120,6 +139,7 @@ def _write_configs(domain: str, cert: Path, key: Path) -> None:
         "        listen 443 reuseport;\n"
         "        listen [::]:443 reuseport;\n"
         "        proxy_pass $spiritus_edge;\n"
+        "        proxy_protocol on;\n"
         "        ssl_preread on;\n"
         "    }\n"
         "}\n",
@@ -143,7 +163,7 @@ def _write_configs(domain: str, cert: Path, key: Path) -> None:
         "    }\n"
         "}\n"
         "server {\n"
-        f"    listen 127.0.0.1:{PANEL_TLS_PORT} ssl;\n"
+        f"    listen 127.0.0.1:{PANEL_TLS_PORT} ssl proxy_protocol;\n"
         f"    server_name {domain};\n"
         f"    ssl_certificate {cert};\n"
         f"    ssl_certificate_key {key};\n"
@@ -152,7 +172,9 @@ def _write_configs(domain: str, cert: Path, key: Path) -> None:
         "        proxy_http_version 1.1;\n"
         "        proxy_set_header Host $host;\n"
         "        proxy_set_header X-Forwarded-Proto https;\n"
-        "        proxy_set_header X-Forwarded-For $remote_addr;\n"
+        # Replaces any X-Forwarded-For the client sent.
+        "        proxy_set_header X-Forwarded-For $proxy_protocol_addr;\n"
+        "        proxy_set_header X-Real-IP $proxy_protocol_addr;\n"
         "    }\n"
         "}\n"
     )

@@ -4,6 +4,17 @@ All notable changes to Spiritus VPN Panel will be documented in this file.
 
 ## [Unreleased]
 
+### 🔐 Security
+- **VPN users could reach the server's loopback and private networks.** Every engine sent user traffic to `direct` with no address filter, so any customer could open the unauthenticated Xray API (`127.0.0.1:10085`: add users, read everyone's traffic), Redis, the panel as a loopback client (bypassing `ADMIN_IP_ALLOWLIST` and login rate limits), the cloud metadata service and the provider's private network. Xray (first routing rule, `IPOnDemand` so `localhost` is caught too), sing-box (`resolve` + `reject`) and mita (egress `REJECT`) now refuse `app/egress_policy.py`'s list. The sing-box Clash API, which listed every user's connections, now needs a secret.
+- **Panel user → root.** The root helper ran `python -m` from `/opt/v7lthronyx` with the panel's `.env` as its `EnvironmentFile`, and root's cron ran `/opt/v7lthronyx/scripts/auto-update.sh`, all owned by `vpnpanel`. A panel compromise could edit the code, the venv or the script, plant `json.py` next to `app/`, set `LD_PRELOAD` in `.env`, or point a symlink at `/etc/shadow` for the root-run cert hook to `chown`. `install.sh` now keeps the tree root-owned (`secure_install_tree`); the panel owns only `data/`, `backups/`, `mtls/`, its logs and `.env`. The helper no longer reads `.env` as its environment, the updater lives in `/usr/local/sbin`, the beat schedule moved to `data/` and `vpn-settings.json` follows `PANEL_DATA_DIR`.
+- **The domain proxy hid every client IP.** nginx's SNI split reached the panel as `127.0.0.1`, which the admin IP allowlist always lets in and which put every visitor in one login bucket. nginx now speaks PROXY protocol to the panel and to Xray behind it.
+- **Root wrote panel-chosen strings into nginx.conf and acme.sh.** The helper accepted any certificate path under `/opt/v7lthronyx` (a `;` or newline in a file name added nginx directives, parsed by root), and the ACME email only had a length check (acme.sh sources it from a shell file). Paths must now be plain names inside the TLS directories; emails must be plain addresses.
+- Agent and reseller tokens were accepted as admin-account tokens when the names matched; `/api/auth/setup-2fa` replaced an existing second factor with a session token alone. It now needs the password, plus the current code when 2FA is on.
+- Redis gets a password on bare-metal installs (`requirepass`, as docker-compose already did).
+- Log messages are kept to one line, so a username cannot forge `Failed login attempt ... from <ip>` lines for fail2ban.
+- Bounds on bulk-create (`pad` built gigabyte names) and on `days`.
+- Dependencies: ~180 known advisories in the pinned DPI/firewall/dev sets (aiohttp 3.9.1, scapy 2.5.0, h2, hpack, dnspython, black) and floors in `requirements.txt` that allowed vulnerable aiohttp, cryptography, PyJWT, requests, jinja2 and scapy. All files now audit clean; CI audits the pinned sets too.
+
 ## [2.1.0] - 2026-10-12
 
 ### 🔐 Security

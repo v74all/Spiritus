@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
+from ...egress_policy import PRIVATE_DESTINATIONS
 from ...protocol_engine import ss2022_key_length, ss2022_user_key
 from ._core import *  # noqa: F403
 
@@ -231,6 +232,11 @@ def _get_active_trojan_clients() -> list:
         return []
 
 
+PRIVATE_DESTINATIONS_RULE = {
+    "type": "field", "ip": PRIVATE_DESTINATIONS, "outboundTag": "block", "ruleTag": "block-private",
+}
+
+
 def _generate_xray_server_config(
     vmess_clients: list | None = None,
     vless_clients: list | None = None,
@@ -267,10 +273,11 @@ def _generate_xray_server_config(
         import shutil
         try:
             os.makedirs("/usr/local/etc/xray", exist_ok=True)
-            for src, dst in [(src_cert, _XRAY_CERT), (src_key, _XRAY_KEY)]:
+            # Xray reads the key through the panel group (SupplementaryGroups).
+            for src, dst, mode in [(src_cert, _XRAY_CERT, 0o644), (src_key, _XRAY_KEY, 0o640)]:
                 if os.path.exists(src):
                     shutil.copy2(src, dst)
-                    os.chmod(dst, 0o644)
+                    os.chmod(dst, mode)
             return _XRAY_CERT, _XRAY_KEY
         except Exception as exc:
             logger.warning("Could not copy TLS certs to xray dir: %s", exc)
@@ -616,7 +623,13 @@ def _generate_xray_server_config(
             {"tag": "block", "protocol": "blackhole"},
             *(limits[0] if limits else []),
         ],
-        "routing": {"domainStrategy": "AsIs", "rules": list(limits[1]) if limits else []},
+        # The private-address rule comes first so no user rule can skip it.
+        # IPOnDemand resolves a domain for it: "localhost" or a name pointing
+        # at 127.0.0.1 must not reach the API, Redis or the panel either.
+        "routing": {
+            "domainStrategy": "IPOnDemand",
+            "rules": [PRIVATE_DESTINATIONS_RULE, *(limits[1] if limits else [])],
+        },
     }
 
 

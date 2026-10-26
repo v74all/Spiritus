@@ -11,6 +11,7 @@ import grp
 import json
 import os
 import pwd
+import re
 import socket
 import struct
 import subprocess
@@ -24,6 +25,9 @@ PANEL_GROUP = os.environ.get("PANEL_GROUP", "vpnpanel")
 MAX_REQUEST = 32 * 1024 * 1024
 
 SERVICES = {"xray", "sing-box", "mita", "fail2ban"}
+_DOMAIN_RE = re.compile(
+    r"(?=.{1,253}\Z)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?"
+)
 EGRESS_BLOCKED_PORTS = (23, 25, 139, 445, 465, 587, 3389)
 # The mita .deb installs /usr/bin/mita; a manual install may use /usr/local/bin.
 MITA = next((p for p in ("/usr/bin/mita", "/usr/local/bin/mita") if os.path.exists(p)), "/usr/bin/mita")
@@ -140,12 +144,15 @@ def _dispatch(operation: str, payload: dict[str, Any]) -> dict[str, Any]:
         domain = str(payload.get("domain", "")).lower()
         contact = str(payload.get("contact_email", ""))
         mode = str(payload.get("mode", "acme"))
-        import re
-        if not re.fullmatch(r"(?=.{1,253}\Z)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", domain):
+        from .domain_manager import (
+            CONTACT_EMAIL_RE,
+            _generate_self_signed_cert,
+            _issue_letsencrypt_cert,
+        )
+        if not _DOMAIN_RE.fullmatch(domain):
             return {"ok": False, "message": "invalid domain"}
-        if len(contact) > 254 or mode not in {"acme", "self-signed"}:
+        if (contact and not CONTACT_EMAIL_RE.fullmatch(contact)) or mode not in {"acme", "self-signed"}:
             return {"ok": False, "message": "invalid certificate request"}
-        from .domain_manager import _generate_self_signed_cert, _issue_letsencrypt_cert
         issued = (
             _generate_self_signed_cert(domain)
             if mode == "self-signed"
@@ -192,7 +199,6 @@ def _dispatch(operation: str, payload: dict[str, Any]) -> dict[str, Any]:
             return {"ok": False, "message": "invalid target port"}
         return hysteria2_port_hop(str(payload.get("ports", "")), target)
     if operation == "wireguard.remove_peer":
-        import re
         interface = str(payload.get("interface", ""))
         public_key = str(payload.get("public_key", ""))
         if not re.fullmatch(r"wg[0-9]{1,3}", interface) or not re.fullmatch(r"[A-Za-z0-9+/]{43}=", public_key):
@@ -258,8 +264,8 @@ async def _handle(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) ->
                     result = {"ok": False, "message": "invalid request"}
                 else:
                     result = await asyncio.to_thread(_dispatch, operation, payload)
-    except (TimeoutError, ValueError, json.JSONDecodeError, subprocess.SubprocessError, OSError) as exc:
-        result = {"ok": False, "message": f"{type(exc).__name__}: {exc}"}
+    except Exception as exc:  # noqa: BLE001 - always answer; a malformed payload must not hang the caller
+        result = {"ok": False, "message": f"{type(exc).__name__}: {exc}"[:500]}
     writer.write(json.dumps(result, separators=(",", ":")).encode() + b"\n")
     await writer.drain()
     writer.close()

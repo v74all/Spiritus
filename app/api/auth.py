@@ -4,7 +4,8 @@ Authentication API router for V7LTHRONYX VPN Panel.
 Endpoints:
 - POST /auth/login        — username/password (returns token or "totp_required")
 - POST /auth/login/2fa    — username/password + TOTP code
-- POST /auth/setup-2fa    — enable TOTP for current user (returns QR URI)
+- POST /auth/setup-2fa    — enable TOTP for current user (password, plus the
+                            current code when replacing; returns QR URI)
 - POST /auth/verify-2fa   — verify a TOTP code
 - POST /auth/logout       — revoke the bearer token (jti → Redis blacklist)
 - GET  /auth/me           — current-user introspection
@@ -63,6 +64,12 @@ class Login2FARequest(BaseModel):
     username: str = Field(..., min_length=1, max_length=100)
     password: str = Field(..., min_length=1, max_length=200)
     totp_code: str = Field(..., min_length=6, max_length=6, pattern=r"^\d{6}$")
+
+
+class Setup2FARequest(BaseModel):
+    password: str = Field(..., min_length=1, max_length=200)
+    # Required when 2FA is already on: replacing it needs the current code.
+    totp_code: str | None = Field(None, min_length=6, max_length=6, pattern=r"^\d{6}$")
 
 
 class Setup2FAResponse(BaseModel):
@@ -271,17 +278,30 @@ async def login_with_2fa(request: Login2FARequest, req: Request, db: AsyncSessio
 
 @router.post("/setup-2fa", response_model=Setup2FAResponse)
 async def setup_2fa(
+    request: Setup2FARequest,
+    req: Request,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_db),
 ):
-    secret = generate_totp_secret()
-    uri = get_totp_uri(secret, current_user.username)
-
+    # A session token alone must not bind (or replace) the second factor:
+    # whoever stole it would lock the real owner out.
+    client_ip = _client_ip(req)
+    await _check_2fa_lockout(client_ip, current_user.username)
     result = await db.execute(select(Admin).where(Admin.username == current_user.username))
     admin_user = result.scalar_one_or_none()
     if admin_user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    if not verify_password(request.password, admin_user.password_hash):
+        await _record_failed_2fa(client_ip, current_user.username)
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+    replacing = bool(admin_user.totp_enabled and admin_user.totp_secret)
+    if replacing and not (request.totp_code and verify_totp(admin_user.totp_secret, request.totp_code)):
+        await _record_failed_2fa(client_ip, current_user.username)
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid 2FA code")
+    await _clear_2fa_attempts(client_ip, current_user.username)
 
+    secret = generate_totp_secret()
+    uri = get_totp_uri(secret, current_user.username)
     admin_user.totp_secret = secret
     admin_user.totp_enabled = True
     await db.commit()

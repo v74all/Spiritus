@@ -19,6 +19,7 @@ import os
 from typing import Any
 
 from .config import settings
+from .egress_policy import PRIVATE_DESTINATIONS
 from .protocol_engine import _parse_mbps, ss2022_key_length, ss2022_user_key
 
 logger = logging.getLogger(__name__)
@@ -36,6 +37,12 @@ _EMPTY_SINGBOX = {
 def _on(state: dict, key: str) -> bool:
     v = state.get(key)
     return v is True or str(v).lower() in ("1", "true", "yes", "on")
+
+
+def clash_api_secret() -> str:
+    """Bearer secret of the loopback Clash API, which lists every user's open
+    connections and can close them. Derived like the keys below."""
+    return hmac.new(settings.secret_key.encode(), b"spiritus-clash-api", hashlib.sha256).hexdigest()
 
 
 def shadowtls_server_key(method: str = SHADOWTLS_SS_METHOD) -> str:
@@ -302,12 +309,19 @@ def singbox_server_config(state: dict, users: list, cert_file: str, key_file: st
     else:
         marked = [{"type": "direct", "tag": f"u{u.id}", "routing_mark": singbox_mark(u.id)} for u in users]
         rules = [{"auth_user": [u.name], "outbound": f"u{u.id}"} for u in users] + wg_rules
+    # See app/egress_policy.py. Names are resolved first so "localhost" and
+    # names pointing at 127.0.0.1 are caught as well.
+    rules = [
+        {"action": "resolve"},
+        {"ip_is_private": True, "ip_cidr": PRIVATE_DESTINATIONS, "action": "reject"},
+        *rules,
+    ]
     config: dict[str, Any] = {
         "log": {"level": "warn", "timestamp": True},
         "inbounds": inbounds,
         "outbounds": [{"type": "direct", "tag": "direct"}, *marked],
         "route": {"rules": rules, "final": "direct"},
-        "experimental": {"clash_api": {"external_controller": CLASH_API}},
+        "experimental": {"clash_api": {"external_controller": CLASH_API, "secret": clash_api_secret()}},
     }
     if endpoints:
         config["endpoints"] = endpoints
@@ -326,6 +340,9 @@ def mieru_server_config(state: dict, users: list) -> dict | None:
         ]),
         "loggingLevel": "WARN",
         "mtu": st["mieru_mtu"],
+        # mita already refuses loopback and RFC 1918 addresses; this adds the
+        # rest of app/egress_policy.py (the metadata service, CGNAT, ...).
+        "egress": {"rules": [{"ipRanges": PRIVATE_DESTINATIONS, "action": "REJECT"}]},
     }
 
 

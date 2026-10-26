@@ -56,6 +56,25 @@ if _log_path:
             file=_sys.stderr,
         )
 
+class _OneLineMessages(logging.Filter):
+    """Escape CR/LF in messages. Usernames and paths from requests are logged,
+    and fail2ban bans whatever IP a forged "Failed login attempt ... from
+    <ip>" line names. Tracebacks are added later by the formatter, untouched."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        try:
+            message = record.getMessage()
+        except Exception:  # noqa: BLE001 - a bad format string is the handler's to report
+            return True
+        if "\n" in message or "\r" in message:
+            record.msg = message.replace("\r", "\\r").replace("\n", "\\n")
+            record.args = None
+        return True
+
+
+for _handler in _log_handlers:
+    _handler.addFilter(_OneLineMessages())
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',

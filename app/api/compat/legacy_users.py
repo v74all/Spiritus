@@ -37,10 +37,14 @@ async def _fill_online_ips(users: list[dict]) -> None:
         u["online_ips"], u["online_ip_count"] = found, len(found)
 
 
+# timedelta(days=...) overflows (a 500) past ~2.7 million days.
+MAX_DAYS = 36500
+
+
 class LegacyUserCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     traffic: float = Field(10.0, ge=0)
-    days: int = Field(30, ge=0)
+    days: int = Field(30, ge=0, le=MAX_DAYS)
     speed_limit_up: int = Field(0, ge=0)
     speed_limit_down: int = Field(0, ge=0)
     note: str = ""
@@ -131,7 +135,7 @@ async def legacy_toggle_user(
 
 class LegacyRenewRequest(BaseModel):
     traffic: float = Field(..., ge=0)
-    days: int = Field(..., ge=0)
+    days: int = Field(..., ge=0, le=MAX_DAYS)
 
 
 @router.post("/users/{name}/renew")
@@ -292,16 +296,17 @@ async def legacy_user_activity(
 # ─────────────────────────────────────────────────────────────────────────────
 
 class BulkCreateRequest(BaseModel):
-    prefix: str = "group"
+    prefix: str = Field("group", max_length=100)
     count: int = Field(1, ge=1, le=500)
-    traffic: float = 1
-    days: int = 30
+    traffic: float = Field(1, ge=0)
+    days: int = Field(30, ge=0, le=MAX_DAYS)
     numbered: bool = True
-    start: int = 1
-    pad: int = 3
+    # zfill(pad) builds the name: an unbounded pad is a memory bomb.
+    start: int = Field(1, ge=0, le=10**9)
+    pad: int = Field(3, ge=1, le=9)
     apply: bool = False
-    speed_limit_up: int = 0
-    speed_limit_down: int = 0
+    speed_limit_up: int = Field(0, ge=0)
+    speed_limit_down: int = Field(0, ge=0)
 
 
 @router.post("/bulk-users")
