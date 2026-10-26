@@ -41,8 +41,13 @@ jobs:
       - name: Run Semgrep
         run: semgrep scan --config p/python --config p/security-audit --error --quiet app/ main.py
 
+      # The optional DPI / firewall sets are pinned, so audit the pins as
+      # written: resolving requirements.txt alone never saw their old aiohttp.
       - name: Run pip-audit
-        run: pip-audit --desc -r requirements.txt
+        run: |
+          pip-audit --desc -r requirements.txt
+          pip-audit --desc --no-deps --disable-pip -r requirements-dpi.txt
+          pip-audit --desc --no-deps --disable-pip -r requirements-firewall.txt
       
       - name: Run Trivy (container scan)
         uses: aquasecurity/trivy-action@0.32.0

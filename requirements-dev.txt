@@ -7,6 +7,6 @@ aiosqlite==0.22.1
 bandit==1.8.6
 pip-audit==2.10.0
 ruff==0.17.0
-black==26.3.1  # CVE-2026-32274 (ReDoS in earlier releases)
+black==26.10.1  # CVE-2026-114134, CVE-2026-32274
 mypy==1.19.1
-fakeredis==2.39.0
+fakeredis==2.40.0
