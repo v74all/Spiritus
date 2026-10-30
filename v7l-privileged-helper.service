@@ -18,6 +18,9 @@ ExecStart=/opt/v7lthronyx/venv/bin/python3 -m app.privileged_helper_daemon
 Restart=on-failure
 RestartSec=3
 UMask=0027
+RuntimeDirectory=v7lthronyx
+RuntimeDirectoryMode=0751
+StateDirectory=v7lthronyx
 
 PrivateTmp=true
 PrivateDevices=true
@@ -31,9 +34,9 @@ RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
 RestrictNamespaces=true
 RestrictRealtime=true
 LockPersonality=true
-CapabilityBoundingSet=CAP_DAC_OVERRIDE CAP_NET_ADMIN CAP_NET_RAW
-AmbientCapabilities=CAP_DAC_OVERRIDE CAP_NET_ADMIN CAP_NET_RAW
-ReadWritePaths=/run/v7lthronyx /etc/v7lthronyx /etc/letsencrypt /etc/fail2ban /usr/local/etc /var/www /var/log/xray
+CapabilityBoundingSet=CAP_CHOWN CAP_DAC_OVERRIDE CAP_NET_ADMIN CAP_NET_RAW
+AmbientCapabilities=CAP_CHOWN CAP_DAC_OVERRIDE CAP_NET_ADMIN CAP_NET_RAW
+ReadWritePaths=/run/v7lthronyx -/etc/v7lthronyx -/etc/letsencrypt -/etc/fail2ban -/etc/nginx -/usr/local/etc -/var/www -/var/log/nginx -/var/lib/nginx -/var/log/xray
 
 [Install]
 WantedBy=multi-user.target

@@ -997,13 +997,14 @@ setup_panel_user() {
 
     # Grant the panel user write access to the xray config directory so it
     # can push updated configs without running as root.
-    mkdir -p /usr/local/etc/xray
-    chown root:"${PANEL_USER}" /usr/local/etc/xray
-    chmod 750 /usr/local/etc/xray
-    if [[ -f /usr/local/etc/xray/config.json ]]; then
-        chown root:"${PANEL_USER}" /usr/local/etc/xray/config.json
-        chmod 640 /usr/local/etc/xray/config.json
+    mkdir -p /usr/local/etc/xray /var/log/xray /etc/v7lthronyx /run/v7lthronyx
+    chown -R root:"${PANEL_USER}" /usr/local/etc/xray /var/log/xray
+    chmod 775 /usr/local/etc/xray /var/log/xray
+    if [[ ! -f /usr/local/etc/xray/config.json ]]; then
+        echo '{}' > /usr/local/etc/xray/config.json
     fi
+    chown root:"${PANEL_USER}" /usr/local/etc/xray/config.json
+    chmod 664 /usr/local/etc/xray/config.json
     print_success "Xray config dir readable by ${PANEL_USER}"
 
     export PANEL_USER
@@ -1109,12 +1110,8 @@ RestrictNamespaces=true
 RestrictRealtime=true
 RestrictSUIDSGID=true
 LockPersonality=true
-MemoryDenyWriteExecute=true
-SystemCallArchitectures=native
-CapabilityBoundingSet=
-AmbientCapabilities=
 UMask=0027
-ReadWritePaths=${INSTALL_DIR} /usr/local/etc/xray /var/log/xray
+ReadWritePaths=${INSTALL_DIR} -/usr/local/etc/xray -/var/log/xray -/run/v7lthronyx
 LimitNOFILE=65536
 
 StandardOutput=journal
@@ -1187,7 +1184,7 @@ AmbientCapabilities=CAP_CHOWN CAP_DAC_OVERRIDE CAP_NET_ADMIN CAP_NET_RAW
 # /var/www is only used by the optional nginx-fallback site (not set up
 # by this installer) — prefixed with '-' so a box without it doesn't
 # hit the same "path doesn't exist" namespace failure as /run above.
-ReadWritePaths=/run/v7lthronyx /etc/v7lthronyx -/etc/letsencrypt /etc/fail2ban /etc/nginx /usr/local/etc -/var/www -/var/log/nginx -/var/lib/nginx /var/log/xray
+ReadWritePaths=/run/v7lthronyx -/etc/v7lthronyx -/etc/letsencrypt -/etc/fail2ban -/etc/nginx -/usr/local/etc -/var/www -/var/log/nginx -/var/lib/nginx -/var/log/xray
 
 [Install]
 WantedBy=multi-user.target
@@ -1218,7 +1215,7 @@ ProtectHome=true
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 CapabilityBoundingSet=
 UMask=0027
-ReadWritePaths=${INSTALL_DIR} /tmp
+ReadWritePaths=${INSTALL_DIR} /tmp -/run/v7lthronyx
 
 StandardOutput=journal
 StandardError=journal
@@ -1252,7 +1249,7 @@ ProtectHome=true
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 CapabilityBoundingSet=
 UMask=0027
-ReadWritePaths=${INSTALL_DIR}
+ReadWritePaths=${INSTALL_DIR} -/run/v7lthronyx
 RestartSec=10
 
 StandardOutput=journal
@@ -1384,7 +1381,8 @@ start_panel() {
         fi
     else
         print_error "Failed to start V7LTHRONYX service. Check logs: journalctl -u ${SERVICE_NAME} -f"
-        tail -n 20 ${INSTALL_DIR}/vpn-panel.log
+        journalctl -u ${SERVICE_NAME} -n 30 --no-pager 2>/dev/null || true
+        tail -n 20 ${INSTALL_DIR}/vpn-panel.log 2>/dev/null || true
         exit 1
     fi
 }
@@ -1607,6 +1605,10 @@ main() {
     configure_systemd
 
     systemctl restart v7lthronyx-helper
+    for _i in $(seq 1 40); do
+        [[ -S /run/v7lthronyx/helper.sock ]] && break
+        sleep 0.25
+    done
     echo -e "${CYAN}[11b/13]${NC} Applying domain to panel database..."
     apply_domain_on_install || true
 

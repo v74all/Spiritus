@@ -38,12 +38,8 @@ RestrictNamespaces=true
 RestrictRealtime=true
 RestrictSUIDSGID=true
 LockPersonality=true
-MemoryDenyWriteExecute=true
-SystemCallArchitectures=native
-CapabilityBoundingSet=
-AmbientCapabilities=
 UMask=0027
-ReadWritePaths=/opt/v7lthronyx /usr/local/etc/xray /var/log/xray
+ReadWritePaths=/opt/v7lthronyx -/usr/local/etc/xray -/var/log/xray -/run/v7lthronyx
 LimitNOFILE=65536
 
 StandardOutput=journal

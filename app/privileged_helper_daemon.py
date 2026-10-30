@@ -243,9 +243,14 @@ def _peer_allowed(writer: asyncio.StreamWriter) -> bool:
         return False
     pid, uid, gid = struct.unpack("3i", sock.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12))
     del pid
-    expected_uid = pwd.getpwnam(PANEL_USER).pw_uid
-    expected_gid = grp.getgrnam(PANEL_GROUP).gr_gid
-    return uid == expected_uid and gid == expected_gid
+    if uid == 0:
+        return True
+    try:
+        expected_uid = pwd.getpwnam(PANEL_USER).pw_uid
+        expected_gid = grp.getgrnam(PANEL_GROUP).gr_gid
+        return uid == expected_uid and gid == expected_gid
+    except (KeyError, OSError):
+        return False
 
 
 async def _handle(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
