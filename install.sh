@@ -1184,7 +1184,7 @@ AmbientCapabilities=CAP_CHOWN CAP_DAC_OVERRIDE CAP_NET_ADMIN CAP_NET_RAW
 # /var/www is only used by the optional nginx-fallback site (not set up
 # by this installer) — prefixed with '-' so a box without it doesn't
 # hit the same "path doesn't exist" namespace failure as /run above.
-ReadWritePaths=/run/v7lthronyx -/etc/v7lthronyx -/etc/letsencrypt -/etc/fail2ban -/etc/nginx -/usr/local/etc -/var/www -/var/log/nginx -/var/lib/nginx -/var/log/xray
+ReadWritePaths=-/run/v7lthronyx -/etc/v7lthronyx -/etc/letsencrypt -/etc/fail2ban -/etc/nginx -/usr/local/etc -/var/www -/var/log/nginx -/var/lib/nginx -/var/log/xray
 
 [Install]
 WantedBy=multi-user.target
@@ -1362,7 +1362,10 @@ start_panel() {
     print_info "Waiting for web application to start (this may take up to 20s)..."
     HEALTH_STATUS="Failed"
     for i in $(seq 1 10); do
-        if curl -s "http://127.0.0.1:${WEB_PORT}/api/health" | grep -q "healthy"; then
+        if curl -sk "http://127.0.0.1:${WEB_PORT}/api/health" | grep -q "healthy"; then
+            HEALTH_STATUS="OK"
+            break
+        elif curl -sk "https://127.0.0.1:${WEB_PORT}/api/health" | grep -q "healthy"; then
             HEALTH_STATUS="OK"
             break
         fi

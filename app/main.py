@@ -370,8 +370,13 @@ class _NoCacheStatic(StaticFiles):
             resp.headers["Expires"] = "0"
         return resp
 
-if os.path.exists("static"):
-    app.mount("/static", _NoCacheStatic(directory="static"), name="static")
+_project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_static_dir = os.path.join(_project_root, "static")
+if not os.path.isdir(_static_dir):
+    _static_dir = os.path.join(os.getcwd(), "static")
+
+if os.path.exists(_static_dir):
+    app.mount("/static", _NoCacheStatic(directory=_static_dir), name="static")
 
 # ── Mount API Routers ──────────────────────────────────
 
@@ -591,7 +596,9 @@ async def google_relay_proxy(
 
 # ── Panel HTML (serves the frontend) ───────────────────
 
-_templates_dir = os.path.join(os.getcwd(), "templates")
+_templates_dir = os.path.join(_project_root, "templates")
+if not os.path.isdir(_templates_dir):
+    _templates_dir = os.path.join(os.getcwd(), "templates")
 _jinja_env = Environment(loader=FileSystemLoader(_templates_dir), autoescape=True)
 
 def _url_for_static(filename: str) -> str:
@@ -618,15 +625,14 @@ async def serve_panel(request: Request):
         return HTMLResponse("<h1>V7LTHRONYX VPN Panel v2.0</h1><p>Panel template not found</p>")
 
     template = _jinja_env.get_template("panel.html")
-    # Cache-bust JS/CSS via mtime so browsers always pick up post-deploy changes
     try:
-        _js_path = os.path.join(os.path.dirname(_templates_dir), "static", "js", "panel.js")
+        _js_path = os.path.join(_static_dir, "js", "panel.js")
         asset_v = str(int(os.path.getmtime(_js_path)))
     except Exception:
         asset_v = "0"
     html = template.render(
         dir=_detect_direction(request),
-        server_ip=_public_server_ip(request),  # what links carry, not the bind address
+        server_ip=_public_server_ip(request),
         server_port=settings.web_port,
         sni_host=settings.vless_ws_host,
         ws_path=settings.vless_ws_path,
@@ -644,16 +650,16 @@ async def serve_agent_panel(request: Request):
         return HTMLResponse("<h1>V7LTHRONYX Agent Panel</h1><p>Agent template not found</p>")
 
     template = _jinja_env.get_template("agent-panel.html")
-    apk_path = os.path.join(os.getcwd(), "static", "downloads", "app-release.apk")
+    apk_path = os.path.join(_static_dir, "downloads", "app-release.apk")
     try:
-        _css_path = os.path.join(os.path.dirname(_templates_dir), "static", "css", "ui.css")
+        _css_path = os.path.join(_static_dir, "css", "ui.css")
         asset_v = str(int(os.path.getmtime(_css_path)))
     except Exception:
         asset_v = "0"
     html = template.render(
         dir=_detect_direction(request),
         asset_v=asset_v,
-        server_ip=_public_server_ip(request),  # what links carry, not the bind address
+        server_ip=_public_server_ip(request),
         server_port=settings.web_port,
         sni_host=settings.vless_ws_host,
         ws_path=settings.vless_ws_path,
@@ -669,13 +675,13 @@ async def serve_agent_panel(request: Request):
 async def serve_landing(request: Request):
     template = _jinja_env.get_template("landing.html")
     try:
-        _js_path = os.path.join(os.path.dirname(_templates_dir), "static", "js", "tailwind.min.js")
+        _js_path = os.path.join(_static_dir, "js", "tailwind.min.js")
         asset_v = str(int(os.path.getmtime(_js_path)))
     except Exception:
         asset_v = "0"
     html = template.render(
         dir=_detect_direction(request),
-        server_ip=_public_server_ip(request),  # what links carry, not the bind address
+        server_ip=_public_server_ip(request),
         server_port=settings.web_port,
         asset_v=asset_v,
         csp_nonce=getattr(request.state, "csp_nonce", ""),
@@ -685,7 +691,7 @@ async def serve_landing(request: Request):
 
 @app.get("/download/app")
 async def download_app():
-    apk_path = os.path.join(os.getcwd(), "static", "downloads", "app-release.apk")
+    apk_path = os.path.join(_static_dir, "downloads", "app-release.apk")
     if not os.path.isfile(apk_path):
         raise HTTPException(status_code=404, detail="File not found")
     return FileResponse(apk_path, filename="vpn-app.apk")
@@ -693,7 +699,7 @@ async def download_app():
 
 @app.get("/download/app-windows")
 async def download_app_windows():
-    win_path = os.path.join(os.getcwd(), "static", "downloads", "vpn-windows.zip")
+    win_path = os.path.join(_static_dir, "downloads", "vpn-windows.zip")
     if not os.path.isfile(win_path):
         raise HTTPException(
             status_code=404,
@@ -877,7 +883,7 @@ async def subscription_page(
         sni_host=_vmess_state.get("vmess_sni") or "",
         ws_path=_vmess_state.get("vmess_ws_path") or "/api/v1/stream",
         settings=settings,
-        apk_available=os.path.isfile(os.path.join(os.getcwd(), "static", "downloads", "app-release.apk")),
+        apk_available=os.path.isfile(os.path.join(_static_dir, "downloads", "app-release.apk")),
         csp_nonce=getattr(request.state, "csp_nonce", ""),
     )
     return HTMLResponse(content=html)
