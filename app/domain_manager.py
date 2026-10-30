@@ -275,31 +275,20 @@ async def _delete_settings(db: AsyncSession, keys: list[str]) -> None:
 #  Validation
 # ═══════════════════════════════════════════════════════════════
 
-def _validate_domain(domain: str) -> str | None:
-    """Return None if `domain` is a usable FQDN, else a reason string.
-
-    Why regex AND DNS resolution:
-      - The regex catches typos fast (no DNS round-trip).
-      - The DNS check catches domains that the operator fat-fingered
-        or that point at a private IP via a CNAME chain. We refuse
-        to issue a Let's Encrypt cert for a domain that resolves
-        to 10.0.0.1 — the ACME HTTP-01 challenge would never
-        succeed anyway, but failing fast saves the operator 60
-        seconds of confusion.
-    """
+def _validate_domain(domain: str, allow_unresolved: bool = False) -> str | None:
     if not domain:
         return "empty domain"
     if len(domain) > 253:
         return "domain longer than 253 chars"
     if not _DOMAIN_RE.match(domain):
         return f"'{domain}' is not a valid FQDN"
-    # Lower-case to avoid duplicate entries.
     if domain != domain.lower():
         return "domain must be lower-case"
-    # IDN: punycode. Don't reject; ACME handles it.
     try:
         info = socket.getaddrinfo(domain, None, type=socket.SOCK_STREAM)
     except socket.gaierror as exc:
+        if allow_unresolved:
+            return None
         return f"DNS resolution failed: {exc}"
     for _fam, *_rest, sockaddr in info:
         ip = sockaddr[0].split("%", 1)[0]
@@ -307,7 +296,7 @@ def _validate_domain(domain: str) -> str | None:
             address = ipaddress.ip_address(ip)
         except ValueError:
             return f"DNS returned invalid address {ip}"
-        if not address.is_global:
+        if not address.is_global and not allow_unresolved:
             return f"domain resolves to private or non-public IP {ip}"
     return None
 
@@ -844,7 +833,7 @@ async def set_domain(
     if contact_email and not CONTACT_EMAIL_RE.fullmatch(contact_email):
         return DomainSetResult(success=False, domain=domain, error="invalid contact email")
 
-    err = _validate_domain(domain)
+    err = _validate_domain(domain, allow_unresolved=prefer_self_signed)
     if err:
         return DomainSetResult(success=False, domain=domain, error=err)
 

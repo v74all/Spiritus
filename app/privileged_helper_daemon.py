@@ -76,7 +76,7 @@ def _atomic_config(target_name: str, content: str) -> dict[str, Any]:
     # made /api/ready fail and left Xray unable to open its own config.
     try:
         os.chown(target, 0, grp.getgrnam(PANEL_GROUP).gr_gid)
-    except KeyError:
+    except (KeyError, PermissionError, OSError):
         pass
     os.chmod(target, 0o640)
     return {"ok": True, "message": "config installed"}
@@ -290,9 +290,14 @@ async def main() -> None:
     if SOCKET_PATH.exists():
         SOCKET_PATH.unlink()
     server = await start_server(SOCKET_PATH)
-    os.chown(SOCKET_PATH, 0, grp.getgrnam(PANEL_GROUP).gr_gid)
-    # Group-only socket (panel group); SO_PEERCRED additionally checks each caller.
-    os.chmod(SOCKET_PATH, 0o660)  # nosec B103
+    try:
+        os.chown(SOCKET_PATH, 0, grp.getgrnam(PANEL_GROUP).gr_gid)
+    except (KeyError, PermissionError, OSError):
+        pass
+    try:
+        os.chmod(SOCKET_PATH, 0o660)
+    except OSError:
+        pass
     async with server:
         await server.serve_forever()
 
