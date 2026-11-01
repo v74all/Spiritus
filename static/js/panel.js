@@ -1897,6 +1897,9 @@ async function loadSettings() {
     document.getElementById('set-cdn-domain').value = s.cdn_domain || '';
     document.getElementById('set-cdn-path').value = s.cdn_ws_path || '/cdn-ws';
     document.getElementById('set-cdn-port').value = s.cdn_port || 2082;
+    document.getElementById('set-cdn-xhttp').checked = s.cdn_xhttp_enabled || false;
+    document.getElementById('set-cdn-xhttp-path').value = s.cdn_xhttp_path || '/cdn-xhttp';
+    document.getElementById('set-cdn-xhttp-port').value = s.cdn_xhttp_port || 2096;
     // Telegram
     document.getElementById('set-telegram').checked = s.telegram_enabled || false;
     document.getElementById('set-telegram-token').value = s.telegram_bot_token || '';
@@ -1986,6 +1989,7 @@ async function resetSettingsToDefault() {
     'set-openvpn': false, 'set-openvpn-port': '1194', 'set-openvpn-proto': 'udp', 'set-openvpn-network': '10.10.0.0/24', 'set-openvpn-dns': '1.1.1.1',
     'set-fingerprint': 'chrome', 'set-noise': false, 'set-noise-packet': 'rand:50-100', 'set-noise-delay': '10-20',
     'set-cdn': false, 'set-cdn-domain': '', 'set-cdn-path': '/cdn-ws', 'set-cdn-port': '2082',
+    'set-cdn-xhttp': false, 'set-cdn-xhttp-path': '/cdn-xhttp', 'set-cdn-xhttp-port': '2096',
     'set-telegram': false, 'set-telegram-token': '', 'set-telegram-chat': '',
     'set-tg-disabled': true, 'set-tg-expired': true, 'set-tg-killswitch': true, 'set-tg-traffic': true, 'set-tg-created': false, 'set-tg-deleted': false,
     'set-dpi-tcp-fragment': false, 'set-dpi-tls-fragment': false, 'set-dpi-ip-fragment': false, 'set-dpi-tcp-keepalive': false,
@@ -2158,6 +2162,9 @@ async function saveSettings() {
     cdn_domain: document.getElementById('set-cdn-domain').value.trim(),
     cdn_ws_path: document.getElementById('set-cdn-path').value.trim() || '/cdn-ws',
     cdn_port: parseInt(document.getElementById('set-cdn-port').value) || 2082,
+    cdn_xhttp_enabled: document.getElementById('set-cdn-xhttp').checked,
+    cdn_xhttp_path: document.getElementById('set-cdn-xhttp-path').value.trim() || '/cdn-xhttp',
+    cdn_xhttp_port: parseInt(document.getElementById('set-cdn-xhttp-port').value) || 2096,
     // Telegram
     telegram_enabled: document.getElementById('set-telegram').checked,
     telegram_bot_token: document.getElementById('set-telegram-token').value.trim(),

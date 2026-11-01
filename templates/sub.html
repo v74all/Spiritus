@@ -425,6 +425,15 @@ details.adv .adv-body{padding-top:16px}
         </div>
       </div>
       {% endif %}
+      {% if links.cdn_vless_xhttp %}
+      <div class="config-item">
+        <div class="config-label"><span class="config-badge badge-cdn">CDN</span> VLESS + XHTTP</div>
+        <div class="config-box">
+          <div class="config-link" id="link-cdn_vless_xhttp">{{ links.cdn_vless_xhttp }}</div>
+          <button class="btn-copy" onclick="copyLink(event, 'cdn_vless_xhttp')">Copy</button>
+        </div>
+      </div>
+      {% endif %}
       {% if links.trojan %}
       <div class="config-item">
         <div class="config-label"><span class="config-badge st-80a7594">Trojan</span> TLS</div>

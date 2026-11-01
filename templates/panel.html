@@ -1815,6 +1815,17 @@
       <div class="form-group"><label>CDN Port (origin) / پورت مبدأ</label>
         <input type="number" id="set-cdn-port" value="2082" min="1" max="65535">
         <div class="settings-desc">Cloudflare connects to this port on your server / کلادفلر از این پورت به سرور وصل میشه</div></div>
+      <div class="settings-row">
+        <div><div class="settings-label">CDN XHTTP / مسیر XHTTP روی CDN</div>
+          <div class="settings-desc">Second CDN path for networks that cut WebSocket / مسیر دوم برای شبکه‌هایی که وب‌سوکت را قطع می‌کنند</div></div>
+        <label class="toggle"><input type="checkbox" id="set-cdn-xhttp"><span class="toggle-slider"></span></label>
+      </div>
+      <div class="form-group"><label>CDN XHTTP Path / مسیر</label>
+        <input type="text" id="set-cdn-xhttp-path" value="/cdn-xhttp"></div>
+      <div class="form-group"><label>CDN XHTTP Port / پورت</label>
+        <input type="number" id="set-cdn-xhttp-port" value="2096" min="1" max="65535">
+        <div class="settings-desc">A Cloudflare HTTPS port: 443, 2053, 2083, 2087, 2096, 8443 / یکی از پورت‌های HTTPS کلادفلر</div>
+</div>
     </div>
 
     </div>

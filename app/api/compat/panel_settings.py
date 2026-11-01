@@ -58,6 +58,9 @@ async def legacy_get_settings(
         "cdn_domain": settings.cdn_domain,
         "cdn_ws_path": settings.cdn_ws_path,
         "cdn_port": settings.cdn_port,
+        "cdn_xhttp_enabled": False,
+        "cdn_xhttp_port": 2096,
+        "cdn_xhttp_path": "/cdn-xhttp",
         "telegram_enabled": False,
         "telegram_bot_token": getattr(settings, 'telegram_bot_token', ''),
         "telegram_chat_id": getattr(settings, 'telegram_chat_id', ''),
@@ -573,8 +576,11 @@ def _generate_xray_server_config(
         "sniffing": {"enabled": True, "destOverride": ["http"]},
     })
 
-    # CDN WS+TLS
-    if _as_bool(s.get("cdn_enabled")) and s.get("cdn_domain") and _tls_ready:
+    # CDN WS+TLS. Cloudflare reaches the origin on the port the client used, so
+    # a CDN link on the VMess port (443) is served by that inbound: a second
+    # listener there would stop Xray from starting.
+    if (_as_bool(s.get("cdn_enabled")) and s.get("cdn_domain") and _tls_ready
+            and int(s.get("cdn_port") or 2082) != int(s.get("vmess_port") or 443)):
         cdn_domain = s.get("cdn_domain")
         inbounds.append({
             "tag": "in-cdn-ws",
@@ -594,6 +600,28 @@ def _generate_xray_server_config(
             "sniffing": {"enabled": True, "destOverride": ["http", "tls"]},
         })
 
+    # VLESS XHTTP+TLS behind the CDN: many short requests instead of one long
+    # stream, for networks whose DPI cuts the WS flows.
+    if (_as_bool(s.get("cdn_enabled")) and s.get("cdn_domain") and _tls_ready
+            and _as_bool(s.get("cdn_xhttp_enabled"))):
+        inbounds.append({
+            "tag": "in-cdn-xhttp",
+            "port": int(s.get("cdn_xhttp_port") or 2096),
+            "listen": listen_addr,
+            "protocol": "vless",
+            "settings": {"clients": vless_clients, "decryption": "none"},
+            "streamSettings": {
+                "network": "xhttp",
+                "security": "tls",
+                "xhttpSettings": {"mode": "auto", "path": s.get("cdn_xhttp_path") or "/cdn-xhttp"},
+                "tlsSettings": {
+                    "serverName": s.get("cdn_domain"),
+                    "certificates": [{"certificateFile": cert_file, "keyFile": key_file}],
+                },
+            },
+            "sniffing": {"enabled": True, "destOverride": ["http", "tls"]},
+        })
+
     # The panel reads per-user traffic with `xray api statsquery` on this
     # loopback API; without it nothing is ever counted.
     from ...panel_edge import retarget_shared_443
@@ -603,7 +631,7 @@ def _generate_xray_server_config(
         "api": {
             "tag": "api",
             "listen": f"127.0.0.1:{getattr(settings, 'api_port', 10085) or 10085}",
-            "services": ["HandlerService", "StatsService", "LoggerService"],
+            "services": ["HandlerService", "StatsService", "LoggerService", "RoutingService"],
         },
         "stats": {},
         "policy": {

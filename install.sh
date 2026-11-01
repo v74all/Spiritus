@@ -71,7 +71,7 @@ install_dependencies() {
         # --no-upgrade: install anything missing, but do not upgrade packages
         # already on the machine. A plain `apt install` on Kali rolling
         # rewrites python3 and metapackages and can remove unrelated software.
-        apt install -y --no-upgrade git ca-certificates openssl cron sudo python3 python3-pip python3-venv curl wget unzip socat postgresql postgresql-contrib redis-server fail2ban nftables iproute2
+        apt install -y --no-upgrade git ca-certificates openssl cron sudo python3 python3-pip python3-venv curl wget unzip socat postgresql postgresql-contrib redis-server fail2ban iptables nftables iproute2
     elif [[ "$PKG_MANAGER" == "yum" ]]; then
         yum install -y git ca-certificates openssl cronie sudo python3 python3-pip curl wget unzip socat postgresql-server redis fail2ban nftables iproute-tc
     fi

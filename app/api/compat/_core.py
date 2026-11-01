@@ -78,6 +78,7 @@ _DPI_SETTING_KEYS = {
 }
 _PROTOCOL_ENABLE_KEYS = {
     "cdn_enabled",
+    "cdn_xhttp_enabled",
     "trojan_enabled",
     "grpc_enabled",
     "httpupgrade_enabled",
@@ -102,6 +103,7 @@ _PROTOCOL_ENABLE_KEYS = {
 _BOOLEAN_SETTING_KEYS = {
     "kill_switch_enabled",
     "cdn_enabled",
+    "cdn_xhttp_enabled",
     "trojan_enabled",
     "grpc_enabled",
     "httpupgrade_enabled",
@@ -490,6 +492,28 @@ def _build_share_links(u: VpnUser, server_ip: str | None = None) -> dict[str, st
             logger.warning("Failed to build %s share link", "cdn_vmess", exc_info=False)
             links["cdn_vmess"] = ""
 
+    if (_settings_state.get("cdn_enabled") and _settings_state.get("cdn_domain")
+            and _settings_state.get("cdn_xhttp_enabled")):
+        try:
+            links["cdn_vless_xhttp"] = ClientConfigGenerator.generate_vless_share_url(
+                uuid=u.uuid,
+                address=_settings_state.get("cdn_domain"),
+                port=int(_settings_state.get("cdn_xhttp_port") or 2096),
+                security="tls",
+                sni=_settings_state.get("cdn_domain"),
+                fp=_settings_state.get("fingerprint") or "chrome",
+                network="xhttp",
+                # A CDN buffers streamed uploads; packet-up is the mode it passes.
+                xhttp_mode="packet-up",
+                path=_settings_state.get("cdn_xhttp_path") or "/cdn-xhttp",
+                host=_settings_state.get("cdn_domain"),
+                label="CDN-XHTTP",
+                **_dpi_vless_kwargs(),
+            )
+        except Exception:
+            logger.warning("Failed to build %s share link", "cdn_vless_xhttp", exc_info=False)
+            links["cdn_vless_xhttp"] = ""
+
     if _settings_state.get("vless_ws_enabled") or settings.vless_ws_enabled:
         try:
             links["vless_ws"] = ClientConfigGenerator.generate_vless_share_url(
@@ -840,6 +864,7 @@ def _user_to_legacy(u: VpnUser, server_ip: str | None = None) -> dict[str, Any]:
         "vmess": links.get("vmess", ""),
         "vless": links.get("vless", ""),
         "cdn_vmess": links.get("cdn_vmess", ""),
+        "cdn_vless_xhttp": links.get("cdn_vless_xhttp", ""),
         "trojan": links.get("trojan", ""),
         "trojan_cdn": links.get("trojan_cdn", ""),
         "grpc_vmess": links.get("grpc_vmess", ""),
