@@ -355,8 +355,9 @@ setup_postgresql() {
     else
         DB_PASS=$(python3 -c "import secrets; print(secrets.token_urlsafe(24))")
         mkdir -p "${INSTALL_DIR}"
-        umask 077
-        echo -n "$DB_PASS" > "$DB_SECRET_FILE"
+        # A subshell: a bare umask here would make the venv and everything
+        # after it 0700, which the panel user cannot read in a root-owned tree.
+        ( umask 077; echo -n "$DB_PASS" > "$DB_SECRET_FILE" )
         chmod 600 "$DB_SECRET_FILE"
     fi
 
@@ -940,6 +941,10 @@ secure_install_tree() {
     id "$u" >/dev/null 2>&1 || return 0
     chown -R root:"$u" "${INSTALL_DIR}"
     chmod -R go-w "${INSTALL_DIR}"
+    # The panel reaches the code through its group. Older installs made the
+    # venv 0700, which only worked while the panel user owned it.
+    chmod -R g+rX "${INSTALL_DIR}"
+    [[ -f "${INSTALL_DIR}/.db-secret" ]] && chmod 600 "${INSTALL_DIR}/.db-secret"
     chmod 750 "${INSTALL_DIR}"
     # Bytecode the panel user wrote while it owned the tree is not trusted.
     find "${INSTALL_DIR}/app" -name __pycache__ -type d -prune -exec rm -rf {} + 2>/dev/null || true
@@ -1000,6 +1005,8 @@ setup_panel_user() {
     mkdir -p /usr/local/etc/xray /var/log/xray /etc/v7lthronyx /run/v7lthronyx
     chown -R root:"${PANEL_USER}" /usr/local/etc/xray /var/log/xray
     chmod 775 /usr/local/etc/xray /var/log/xray
+    # The panel rewrites these certificate copies on every sync.
+    chown -h "${PANEL_USER}:${PANEL_USER}" /usr/local/etc/xray/server.crt /usr/local/etc/xray/server.key 2>/dev/null || true
     if [[ ! -f /usr/local/etc/xray/config.json ]]; then
         echo '{}' > /usr/local/etc/xray/config.json
     fi
@@ -1439,7 +1446,7 @@ show_info() {
     echo -e "    ${GREEN}Stop:${NC}     systemctl stop ${SERVICE_NAME}"
     echo -e "    ${GREEN}Restart:${NC}  systemctl restart ${SERVICE_NAME}"
     echo -e "    ${GREEN}Logs:${NC}     journalctl -u ${SERVICE_NAME} -f"
-    echo -e "    ${GREEN}Update:${NC}   ${INSTALL_DIR}/scripts/auto-update.sh"
+    echo -e "    ${GREEN}Update:${NC}   /usr/local/sbin/spiritus-auto-update"
     echo ""
     echo -e "${CYAN}═══════════════════════════════════════════════════════════${NC}"
 }

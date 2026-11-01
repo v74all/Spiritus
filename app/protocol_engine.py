@@ -1294,6 +1294,8 @@ class ClientConfigGenerator:
             "port": str(port),
             "id": uuid,
             "aid": str(alter_id),
+            # Not left to "auto": sing-box sends that as a value Xray rejects.
+            "scy": "aes-128-gcm",
             "net": network,
             "type": "none",
             "host": extra_host_header or sni,

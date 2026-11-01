@@ -11,6 +11,7 @@ import asyncio
 import ipaddress
 import logging
 import pathlib
+import re
 import shutil
 import socket
 import subprocess
@@ -328,3 +329,40 @@ def test_bulk_and_user_requests_are_bounded():
     with pytest.raises(ValidationError):
         LegacyUserCreate(name="a", days=MAX_DAYS + 1)
     assert BulkCreateRequest(pad=3, days=30).pad == 3
+
+
+def _install_sh() -> str:
+    return (pathlib.Path(__file__).resolve().parents[2] / "install.sh").read_text(encoding="utf-8")
+
+
+def test_installer_umask_does_not_leak_into_later_steps():
+    # A bare `umask 077` made the venv 0700: the panel could not execute it.
+    assert not re.search(r"^\s*umask\b", _install_sh(), re.M)
+
+
+def test_secure_install_tree_keeps_code_readable_and_secrets_private(tmp_path):
+    body = re.search(r"^secure_install_tree\(\) \{.*?^\}", _install_sh(), re.M | re.S).group(0)
+    tree = tmp_path / "t"
+    (tree / "venv" / "bin").mkdir(parents=True)
+    (tree / "app").mkdir()
+    (tree / "venv" / "bin" / "python3").write_text("x")
+    (tree / ".db-secret").write_text("x")
+    (tree / "venv" / "bin" / "python3").chmod(0o700)
+    (tree / "venv" / "bin").chmod(0o700)
+    (tree / "venv").chmod(0o700)
+    (tree / ".db-secret").chmod(0o600)
+    # Ownership needs root; this only exercises the modes.
+    script = f"""
+chown() {{ :; }}
+install() {{ command mkdir -p "${{@: -3}}"; }}
+id() {{ return 0; }}
+INSTALL_DIR={tree}
+PANEL_USER=nobody
+{body}
+secure_install_tree
+"""
+    subprocess.run(["bash", "-c", script], check=True, capture_output=True)
+    assert (tree / "venv").stat().st_mode & 0o050 == 0o050
+    assert (tree / "venv" / "bin").stat().st_mode & 0o050 == 0o050
+    assert (tree / "venv" / "bin" / "python3").stat().st_mode & 0o050 == 0o050
+    assert (tree / ".db-secret").stat().st_mode & 0o077 == 0
