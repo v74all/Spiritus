@@ -176,7 +176,8 @@ def singbox_outbounds(nodes: list[dict], spki_pin: str) -> list[dict]:
                 continue  # XHTTP: not a sing-box transport
             ob: dict[str, Any] = {"type": p, **base}
             if p == "vmess":
-                ob.update(uuid=n["uuid"], security="auto", alter_id=0)
+                # Not "auto": Xray rejects sing-box's auto with "unknown security type".
+                ob.update(uuid=n["uuid"], security="aes-128-gcm", alter_id=0)
             elif p == "vless":
                 ob["uuid"] = n["uuid"]
                 if n.get("flow"):

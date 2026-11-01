@@ -785,7 +785,7 @@ async def _subscription_user(user_uuid: str, db: AsyncSession) -> VpnUser:
 _SUB_LINK_ORDER = (
     "vmess", "vless", "vless_ws", "vless_ws_plain_front",
     "vless_xhttp", "vless_vision", "vless_reverse",
-    "cdn_vmess", "trojan", "trojan_cdn",
+    "cdn_vmess", "cdn_vless_xhttp", "trojan", "trojan_cdn",
     "grpc_vmess", "httpupgrade_vmess", "ss2022",
     "hysteria2", "tuic", "naiveproxy", "mieru",
 )
@@ -1061,6 +1061,29 @@ def _subscription_json_config(
                 "tlsSettings": _tls(cdn_domain, ours=False),
             },
         })
+
+        if panel_settings.get("cdn_xhttp_enabled"):
+            outbounds.append({
+                "tag": f"{prefix}-CDN-XHTTP-{user.name}",
+                "protocol": "vless",
+                "settings": {
+                    "vnext": [{
+                        "address": cdn_domain,
+                        "port": int(panel_settings.get("cdn_xhttp_port") or 2096),
+                        "users": [{"id": uid, "encryption": "none"}],
+                    }],
+                },
+                "streamSettings": {
+                    "network": "xhttp",
+                    "security": "tls",
+                    "xhttpSettings": {
+                        "mode": "packet-up",
+                        "path": panel_settings.get("cdn_xhttp_path") or "/cdn-xhttp",
+                        "host": cdn_domain,
+                    },
+                    "tlsSettings": _tls(cdn_domain, ours=False),
+                },
+            })
 
     if panel_settings.get("trojan_enabled"):
         outbounds.append({
@@ -1772,8 +1795,9 @@ def _generate_xray_server_config(panel_settings: dict) -> dict:
             "sniffing": {"enabled": True, "destOverride": ["http", "tls"]},
         })
 
-    # CDN WS+TLS
-    if panel_settings.get("cdn_enabled") and panel_settings.get("cdn_domain"):
+    # CDN WS+TLS (on the VMess port the link is served by that inbound)
+    if (panel_settings.get("cdn_enabled") and panel_settings.get("cdn_domain")
+            and int(panel_settings.get("cdn_port") or 2082) != int(panel_settings.get("vmess_port") or 443)):
         cdn_domain = panel_settings.get("cdn_domain")
         inbounds.append({
             "tag": "in-cdn-ws",

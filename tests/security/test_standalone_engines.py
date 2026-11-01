@@ -21,7 +21,7 @@ from app import standalone_engines, traffic_control, traffic_kernel
 from app.api.compat import _core
 from app.api.compat._core import _load_legacy_settings, _save_legacy_settings
 from app.api.compat.panel_settings import ensure_ss2022_key
-from app.client_profiles import clash_profile, parse_link, singbox_profile
+from app.client_profiles import clash_profile, parse_link, singbox_outbounds, singbox_profile
 from app.database import AsyncSessionLocal, init_db
 from app.egress_policy import PRIVATE_DESTINATIONS
 from app.models import VpnUser
@@ -235,6 +235,13 @@ def test_profile_endpoints_serve_active_users_only(monkeypatch, tmp_path):
         assert client.get(f"/sub-clash/{off}").status_code == 404
 
 
+def test_singbox_vmess_names_a_cipher_xray_accepts():
+    # Xray refuses sing-box's "auto" with "unknown security type".
+    node = {"proto": "vmess", "name": "v", "server": "203.0.113.1", "port": 443, "uuid": str(uuid.uuid4()),
+            "network": "ws", "security": "tls", "sni": "", "host": "", "path": "/"}
+    assert singbox_outbounds([node], "")[0]["security"] == "aes-128-gcm"
+
+
 def test_tls_inbounds_serve_the_domain_certificate_when_one_is_set(cert, monkeypatch, tmp_path):
     from app import tls_trust
 
@@ -262,3 +269,14 @@ def test_marks_are_left_out_when_the_engine_cannot_set_them(tmp_path, cert):
     assert traffic_control.engine_can_mark("mita", proc=root) is True  # not running yet
     cfg = standalone_engines.singbox_server_config(STATE, _users(), *cert, mark_users=False)
     assert not any("routing_mark" in o for o in cfg["outbounds"]) and cfg["route"]["rules"] == PRIVATE_RULES
+
+
+def test_cdn_xhttp_link_targets_the_domain_and_uses_packet_up(monkeypatch):
+    user = VpnUser(name="c", uuid=str(uuid.uuid4()), active=1)
+    monkeypatch.setattr(_core, "_settings_state", {
+        "cdn_enabled": True, "cdn_domain": "cdn.example.com", "cdn_xhttp_enabled": True,
+    })
+    node = parse_link(_core._build_share_links(user, server_ip="203.0.113.1")["cdn_vless_xhttp"])
+    assert (node["server"], node["port"], node["network"]) == ("cdn.example.com", 2096, "xhttp")
+    assert node["security"] == "tls" and node["sni"] == "cdn.example.com"
+    assert node["mode"] == "packet-up" and node["path"] == "/cdn-xhttp"

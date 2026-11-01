@@ -4,6 +4,15 @@ All notable changes to Spiritus VPN Panel will be documented in this file.
 
 ## [Unreleased]
 
+### 🌐 Censorship resistance
+- CDN links can use the public VMess port: `cdn_port` equal to `vmess_port` (443) shares that inbound instead of adding a second listener, which stopped Xray from starting.
+- New second CDN path, VLESS + XHTTP + TLS (`cdn_xhttp_enabled`, `cdn_xhttp_port`, `cdn_xhttp_path`), in links, `/sub-json`, the subscription page and Settings.
+
+### 🐛 Fixes
+- sing-box profiles set VMess `security` to `aes-128-gcm`: Xray rejected `auto` with "unknown security type", so VMess, gRPC and HTTPUpgrade failed.
+- The Xray API now exposes `RoutingService`. Live user sync lists routing rules, and without it each sync fell back to restarting Xray.
+- The installer installs `iptables`: fail2ban's ban actions call it, so bans were logged but never applied.
+
 ### 🔐 Security
 - **VPN users could reach the server's loopback and private networks.** Every engine sent user traffic to `direct` with no address filter, so any customer could open the unauthenticated Xray API (`127.0.0.1:10085`: add users, read everyone's traffic), Redis, the panel as a loopback client (bypassing `ADMIN_IP_ALLOWLIST` and login rate limits), the cloud metadata service and the provider's private network. Xray (first routing rule, `IPOnDemand` so `localhost` is caught too), sing-box (`resolve` + `reject`) and mita (egress `REJECT`) now refuse `app/egress_policy.py`'s list. The sing-box Clash API, which listed every user's connections, now needs a secret.
 - **Panel user → root.** The root helper ran `python -m` from `/opt/v7lthronyx` with the panel's `.env` as its `EnvironmentFile`, and root's cron ran `/opt/v7lthronyx/scripts/auto-update.sh`, all owned by `vpnpanel`. A panel compromise could edit the code, the venv or the script, plant `json.py` next to `app/`, set `LD_PRELOAD` in `.env`, or point a symlink at `/etc/shadow` for the root-run cert hook to `chown`. `install.sh` now keeps the tree root-owned (`secure_install_tree`); the panel owns only `data/`, `backups/`, `mtls/`, its logs and `.env`. The helper no longer reads `.env` as its environment, the updater lives in `/usr/local/sbin`, the beat schedule moved to `data/` and `vpn-settings.json` follows `PANEL_DATA_DIR`.

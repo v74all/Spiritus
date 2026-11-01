@@ -172,3 +172,28 @@ def test_xhttp_port_is_the_same_everywhere(state):
     sub = _subscription_json_config(_user(), SERVER_IP, state)
     xhttp = next(o for o in sub["outbounds"] if o["streamSettings"].get("network") == "xhttp")
     assert xhttp["settings"]["vnext"][0]["port"] == port
+
+
+def test_cdn_on_the_vmess_port_shares_that_inbound(state):
+    state.update(vmess_port=443, cdn_enabled=True, cdn_domain="cdn.example.com", cdn_port=443)
+    config = _server()
+    assert "in-cdn-ws" not in {ib["tag"] for ib in config["inbounds"]}
+    assert [ib["port"] for ib in config["inbounds"]].count(443) == 1
+
+
+def test_cdn_on_its_own_port_gets_an_inbound(state):
+    state.update(vmess_port=443, cdn_enabled=True, cdn_domain="cdn.example.com", cdn_port=2082)
+    assert _inbound(_server(), "in-cdn-ws")["port"] == 2082
+
+
+def test_cdn_xhttp_is_off_until_enabled(state):
+    state.update(cdn_enabled=True, cdn_domain="cdn.example.com")
+    assert "in-cdn-xhttp" not in {ib["tag"] for ib in _server()["inbounds"]}
+    state.update(cdn_xhttp_enabled=True)
+    ib = _inbound(_server(), "in-cdn-xhttp")
+    assert ib["port"] == 2096 and ib["protocol"] == "vless"
+    assert ib["streamSettings"]["network"] == "xhttp" and ib["streamSettings"]["security"] == "tls"
+
+
+def test_xray_api_exposes_routing_for_live_sync(state):
+    assert "RoutingService" in _server()["api"]["services"]

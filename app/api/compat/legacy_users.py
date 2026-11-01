@@ -440,6 +440,7 @@ async def legacy_bulk_export_zip(
                     ("vmess", "VMess"),
                     ("vless", "VLESS"),
                     ("cdn_vmess", "CDN"),
+                    ("cdn_vless_xhttp", "CDN-XHTTP"),
                     ("trojan", "Trojan"),
                     ("grpc_vmess", "gRPC"),
                     ("httpupgrade_vmess", "HU"),

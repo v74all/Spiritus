@@ -835,7 +835,7 @@ class XrayConfigGenerator:
             },
             "api": {
                 "tag": "api",
-                "services": ["HandlerService", "StatsService", "LoggerService"]
+                "services": ["HandlerService", "StatsService", "LoggerService", "RoutingService"]
             },
             "stats": {},
             "policy": {
