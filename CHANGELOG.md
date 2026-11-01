@@ -12,6 +12,9 @@ All notable changes to Spiritus VPN Panel will be documented in this file.
 - sing-box profiles set VMess `security` to `aes-128-gcm`: Xray rejected `auto` with "unknown security type", so VMess, gRPC and HTTPUpgrade failed.
 - The Xray API now exposes `RoutingService`. Live user sync lists routing rules, and without it each sync fell back to restarting Xray.
 - The installer installs `iptables`: fail2ban's ban actions call it, so bans were logged but never applied.
+- The installer no longer leaves the panel unable to start. A leaked `umask 077` made fresh venvs `0700`, and upgrades kept such directories through the move to a root-owned tree, so systemd failed with `status=203/EXEC`.
+- Re-running the installer keeps the panel able to refresh its TLS copies in `/usr/local/etc/xray`.
+- `vmess://` links name their cipher (`scy`), so clients built on sing-box connect.
 
 ### 🔐 Security
 - **VPN users could reach the server's loopback and private networks.** Every engine sent user traffic to `direct` with no address filter, so any customer could open the unauthenticated Xray API (`127.0.0.1:10085`: add users, read everyone's traffic), Redis, the panel as a loopback client (bypassing `ADMIN_IP_ALLOWLIST` and login rate limits), the cloud metadata service and the provider's private network. Xray (first routing rule, `IPOnDemand` so `localhost` is caught too), sing-box (`resolve` + `reject`) and mita (egress `REJECT`) now refuse `app/egress_policy.py`'s list. The sing-box Clash API, which listed every user's connections, now needs a secret.

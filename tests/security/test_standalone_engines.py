@@ -280,3 +280,10 @@ def test_cdn_xhttp_link_targets_the_domain_and_uses_packet_up(monkeypatch):
     assert (node["server"], node["port"], node["network"]) == ("cdn.example.com", 2096, "xhttp")
     assert node["security"] == "tls" and node["sni"] == "cdn.example.com"
     assert node["mode"] == "packet-up" and node["path"] == "/cdn-xhttp"
+
+
+def test_vmess_links_name_the_cipher():
+    from app.protocol_engine import ClientConfigGenerator
+
+    link = ClientConfigGenerator.generate_vmess_share_url(uuid=str(uuid.uuid4()), address="203.0.113.1", port=443)
+    assert json.loads(base64.b64decode(link.removeprefix("vmess://")))["scy"] == "aes-128-gcm"
