@@ -50,7 +50,7 @@ jobs:
           pip-audit --desc --no-deps --disable-pip -r requirements-firewall.txt
       
       - name: Run Trivy (container scan)
-        uses: aquasecurity/trivy-action@0.32.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: 'fs'
           scan-ref: '.'
@@ -173,7 +173,7 @@ jobs:
           cache-to: type=gha,mode=max
       
       - name: Scan Docker image with Trivy
-        uses: aquasecurity/trivy-action@0.32.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: spiritus:${{ github.sha }}
           format: 'table'
