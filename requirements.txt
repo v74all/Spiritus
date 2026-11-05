@@ -16,7 +16,7 @@ msgpack>=1.2.1                      # GHSA-6v7p-g79w-8964
 sqlalchemy[asyncio]>=2.0.0
 greenlet>=3.0.0
 alembic>=1.12.0
-psycopg[binary]>=3.1.0
+psycopg[binary]>=3.3.6
 asyncpg>=0.29.0
 
 # Caching & Rate Limiting
